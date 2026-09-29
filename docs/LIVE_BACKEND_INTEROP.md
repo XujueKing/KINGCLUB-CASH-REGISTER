@@ -11,3 +11,11 @@
 实测qJ6xXR隔离MySQL（201迁移）及AVKmw7kv隔离Redis，附带Node HTTP/WS/outbox全链路与本Dart TLS测试全部通过，退出0，所有专属服务已关闭。Flutter analyze无问题，常规217项测试通过、2项跳过（可选截图及本在线测试）；本在线测试在上述隔离运行中单独1项通过。后端完整verify190文件/1378测试通过，Docker静态检查分支跳过。
 
 本轮仅测试及文档，无应用业务代码变更，不需要重装APK。没有验证安卓UI实际登录、Android Keystore/断电恢复、公开CA证书/反向代理、生产域名或正式账号。Dart测试验证实时心跳及会话变更，Node联调验证SQL队列→Redis→WS通知；尚未合为Dart客户端收到事务通知并触发UI重读的单一验收。真实支付/核销、完整营业及生产部署仍未验收。
+
+## 上菜门禁真实客户端补验
+
+2026-09-29：测试故意绕过客户端UI门禁，经实际HTTPS超级接口发送有效形状的1919/1920参数。只有workbench.read的TEST_ONLY员工对1919得到CASHIER_SERVING_NOT_ENABLED，对1920得到CASHIER_PERMISSION_DENIED；不因写入关闭而错误关闭可授权的恢复查询服务。
+
+隔离入口现在临时启用六个接口的元数据，运行结束恢复禁用；上菜业务写入开关仍关闭。Flutter进程前后对订单商品行、上菜回执、库存流水、付款记录及outbox完整排序快照比较相等，证明本次拒绝未修改这些业务表。隔离MySQL in5ETy从空库应用204迁移、Redis LZP99fQb及真实Dart HTTPS/WSS测试通过，专属服务均停止；analyze无问题。
+
+这补足传输层到实际服务端门禁验证，不代表成功上菜及其回执/数量的Dart正向互通已完成，也不代表设备或生产验收。

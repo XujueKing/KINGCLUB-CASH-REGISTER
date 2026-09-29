@@ -66,6 +66,40 @@ void main() {
           );
           expect(session.employeeRef, 'E00000000008');
           client = CcsopClient(base, session.credentials);
+          expect(session.permissions, isNot(contains('orders.serve')));
+          final servingScope = <String, dynamic>{
+            'storeRef': session.storeRef,
+            'tableRef': 'TEST_HTTP_TABLE',
+            'sessionRef': 'H00000000001',
+            'orderRef': 'D00000000001',
+            'productRef': 'TEST_ONLY_PRODUCT',
+            'requestId': 'ed029c31-14a9-40b4-a5a3-bbc2c056fa22',
+          };
+          // Bypass UI guards deliberately: the real server must enforce both.
+          await expectLater(
+            client.call('K260929001919', {
+              ...servingScope,
+              'expectedServedQuantity': 0,
+              'targetServedQuantity': 1,
+            }),
+            throwsA(
+              isA<CcsopFailure>().having(
+                (e) => e.code,
+                'code',
+                'CASHIER_SERVING_NOT_ENABLED',
+              ),
+            ),
+          );
+          await expectLater(
+            client.call('K260929001920', servingScope),
+            throwsA(
+              isA<CcsopFailure>().having(
+                (e) => e.code,
+                'code',
+                'CASHIER_PERMISSION_DENIED',
+              ),
+            ),
+          );
           final workbench = TableSnapshot.parse(
             await client.call('K260929001902', {'storeRef': session.storeRef}),
             storeRef: session.storeRef,
