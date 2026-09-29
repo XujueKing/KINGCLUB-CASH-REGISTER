@@ -14,11 +14,13 @@ class LiveCatalogPanel extends StatefulWidget {
     required this.language,
     required this.onBack,
     this.revision = 0,
+    this.onSelect,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final VoidCallback onBack;
   final int revision;
+  final ValueChanged<CatalogProduct>? onSelect;
   @override
   State<LiveCatalogPanel> createState() => _LiveCatalogPanelState();
 }
@@ -156,7 +158,9 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text(t('catalogNotice')),
+        child: Text(
+          t(widget.onSelect == null ? 'catalogNotice' : 'cartNotice'),
+        ),
       ),
       SizedBox(
         height: 60,
@@ -212,6 +216,17 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           Text(p.specification(widget.language)),
+                          if (widget.onSelect != null)
+                            OutlinedButton(
+                              key: ValueKey('catalog-add-${p.reference}'),
+                              onPressed:
+                                  foreground &&
+                                      p.inventoryKnown &&
+                                      p.available > 0
+                                  ? () => widget.onSelect!(p)
+                                  : null,
+                              child: Text(t('cartAdd')),
+                            ),
                           Wrap(
                             spacing: 24,
                             runSpacing: 8,

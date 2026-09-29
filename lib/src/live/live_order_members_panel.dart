@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'order_context_snapshot.dart';
+import 'live_cart_panel.dart';
 
 class LiveOrderMembersPanel extends StatefulWidget {
   const LiveOrderMembersPanel({
@@ -29,6 +30,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     with WidgetsBindingObserver {
   OrderContextSnapshot? data;
   SeatedOrderMember? selected;
+  bool cart = false;
   final cursors = <String?>[null];
   int page = 0, epoch = 0;
   bool loading = false, failed = false, foreground = true;
@@ -47,6 +49,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     setState(() {
       data = null;
       selected = null;
+      cart = false;
       loading = false;
       failed = false;
     });
@@ -94,6 +97,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
       data = null;
       selected = null;
       loading = true;
+      cart = false;
       failed = false;
     });
     try {
@@ -137,136 +141,159 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OutlinedButton(
-              onPressed: widget.onBack,
-              child: Text(t('ordersBack')),
-            ),
-            Text(
-              t('orderMembersTitle'),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            OutlinedButton(
-              key: const ValueKey('order-members-refresh'),
-              onPressed: loading ? null : () => unawaited(load(reset: true)),
-              child: Text(t('liveRefresh')),
-            ),
-          ],
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text(t('orderMembersNotice')),
-      ),
-      if (data != null)
+  Widget build(BuildContext context) {
+    if (cart && data != null && selected != null) {
+      return LiveCartPanel(
+        auth: widget.auth,
+        language: widget.language,
+        orderContext: data!,
+        memberRef: selected!.reference,
+        revision: widget.revision,
+        onBack: () => unawaited(load(reset: true)),
+      );
+    }
+    return Column(
+      children: [
         Padding(
           padding: const EdgeInsets.all(12),
           child: Wrap(
-            spacing: 24,
+            spacing: 16,
             runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(data!.tableName),
-              Text(data!.sessionRef),
-              Text(
-                t(
-                  data!.paymentTiming == 'prepay'
-                      ? 'livePrepay'
-                      : 'livePostpay',
-                ),
+              OutlinedButton(
+                onPressed: widget.onBack,
+                child: Text(t('ordersBack')),
               ),
-              Text('${t('guests')}: ${data!.partySize ?? '—'}'),
-              Text('${t('liveObserved')}: ${data!.observedAt.toLocal()}'),
+              Text(
+                t('orderMembersTitle'),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              OutlinedButton(
+                key: const ValueKey('order-members-refresh'),
+                onPressed: loading ? null : () => unawaited(load(reset: true)),
+                child: Text(t('liveRefresh')),
+              ),
             ],
           ),
         ),
-      if (loading) const LinearProgressIndicator(),
-      Expanded(
-        child: failed
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(t('orderMembersFailed')),
-                ),
-              )
-            : data == null
-            ? const SizedBox()
-            : data!.members.isEmpty
-            ? Center(child: Text(t('orderMembersEmpty')))
-            : ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: data!.members.length,
-                itemBuilder: (context, index) {
-                  final member = data!.members[index];
-                  return Card(
-                    child: ListTile(
-                      key: ValueKey('order-member-${member.reference}'),
-                      enabled: member.eligible,
-                      selected: selected?.reference == member.reference,
-                      title: Text(member.nickname ?? t('orderMemberUnnamed')),
-                      subtitle: Text(
-                        '${member.reference}${member.eligible ? '' : ' · ${t('orderMemberIneligible')}'}',
-                      ),
-                      trailing: Icon(
-                        selected?.reference == member.reference
-                            ? Icons.check_circle
-                            : Icons.circle_outlined,
-                      ),
-                      onTap: member.eligible
-                          ? () => setState(() {
-                              selected = selected?.reference == member.reference
-                                  ? null
-                                  : member;
-                            })
-                          : null,
-                    ),
-                  );
-                },
-              ),
-      ),
-      if (selected != null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            '${t('orderMemberSelected')}: ${selected!.nickname ?? t('orderMemberUnnamed')} (${selected!.reference})',
-            key: const ValueKey('order-member-selection'),
+          child: Text(t('orderMembersNotice')),
+        ),
+        if (data != null)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 24,
+              runSpacing: 8,
+              children: [
+                Text(data!.tableName),
+                Text(data!.sessionRef),
+                Text(
+                  t(
+                    data!.paymentTiming == 'prepay'
+                        ? 'livePrepay'
+                        : 'livePostpay',
+                  ),
+                ),
+                Text('${t('guests')}: ${data!.partySize ?? '—'}'),
+                Text('${t('liveObserved')}: ${data!.observedAt.toLocal()}'),
+              ],
+            ),
+          ),
+        if (loading) const LinearProgressIndicator(),
+        Expanded(
+          child: failed
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(t('orderMembersFailed')),
+                  ),
+                )
+              : data == null
+              ? const SizedBox()
+              : data!.members.isEmpty
+              ? Center(child: Text(t('orderMembersEmpty')))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: data!.members.length,
+                  itemBuilder: (context, index) {
+                    final member = data!.members[index];
+                    return Card(
+                      child: ListTile(
+                        key: ValueKey('order-member-${member.reference}'),
+                        enabled: member.eligible,
+                        selected: selected?.reference == member.reference,
+                        title: Text(member.nickname ?? t('orderMemberUnnamed')),
+                        subtitle: Text(
+                          '${member.reference}${member.eligible ? '' : ' · ${t('orderMemberIneligible')}'}',
+                        ),
+                        trailing: Icon(
+                          selected?.reference == member.reference
+                              ? Icons.check_circle
+                              : Icons.circle_outlined,
+                        ),
+                        onTap: member.eligible
+                            ? () => setState(() {
+                                selected =
+                                    selected?.reference == member.reference
+                                    ? null
+                                    : member;
+                              })
+                            : null,
+                      ),
+                    );
+                  },
+                ),
+        ),
+        if (selected != null)
+          FilledButton(
+            key: const ValueKey('order-member-cart'),
+            onPressed: loading || !foreground
+                ? null
+                : () => setState(() {
+                    cart = true;
+                  }),
+            child: Text(t('cartTitle')),
+          ),
+        if (selected != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              '${t('orderMemberSelected')}: ${selected!.nickname ?? t('orderMemberUnnamed')} (${selected!.reference})',
+              key: const ValueKey('order-member-selection'),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Wrap(
+            spacing: 20,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton(
+                key: const ValueKey('order-members-previous'),
+                onPressed: loading || page == 0
+                    ? null
+                    : () => unawaited(load(target: page - 1)),
+                child: Text(t('livePrevious')),
+              ),
+              Text('${t('livePage')} ${page + 1}'),
+              OutlinedButton(
+                key: const ValueKey('order-members-next'),
+                onPressed: loading || data?.nextAfterMember == null
+                    ? null
+                    : () {
+                        cursors.removeRange(page + 1, cursors.length);
+                        cursors.add(data!.nextAfterMember);
+                        unawaited(load(target: page + 1));
+                      },
+                child: Text(t('liveNext')),
+              ),
+            ],
           ),
         ),
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 20,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OutlinedButton(
-              key: const ValueKey('order-members-previous'),
-              onPressed: loading || page == 0
-                  ? null
-                  : () => unawaited(load(target: page - 1)),
-              child: Text(t('livePrevious')),
-            ),
-            Text('${t('livePage')} ${page + 1}'),
-            OutlinedButton(
-              key: const ValueKey('order-members-next'),
-              onPressed: loading || data?.nextAfterMember == null
-                  ? null
-                  : () {
-                      cursors.removeRange(page + 1, cursors.length);
-                      cursors.add(data!.nextAfterMember);
-                      unawaited(load(target: page + 1));
-                    },
-              child: Text(t('liveNext')),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }

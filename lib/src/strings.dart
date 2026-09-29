@@ -6,6 +6,17 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'cartTitle': '点单购物车|Order cart|點單購物車|ตะกร้าสั่งซื้อ',
+  'cartNotice': '商品与库存为查询时快照，下单由服务器重新核对。|Catalog and stock are observations, rechecked by the server on submission.|商品與庫存為查詢時快照，下單由伺服器重新核對。|สินค้าและสต็อกเป็นข้อมูลขณะค้นหา เซิร์ฟเวอร์จะตรวจสอบอีกครั้งเมื่อสั่งซื้อ',
+  'cartAdd': '加入／增加|Add|加入／增加|เพิ่ม',
+  'cartRemove': '减少数量|Reduce quantity|減少數量|ลดจำนวน',
+  'cartDelete': '移除商品|Remove item|移除商品|นำสินค้าออก',
+  'cartDraftEmpty': '尚未选择商品|No items selected|尚未選擇商品|ยังไม่ได้เลือกสินค้า',
+  'cartSubmit': '核对并下单|Review and place order|核對並下單|ตรวจสอบและสั่งซื้อ',
+  'cartConfirmNotice': '确认后提交真实订单：先付模式预留库存，后付模式扣减库存。此操作不是收款，选择消费会员不代表余额扣款授权。|Confirmation submits a real order: prepay reserves stock; postpay issues stock. This is not payment, and selecting a consumer does not authorize wallet debit.|確認後提交真實訂單：先付模式預留庫存，後付模式扣減庫存。此操作不是收款，選擇消費會員不代表餘額扣款授權。|การยืนยันจะส่งคำสั่งซื้อจริง จ่ายก่อนจะจองสต็อก จ่ายทีหลังจะตัดสต็อก นี่ไม่ใช่การชำระเงิน การเลือกสมาชิกไม่อนุญาตให้หักยอดเงิน',
+  'cartStale': '场次或会话已变化，请返回重新选择会员和商品。|Context changed. Return and select the member and items again.|場次或會話已變化，請返回重新選擇會員和商品。|บริบทเปลี่ยนแล้ว โปรดกลับไปเลือกสมาชิกและสินค้าใหม่',
+  'cartPending': '本桌已有待确认原请求，请先查回，勿重复下单。|This table has an unresolved request. Look it up before placing another order.|本桌已有待確認原請求，請先查回，勿重複下單。|โต๊ะนี้มีคำขอที่ยังไม่ยืนยัน โปรดตรวจสอบก่อนสั่งซื้ออีกครั้ง',
+  'cartLimit': '无法增加：库存不足、超出数量／金额限制或商品版本变化；请核对或移除后重新选择。|Cannot add: stock, quantity or amount limit, or changed product version. Review or remove and select again.|無法增加：庫存不足、超出數量／金額限制或商品版本變化；請核對或移除後重新選擇。|เพิ่มไม่ได้ สต็อกไม่พอ เกินจำนวนหรือยอดเงิน หรือสินค้าเปลี่ยนเวอร์ชัน โปรดตรวจสอบหรือลบแล้วเลือกใหม่',
   'orderRecoveryTitle':
       '待确认订单请求|Pending order requests|待確認訂單請求|คำขอสั่งซื้อที่รอยืนยัน',
   'orderRecoveryNotice': '仅处理当前员工在本设备保存的原请求。查回不重新下单；记录金额不是付款凭证。|Original requests saved for this employee on this device only. Lookup does not resubmit; the amount is not proof of payment.|僅處理目前員工在本裝置儲存的原請求。查回不重新下單；記錄金額不是付款憑證。|เฉพาะคำขอเดิมของพนักงานนี้ที่บันทึกในอุปกรณ์นี้ การตรวจสอบไม่ส่งคำสั่งซื้อซ้ำ ยอดเงินไม่ใช่หลักฐานการชำระเงิน',
@@ -20,7 +31,7 @@ const copy = <String, String>{
   'orderRecoveryFailed': '无法读取待确认记录，请重试；不会清除记录。|Unable to read pending records. Retry; records will not be cleared.|無法讀取待確認記錄，請重試；不會清除記錄。|อ่านรายการที่รอยืนยันไม่ได้ โปรดลองใหม่ ระบบจะไม่ลบบันทึก',
   'orderRecoveryEmpty': '本设备当前员工暂无待确认订单请求。|No pending requests for this employee on this device.|本裝置目前員工暫無待確認訂單請求。|ไม่มีคำขอที่รอยืนยันของพนักงานนี้ในอุปกรณ์นี้',
   'orderMembersTitle': '入座会员|Seated members|入座會員|สมาชิกที่นั่งอยู่',
-  'orderMembersNotice': '仅核对本场次会员。选择不代表付款授权；员工下单尚未开放。|Check members in this session. Selection is not payment consent; staff ordering is not enabled.|僅核對本場次會員。選擇不代表付款授權；員工下單尚未開放。|ตรวจสอบสมาชิกในรอบนี้ การเลือกไม่ใช่การอนุมัติชำระเงิน ยังไม่เปิดให้พนักงานสั่งซื้อ',
+  'orderMembersNotice': '选择本场次消费会员后进入点单；不代表付款或余额扣款授权。|Select a consumer in this session to order. Selection is not payment or wallet debit consent.|選擇本場次消費會員後進入點單；不代表付款或餘額扣款授權。|เลือกสมาชิกผู้ใช้บริการในรอบนี้เพื่อสั่งซื้อ การเลือกไม่ใช่การอนุมัติชำระเงินหรือหักยอดเงิน',
   'orderMembersEmpty': '本页暂无入座会员；人数不等于会员入座记录。|No seated members on this page. Guest count is not a membership record.|本頁暫無入座會員；人數不等於會員入座記錄。|ไม่มีสมาชิกที่นั่งในหน้านี้ จำนวนคนไม่ใช่บันทึกสมาชิก',
   'orderMembersFailed': '无法确认当前场次或会员，请刷新或返回桌台。|Unable to confirm this session or its members. Refresh or return to tables.|無法確認目前場次或會員，請重新整理或返回桌檯。|ยืนยันรอบหรือสมาชิกไม่ได้ โปรดรีเฟรชหรือกลับไปหน้าโต๊ะ',
   'orderMemberUnnamed': '未设置昵称|Nickname not set|未設定暱稱|ยังไม่ได้ตั้งชื่อเล่น',
