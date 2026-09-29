@@ -74,3 +74,6 @@ LiveTablesPanel 的授权空台入口打开 LiveOpeningPanel，顶部独立待�
 
 界面增量 ARM32 Release APK 构建通过：24.0 秒、15.5 MB，仍为 preview 独立包名/开发签名；未安装。
 SHA256：`C4608FF894A1202E1273A5EF4D802DBE12B5A4D6BF8EDB7A48AEF32F4A57A7D0`。
+
+后续实机增量：该 APK 已在指定收银机覆盖安装并核对设备端哈希，四语言登录页启动/切换已检查。
+未有真实员工会话，未进入开台营业验收；安装细节与限制见 [DEVICE_SMOKE_2026-09-29.md](DEVICE_SMOKE_2026-09-29.md)。
