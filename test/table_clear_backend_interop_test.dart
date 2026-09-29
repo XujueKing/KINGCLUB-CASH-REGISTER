@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/auth/staff_session.dart';
 import 'package:kingclub_cash_register/src/live/table_clear_command.dart';
+import 'package:kingclub_cash_register/src/live/table_snapshot.dart';
+import 'package:kingclub_cash_register/src/network/cashier_socket.dart';
+import 'package:kingclub_cash_register/src/network/ccsop_realtime_codec.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_handshake.dart';
 
@@ -29,6 +33,9 @@ void main() {
       await HttpOverrides.runWithHttpOverrides(() async {
         final handshake = CcsopHandshakeClient(base);
         CcsopClient? client;
+        CashierSocket? socket;
+        CcsopRealtimeCodec? codec;
+        StreamIterator<Object?>? messages;
         try {
           final login = await handshake.call('K260929001901', {
             'loginName': 'test-http-only',
@@ -60,6 +67,23 @@ void main() {
           Matcher denied(String code) =>
               throwsA(isA<CcsopFailure>().having((e) => e.code, 'code', code));
           if (fixture['nextSessionRef'] == null) {
+            codec = CcsopRealtimeCodec(
+              session.credentials,
+              'store:${session.storeRef}',
+              endpoint: '/cashier/ws',
+            );
+            socket = await IoCashierSocket.connect(
+              await codec.connectionUri(base),
+            );
+            messages = StreamIterator(socket.messages);
+            expect(
+              await messages.moveNext().timeout(const Duration(seconds: 8)),
+              true,
+            );
+            expect(
+              (await codec.decode(messages.current as String))['eventType'],
+              'connection.ready',
+            );
             expect(
               TableClearResult.parse(
                 await client.call('K260929001922', command.lookup),
@@ -88,6 +112,23 @@ void main() {
             );
             expect(TableClearResult.parse(recovered, command).confirmed, true);
             expect((recovered as Map)['result'], (results[0] as Map)['result']);
+            final topics = <String>{};
+            for (var i = 0; i < 2; i++) {
+              expect(
+                await messages.moveNext().timeout(const Duration(seconds: 8)),
+                true,
+              );
+              final frame = await codec.decode(messages.current as String);
+              expect(frame['eventType'], 'commerce.changed');
+              final data = frame['data'] as Map;
+              expect(data['storeRef'], session.storeRef);
+              expect(
+                data.length,
+                2,
+              ); // No receipt, personal details or business state pushed.
+              topics.add(data['topic'] as String);
+            }
+            expect(topics, {'tables', 'orders'});
             // New HTTP encryption envelope, new business request ID, same closed session must fail.
             await expectLater(
               client.call('K260929001921', prepared.params),
@@ -121,8 +162,25 @@ void main() {
               denied('TABLE_CLEAR_REQUEST_CONFLICT'),
             );
           }
+          // Scope the page to this test table, leaving older intentionally incomplete fixtures out.
+          final workbench = TableSnapshot.parse(
+            await client.call('K260929001902', {
+              'storeRef': session.storeRef,
+              'afterTable': 'TEST_TLS_CLEAQ',
+            }),
+            storeRef: session.storeRef,
+            employeeRef: session.employeeRef,
+            afterTable: 'TEST_TLS_CLEAQ',
+          );
+          final table = workbench.tables.singleWhere(
+            (row) => row.reference == command.tableRef,
+          );
+          expect(table.session?.reference, fixture['nextSessionRef']);
           await client.call('K260929001904', {});
         } finally {
+          await messages?.cancel();
+          await socket?.close();
+          codec?.close();
           client?.close();
           handshake.close();
         }
