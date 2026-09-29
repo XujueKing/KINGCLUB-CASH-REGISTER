@@ -6,6 +6,18 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'servingConfirm': '确认上菜记录|Confirm delivery|確認上菜記錄|ยืนยันบันทึกการเสิร์ฟ',
+  'servingThisQuantity': '本次实际已上数量|Quantity actually delivered now|本次實際已上數量|จำนวนที่เสิร์ฟจริงครั้งนี้',
+  'servingConfirmNotice': '仅登记已实际交付的数量，不是下单、出库或收款。请核对后确认。|Record goods actually delivered, not a new order, stock issue or payment. Verify before confirming.|僅登記已實際交付的數量，不是下單、出庫或收款。請核對後確認。|บันทึกเฉพาะจำนวนที่เสิร์ฟจริง ไม่ใช่การสั่งซื้อ ตัดสต็อก หรือชำระเงิน โปรดตรวจสอบก่อนยืนยัน',
+  'servingRecoveryTitle': '上菜请求处理|Delivery requests|上菜請求處理|จัดการคำขอเสิร์ฟ',
+  'servingRecoveryNotice': '仅显示本员工本设备的未决原请求。先查回结果，不能据此重复交付实物。|Unresolved original requests for this employee and device. Look up results first; do not deliver goods again.|僅顯示本員工本設備的未決原請求。先查回結果，不能據此重複交付實物。|แสดงคำขอเดิมที่ยังไม่ทราบผลของพนักงานและเครื่องนี้ ตรวจสอบผลก่อน ห้ามเสิร์ฟสินค้าซ้ำ',
+  'servingLookup': '查询原请求|Look up original|查詢原請求|ตรวจสอบคำขอเดิม',
+  'servingRetry': '恢复原登记|Resume original record|恢復原登記|ดำเนินการบันทึกเดิมต่อ',
+  'servingRetryNotice': '只重发原始登记，不再交付一份商品。若已由其他员工登记或数量冲突，请先核对，不新建替代请求。|Resend the original record only. Do not deliver goods again. If another employee recorded it or counts conflict, review before proceeding; do not create a replacement request.|只重發原始登記，不再交付一份商品。若已由其他員工登記或數量衝突，請先核對，不新建替代請求。|ส่งบันทึกเดิมอีกครั้งเท่านั้น ห้ามเสิร์ฟซ้ำ หากพนักงานอื่นบันทึกแล้วหรือจำนวนขัดแย้ง ให้ตรวจสอบก่อน ห้ามสร้างคำขอแทน',
+  'servingConfirmed': '原登记已由服务器确认。返回订单刷新当前数量。|Original record confirmed by the server. Return and refresh current order counts.|原登記已由伺服器確認。返回訂單重新整理當前數量。|เซิร์ฟเวอร์ยืนยันบันทึกเดิมแล้ว กลับไปรีเฟรชจำนวนปัจจุบันของรายการ',
+  'servingUnresolved': '尚未查到原请求结果；记录仍保留，未自动重发。|No original result observed. The record is retained; nothing was resent automatically.|尚未查到原請求結果；記錄仍保留，未自動重發。|ยังไม่พบผลของคำขอเดิม เก็บบันทึกไว้แล้วและไม่ได้ส่งซ้ำอัตโนมัติ',
+  'servingNoPending': '暂无可见未决上菜请求|No visible unresolved delivery requests|暫無可見未決上菜請求|ไม่มีคำขอเสิร์ฟที่ยังไม่ทราบผลที่แสดงได้',
+  'servingFailed': '查询或登记未完成，请保留原请求后再核对。|Lookup or recording did not complete. Retain the original request and review.|查詢或登記未完成，請保留原請求後再核對。|ตรวจสอบหรือบันทึกไม่สำเร็จ โปรดเก็บคำขอเดิมไว้และตรวจสอบอีกครั้ง',
   'servingDelivered': '已上|Delivered|已上|เสิร์ฟแล้ว',
   'servingRemaining': '待上|Remaining|待上|ยังไม่เสิร์ฟ',
   'servingUnknown': '服务器未提供上菜记录|Delivery record unavailable from server|伺服器未提供上菜記錄|เซิร์ฟเวอร์ยังไม่มีข้อมูลการเสิร์ฟ',

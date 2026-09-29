@@ -6,6 +6,7 @@ import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'order_snapshot.dart';
 import 'live_cash_recovery_panel.dart';
+import 'live_serving_recovery_panel.dart';
 import 'table_snapshot.dart';
 
 class LiveOrdersPanel extends StatefulWidget {
@@ -34,11 +35,13 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   bool loading = false, failed = false, foreground = true, queued = false;
   Timer? debounce;
   bool cashBusy = false, cashRecovery = false;
+  bool servingRecovery = false;
+  bool servingConfirming = false;
   BuildContext? cashDialog;
   void closeCashDialog() {
     final ctx = cashDialog;
     if (ctx != null && ctx.mounted && ModalRoute.of(ctx)?.isCurrent == true) {
-      Navigator.of(ctx).pop(false);
+      Navigator.of(ctx).pop();
     }
   }
 
@@ -127,6 +130,133 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
     }
   }
 
+  bool servingEligible(LiveOrder order, OrderItem item) =>
+      foreground &&
+      widget.auth.session?.permissions.contains('orders.serve') == true &&
+      {'open', 'clearing'}.contains(data?.sessionStatus) &&
+      item.servingKnown &&
+      item.remainingQuantity! > 0 &&
+      (order.status == 'paid' ||
+          (data?.paymentTiming == 'postpay' &&
+              order.status == 'pending' &&
+              order.cashierOrder));
+
+  Future<void> confirmServing(LiveOrder order, OrderItem item) async {
+    if (cashBusy || loading || !servingEligible(order, item)) return;
+    final generation = epoch,
+        auth = widget.auth,
+        identity = widget.auth.session;
+    bool current() =>
+        mounted &&
+        foreground &&
+        epoch == generation &&
+        identical(auth, widget.auth) &&
+        identical(identity, auth.session);
+    setState(() => cashBusy = true);
+    var attempted = false;
+    try {
+      final pending = await auth.pendingServing();
+      if (!mounted || !current()) return;
+      if (pending.any(
+        (e) => e.orderRef == order.reference && e.productRef == item.productRef,
+      )) {
+        setState(() => servingRecovery = true);
+        return;
+      }
+      var text = '';
+      setState(() => servingConfirming = true);
+      final delivered = await showDialog<int>(
+        context: context,
+        builder: (ctx) {
+          cashDialog = ctx;
+          return StatefulBuilder(
+            builder: (ctx, update) {
+              final count = RegExp(r'^[1-9][0-9]{0,3}$').hasMatch(text)
+                  ? int.tryParse(text)
+                  : null;
+              final valid = count != null && count <= item.remainingQuantity!;
+              return AlertDialog(
+                title: Text(t('servingConfirm')),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${item.name(widget.language)} · ${item.specification(widget.language)}\n${t('servingDelivered')}: ${item.servedQuantity} · ${t('servingRemaining')}: ${item.remainingQuantity}',
+                      ),
+                      Text(t('servingConfirmNotice')),
+                      TextField(
+                        key: const ValueKey('serving-quantity'),
+                        keyboardType: TextInputType.number,
+                        onChanged: (value) => update(() => text = value),
+                        decoration: InputDecoration(
+                          labelText: t('servingThisQuantity'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: Text(t('cashPrepareCancel')),
+                  ),
+                  FilledButton(
+                    key: const ValueKey('serving-confirm-submit'),
+                    onPressed: valid
+                        ? () => Navigator.of(ctx).pop(count)
+                        : null,
+                    child: Text(t('servingConfirm')),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+      cashDialog = null;
+      if (mounted) setState(() => servingConfirming = false);
+      if (!current() || delivered == null || !servingEligible(order, item)) {
+        return;
+      }
+      attempted = true;
+      await auth.confirmServing(
+        tableRef: widget.table.reference,
+        sessionRef: widget.table.session!.reference,
+        orderRef: order.reference,
+        productRef: item.productRef,
+        quantity: item.quantity,
+        expectedServedQuantity: item.servedQuantity!,
+        targetServedQuantity: item.servedQuantity! + delivered,
+        confirmed: true,
+      );
+      if (current()) {
+        setState(() => data = null);
+      }
+    } catch (_) {
+      if (current()) {
+        setState(() {
+          if (attempted) {
+            servingRecovery = true;
+          } else {
+            failed = true;
+            data = null;
+          }
+        });
+      }
+    } finally {
+      cashDialog = null;
+      if (mounted) {
+        setState(() {
+          cashBusy = false;
+          servingConfirming = false;
+        });
+        if (foreground && !servingRecovery) unawaited(load(reset: true));
+      }
+    }
+  }
+
   String t(String key) => tr(widget.language, key);
   @override
   void initState() {
@@ -147,6 +277,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
         loading = false;
         failed = true;
         cashRecovery = false;
+        servingRecovery = false;
       });
     }
   }
@@ -268,7 +399,16 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   }
 
   @override
-  Widget build(BuildContext context) => cashRecovery
+  Widget build(BuildContext context) => servingRecovery
+      ? LiveServingRecoveryPanel(
+          auth: widget.auth,
+          language: widget.language,
+          onBack: () {
+            setState(() => servingRecovery = false);
+            unawaited(load(reset: true));
+          },
+        )
+      : cashRecovery
       ? LiveCashRecoveryPanel(
           auth: widget.auth,
           language: widget.language,
@@ -291,6 +431,16 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                     child: Text(t('ordersBack')),
                   ),
                   Text('${widget.table.name} · ${t('ordersDetails')}'),
+                  if (widget.auth.session?.permissions.contains(
+                        'orders.serve',
+                      ) ==
+                      true)
+                    OutlinedButton(
+                      onPressed: cashBusy
+                          ? null
+                          : () => setState(() => servingRecovery = true),
+                      child: Text(t('servingRecoveryTitle')),
+                    ),
                   OutlinedButton(
                     key: const ValueKey('orders-refresh'),
                     onPressed: loading || cashBusy
@@ -316,7 +466,8 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                   '${t('liveObserved')}: ${data!.observedAt.toLocal()}',
                 ),
               ),
-            if (loading || cashBusy) const LinearProgressIndicator(),
+            if (loading || (cashBusy && !servingConfirming))
+              const LinearProgressIndicator(),
             Expanded(
               child: failed
                   ? Center(child: Text(t('liveReadFailed')))
@@ -370,6 +521,18 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                             'serving-progress-${order.reference}-${item.productRef}',
                                           ),
                                         ),
+                                        if (servingEligible(order, item))
+                                          OutlinedButton(
+                                            key: ValueKey(
+                                              'serving-open-${order.reference}-${item.productRef}',
+                                            ),
+                                            onPressed: cashBusy
+                                                ? null
+                                                : () => unawaited(
+                                                    confirmServing(order, item),
+                                                  ),
+                                            child: Text(t('servingConfirm')),
+                                          ),
                                       ],
                                     ),
                                   ),
