@@ -1,5 +1,7 @@
 # 收银端生产目标（进行中）
 
+设备升级补验：c1fc1df ARM32包已在备份旧APK并核对哈希后保留数据升级指定收银机；设备安装包哈希与构建一致，冷启动840ms，真机截图为独立员工空白登录页，限定启动日志无匹配异常。没有真实登录/交易/打印，仍开发签名；本次不代替订单场次汇总及现金/上菜的Android业务验收，详见 [ORDER_CONFIRMATION_FIRST_FRAME.md](ORDER_CONFIRMATION_FIRST_FRAME.md)。
+
 最新订单确认修复：现金/上菜确认在路由已推入但首帧未构建时，身份/后台/revision失效不再显示旧确认内容；新增6项回归，全量487通过/5可选跳过，analyze通过，见 [ORDER_CONFIRMATION_FIRST_FRAME.md](ORDER_CONFIRMATION_FIRST_FRAME.md)。没有真实经营写入。
 
 汇总HTTPS状态更新：后端938027dd与收银a7a448f已完成独立MySQL/Redis下的真实Dart HTTPS/WSS补验，汇总与独立SQL核算相符、空页保留整场汇总、无权限和跨店拒绝、14业务表不变；临时服务停止。覆盖下文历史“Dart HTTPS待补”，不代表Android业务验收、整桌结账或生产部署完成。

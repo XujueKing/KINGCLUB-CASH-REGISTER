@@ -9,3 +9,11 @@ test/order_confirmation_race_test.dart使用明确测试替身：先完成日志
 该证据为Flutter widget及替身验证，不是Android现场经营或真实渠道验收；本轮不改后端、不支付、不上菜确认、不打印、不部署。
 
 ARM32 release APK构建成功（CASHIER_PREVIEW=false、CASHIER_REALTIME=true），仍开发签名；未覆盖安装设备，不能将构建结果当作真机验收。
+
+## 指定收银机升级补验
+
+后续已核对指定设备为D2_2nd-SQB/armeabi-v7a、ADB状态device。读取当前独立收银应用安装路径，先pull旧base.apk至本机私有备份目录，再核对源文件和副本SHA256同为886973F23161E9467CACC9607596B829400BC877721522F971EEBFE4262BAC6D。此为APK备份，不含应用数据、Keystore或系统固件。
+
+c1fc1df源码对应ARM32 APK经install -r保留数据升级成功，没有清数据、卸载、改收钱吧或其他设备。构建与设备安装文件SHA256一致：2FA4CD91BACA1EA02EE7B9561EF82F49442ADA550847992999DF9ED30E5DAEB1。am start -W -S仅重启独立收银应用，COLD TotalTime=840ms、WaitTime=895ms。实际1366×768截图为无账号内容的独立员工登录页，界面未见明显溢出。应用PID限定的最近300条启动日志未匹配FATAL EXCEPTION、ANR in、E/flutter或Unhandled Exception；不是长期性能或无故障证明。
+
+本节更新上段“未安装”状态；登录后的现金/上菜首帧竞争仍只有widget测试证据，未用真实员工做现场经营，不把安装成功等同于业务验收。没有登录、付款、上菜确认、打印或线上部署，仍开发签名。
