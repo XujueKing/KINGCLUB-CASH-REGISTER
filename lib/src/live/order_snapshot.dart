@@ -123,12 +123,14 @@ class OrderSnapshot {
     this.nextAfterOrder,
     this.sessionStatus,
     this.paymentTiming,
+    this.sessionSummary,
   );
   final List<LiveOrder> orders;
   final DateTime observedAt;
   final String? nextAfterOrder;
   final String sessionStatus;
   final String paymentTiming;
+  final SessionOrderSummary? sessionSummary;
   factory OrderSnapshot.parse(
     Object? raw, {
     required String storeRef,
@@ -174,6 +176,60 @@ class OrderSnapshot {
       next,
       session['status'] as String,
       session['paymentTiming'] as String,
+      data.containsKey('sessionSummary')
+          ? SessionOrderSummary.parse(data['sessionSummary'], orders)
+          : null,
     );
+  }
+}
+
+class OrderSummaryBucket {
+  const OrderSummaryBucket(this.orderCount, this.totalCents);
+  final int orderCount, totalCents;
+}
+
+/// Whole-session counts from the server transaction, never a collection authorization.
+class SessionOrderSummary {
+  SessionOrderSummary._(this.currency, this.buckets);
+  final String currency;
+  final Map<String, OrderSummaryBucket> buckets;
+  factory SessionOrderSummary.parse(Object? raw, List<LiveOrder> orders) {
+    final data = _map(raw), currency = data['currency'];
+    if (data.length != 4 ||
+        currency is! String ||
+        !RegExp(r'^[A-Z]{3}$').hasMatch(currency)) {
+      throw const FormatException();
+    }
+    var total = 0, count = 0;
+    final buckets = <String, OrderSummaryBucket>{};
+    for (final status in ['paid', 'pending', 'expired']) {
+      final bucket = _map(data[status]);
+      final n = bucket['orderCount'], cents = bucket['totalCents'];
+      if (bucket.length != 2 ||
+          n is! int ||
+          cents is! int ||
+          n < 0 ||
+          cents < 0 ||
+          n > 9007199254740991 ||
+          cents > 9007199254740991 ||
+          (n == 0 ? cents != 0 : cents < n)) {
+        throw const FormatException();
+      }
+      total += cents;
+      count += n;
+      if (total > 9007199254740991 || count > 9007199254740991) {
+        throw const FormatException();
+      }
+      final page = orders.where((order) => order.status == status);
+      if (page.length > n ||
+          page.fold<int>(0, (sum, order) => sum + order.totalCents) > cents) {
+        throw const FormatException();
+      }
+      buckets[status] = OrderSummaryBucket(n, cents);
+    }
+    if (orders.any((order) => order.currency != currency)) {
+      throw const FormatException();
+    }
+    return SessionOrderSummary._(currency, Map.unmodifiable(buckets));
   }
 }

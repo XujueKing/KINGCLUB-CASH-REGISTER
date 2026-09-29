@@ -6,6 +6,8 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'sessionSummaryTitle': '本场次全部订单汇总（非结账金额）|All session orders (not a checkout amount)|本場次全部訂單彙總（非結帳金額）|สรุปทุกคำสั่งซื้อในรอบนี้ (ไม่ใช่ยอดเรียกเก็บ)',
+  'sessionSummaryUnknown': '本场次汇总未知，不能用本页金额代替。|Session totals unavailable; this page is not the full bill.|本場次彙總未知，不能用本頁金額代替。|ไม่ทราบยอดรวมรอบนี้ ยอดหน้านี้ไม่ใช่บิลทั้งหมด',
   'orderPreviewTitle': '单笔订单预览（未打印）|Single-order preview (not printed)|單筆訂單預覽（未列印）|ดูคำสั่งซื้อเดียว (ยังไม่พิมพ์)',
   'orderPreviewNotice': '仅为订单快照，不是整桌结账单、收款凭证或发票。未发送打印数据。|Order snapshot only, not a whole-table bill, payment receipt or invoice. Nothing sent to a printer.|僅為訂單快照，不是整桌結帳單、收款憑證或發票。未傳送列印資料。|ข้อมูลคำสั่งซื้อเท่านั้น ไม่ใช่บิลรวมโต๊ะ หลักฐานรับเงิน หรือใบกำกับภาษี ยังไม่ส่งข้อมูลไปพิมพ์',
   'orderPreviewStatus':

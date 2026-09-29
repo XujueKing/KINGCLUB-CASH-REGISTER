@@ -506,6 +506,26 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
             ),
             if (data != null)
               Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 4,
+                ),
+                child: data!.sessionSummary == null
+                    ? Text(t('sessionSummaryUnknown'))
+                    : Wrap(
+                        spacing: 20,
+                        runSpacing: 4,
+                        children: [
+                          Text(t('sessionSummaryTitle')),
+                          for (final status in ['paid', 'pending', 'expired'])
+                            Text(
+                              '${t('order_$status')}: ${data!.sessionSummary!.buckets[status]!.orderCount} · ${data!.sessionSummary!.currency} ${formatCents(data!.sessionSummary!.buckets[status]!.totalCents)}',
+                            ),
+                        ],
+                      ),
+              ),
+            if (data != null)
+              Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text(
                   '${t('liveObserved')}: ${data!.observedAt.toLocal()}',
