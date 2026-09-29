@@ -1,5 +1,7 @@
 # 收银端生产目标（进行中）
 
+收款接线专项审计：实查统一后端51d93d83，现有微信/支付宝APP支付不能直接当POS收款；员工路由当前只接现金写流程及四渠道准入只读查询。另确认非现金收银结算还需同步补清台回执校验，不能放宽现有门禁。相关5文件/140项测试通过，未改后端或调用渠道，具体证据与实施顺序见 [PAYMENT_CHANNEL_GAP_AUDIT.md](PAYMENT_CHANNEL_GAP_AUDIT.md)。
+
 员工会话存储交接补验：修复登录/续期安全写入期间到期仍装入内存的问题，两个测试先复现，再验证拒绝过期会话及写入中退出清理；全量447项通过/5可选跳过、analyze无问题。尚未构建安装，见 [SESSION_INSTALL_EXPIRY.md](SESSION_INSTALL_EXPIRY.md)。
 
 工作台有效期补验：1902 返回前补会话到期检查，测试先复现后修复，覆盖恰好到期/到期之后拒绝及到期前正常返回；全量444项通过/5可选跳过、analyze无问题。本修复尚未构建安装，见 [WORKBENCH_EXPIRY_GUARD.md](WORKBENCH_EXPIRY_GUARD.md)。
