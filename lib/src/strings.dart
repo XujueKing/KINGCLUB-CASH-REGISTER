@@ -6,6 +6,17 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'cartDraftSave': '保存草稿|Save draft|儲存草稿|บันทึกร่าง',
+  'cartDraftRestore': '恢复草稿|Restore draft|恢復草稿|เรียกคืนร่าง',
+  'cartDraftDiscard': '删除草稿|Delete draft|刪除草稿|ลบร่าง',
+  'cartDraftNotice': '草稿只保存在本设备，未下单、不锁价或库存。未保存的修改离页即丢失。|Drafts stay on this device. No order, price lock or stock reservation. Unsaved edits are lost on leaving.|草稿只儲存在本裝置，未下單、不鎖價或庫存。未儲存的修改離頁即遺失。|ร่างอยู่ในเครื่องนี้เท่านั้น ยังไม่ได้สั่งซื้อ ล็อกราคา หรือจองสต็อก การแก้ไขที่ไม่บันทึกจะหายเมื่อออก',
+  'cartDraftFound': '发现本场次草稿，请恢复或删除后继续。|A draft exists for this session. Restore or delete it to continue.|發現本場次草稿，請恢復或刪除後繼續。|พบร่างของรอบนี้ โปรดเรียกคืนหรือลบก่อนดำเนินการต่อ',
+  'cartDraftSaved': '草稿已保存，尚未下单。|Draft saved. No order placed.|草稿已儲存，尚未下單。|บันทึกร่างแล้ว ยังไม่ได้สั่งซื้อ',
+  'cartDraftRestored': '已按当前会员、价格及库存核对草稿，请再次确认后下单。|Draft checked against current membership, prices and stock. Review before placing the order.|已按當前會員、價格及庫存核對草稿，請再次確認後下單。|ตรวจสอบสมาชิก ราคา และสต็อกปัจจุบันแล้ว โปรดตรวจทานก่อนสั่งซื้อ',
+  'cartDraftDiscardNotice': '只删除本设备这份草稿并清空当前选择，不取消任何订单。|Delete this local draft and clear current selections only. No order is cancelled.|只刪除本裝置這份草稿並清空當前選擇，不取消任何訂單。|ลบเฉพาะร่างนี้ในเครื่องและล้างรายการที่เลือก ไม่ยกเลิกคำสั่งซื้อใด',
+  'cartDraftDiscarded': '草稿已删除，未操作订单。|Draft deleted. Orders unchanged.|草稿已刪除，未操作訂單。|ลบร่างแล้ว ไม่ได้เปลี่ยนคำสั่งซื้อ',
+  'cartDraftResave': '选择已修改，请先重新保存草稿再下单。|Selections changed. Save the updated draft before ordering.|選擇已修改，請先重新儲存草稿再下單。|รายการเปลี่ยนแล้ว โปรดบันทึกร่างใหม่ก่อนสั่งซื้อ',
+  'cartDraftFailed': '草稿处理未完成。请核对场次、商品和网络；保存或删除失败后请返回重进，读取实际保存结果。|Draft action incomplete. Check session, items and connection. After a save or delete failure, return and reopen to read the actual saved state.|草稿處理未完成。請核對場次、商品和網路；儲存或刪除失敗後請返回重進，讀取實際儲存結果。|ดำเนินการกับร่างไม่สำเร็จ ตรวจสอบรอบ สินค้า และเครือข่าย หากบันทึกหรือลบไม่สำเร็จ ให้กลับแล้วเปิดใหม่เพื่อตรวจสอบสถานะจริง',
   'tableClearConfirm': '核对并清台|Review and clear table|核對並清台|ตรวจสอบและปิดโต๊ะ',
   'tableClearCancel': '暂不清台|Not now|暫不清台|ยังไม่ปิดโต๊ะ',
   'tableClearConfirmNotice': '确认顾客已离座且现场已整理。本操作关闭这个场次，不收款、不退款，也不删除历史。服务器将核对全部订单、付款与上菜记录；未满足条件会拒绝。|Confirm guests have left and the table is ready. Closes this session only; no payment, refund or history deletion. The server checks all orders, payments and delivery records and rejects unmet conditions.|確認顧客已離座且現場已整理。本操作關閉這個場次，不收款、不退款，也不刪除歷史。伺服器將核對全部訂單、付款與上菜記錄；未滿足條件會拒絕。|ยืนยันว่าลูกค้าออกและจัดโต๊ะเรียบร้อย ปิดเฉพาะรอบนี้ ไม่รับเงิน คืนเงิน หรือลบประวัติ เซิร์ฟเวอร์ตรวจคำสั่งซื้อ การชำระเงิน และการเสิร์ฟทั้งหมด และจะปฏิเสธหากไม่ผ่านเงื่อนไข',

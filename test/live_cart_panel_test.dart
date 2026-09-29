@@ -16,6 +16,8 @@ import 'order_command_test.dart' as o;
 import 'staff_session_test.dart' as a;
 
 class CartAuth extends m.MemberAuth {
+  @override
+  Future<List<CartDraft>> cartDrafts() async => [];
   int submits = 0;
   bool failSubmit = false, failJournal = false, unknown = false;
   int available = 3;
@@ -301,8 +303,8 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
-    await tap(tester, 'cart-confirm');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('cart-confirm')), findsNothing);
     expect(auth.submits, 0);
     expect(enabled(tester), false);
     expect(find.text(tr(UiLanguage.zh, 'cartStale')), findsOneWidget);
@@ -316,8 +318,8 @@ void main() {
     await tap(tester, 'catalog-add-p001');
     await tap(tester, 'cart-submit');
     auth.invalidate();
-    await tester.pump();
-    await tap(tester, 'cart-confirm');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('cart-confirm')), findsNothing);
     expect(auth.submits, 0);
     expect(enabled(tester), false);
     await tester.pumpWidget(const SizedBox());
