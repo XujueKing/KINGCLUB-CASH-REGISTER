@@ -8,6 +8,7 @@ import '../network/cashier_realtime_client.dart';
 import '../strings.dart';
 import 'table_snapshot.dart';
 import 'live_orders_panel.dart';
+import 'live_opening_panel.dart';
 
 class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
@@ -29,6 +30,8 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     with WidgetsBindingObserver {
   TableSnapshot? snapshot;
   LiveTable? selected;
+  bool opening = false;
+  String? openingTable, openingCurrency;
   final cursors = <String?>[null];
   int page = 0, epoch = 0;
   bool loading = false, failed = false;
@@ -169,6 +172,22 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (opening) {
+      return LiveOpeningPanel(
+        auth: widget.auth,
+        language: widget.language,
+        tableId: openingTable,
+        currency: openingCurrency,
+        onBack: () {
+          setState(() {
+            opening = false;
+            openingTable = null;
+            openingCurrency = null;
+          });
+          unawaited(load(reset: true));
+        },
+      );
+    }
     if (selected != null) {
       return LiveOrdersPanel(
         key: ValueKey(selected!.session!.reference),
@@ -200,6 +219,17 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(widget.auth.session?.displayName ?? ''),
+              if (widget.auth.session?.permissions.contains('table.open') ==
+                  true)
+                OutlinedButton(
+                  key: const ValueKey('opening-pending'),
+                  onPressed: () => setState(() {
+                    opening = true;
+                    openingTable = null;
+                    openingCurrency = null;
+                  }),
+                  child: Text(t('openingPending')),
+                ),
               OutlinedButton(
                 key: const ValueKey('live-refresh'),
                 onPressed: loading ? null : () => unawaited(load(reset: true)),
@@ -335,6 +365,21 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 ],
               ),
             ],
+            if (session == null &&
+                table.status == 'active' &&
+                widget.auth.session?.permissions.contains('table.open') == true)
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton(
+                  key: ValueKey('opening-table-${table.reference}'),
+                  onPressed: () => setState(() {
+                    opening = true;
+                    openingTable = table.reference;
+                    openingCurrency = currency;
+                  }),
+                  child: Text(t('openingSubmit')),
+                ),
+              ),
           ],
         ),
       ),
