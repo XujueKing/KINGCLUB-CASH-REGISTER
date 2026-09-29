@@ -222,6 +222,9 @@ class StaffAuthController extends ChangeNotifier {
       'afterTable': ?afterTable,
     });
     _check(epoch);
+    if (!session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
     return value;
   }
 

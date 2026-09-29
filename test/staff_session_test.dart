@@ -132,6 +132,82 @@ Future<void> login(StaffAuthController controller) => controller.login(
 
 void main() {
   test(
+    'workbench accepts response just before expiry, then refuses new reads',
+    () async {
+      var clock = now;
+      final api = TestApi()..pendingRead = Completer<Object?>();
+      final c = StaffAuthController(
+        vault: SessionVault(storage: TestStorage()),
+        authFactory: (_) => TestAuth(),
+        sessionFactory: (_) => api,
+        now: () => clock,
+      );
+      addTearDown(c.dispose);
+      await login(c);
+      final reading = c.readWorkbench();
+      clock = now
+          .add(const Duration(minutes: 15))
+          .subtract(const Duration(microseconds: 1));
+      final result = {
+        'result': {'tables': []},
+      };
+      api.pendingRead!.complete(result);
+      expect(await reading, same(result));
+      api.params = null;
+      clock = now.add(const Duration(minutes: 15));
+      await expectLater(
+        c.readWorkbench(),
+        throwsA(
+          isA<CcsopFailure>().having(
+            (error) => error.code,
+            'code',
+            'SESSION_REQUIRED',
+          ),
+        ),
+      );
+      expect(api.params, isNull);
+    },
+  );
+
+  for (final elapsed in [
+    const Duration(minutes: 15),
+    const Duration(minutes: 16),
+  ]) {
+    test('workbench rejects response at or after expiry: $elapsed', () async {
+      var clock = now;
+      final api = TestApi()..pendingRead = Completer<Object?>();
+      final c = StaffAuthController(
+        vault: SessionVault(storage: TestStorage()),
+        authFactory: (_) => TestAuth(),
+        sessionFactory: (_) => api,
+        now: () => clock,
+      );
+      addTearDown(c.dispose);
+      await login(c);
+      final reading = c.readWorkbench(afterTable: 'test-table');
+      expect(api.params, {
+        'storeRef': 'test-store',
+        'afterTable': 'test-table',
+      });
+      final rejected = expectLater(
+        reading,
+        throwsA(
+          isA<CcsopFailure>().having(
+            (error) => error.code,
+            'code',
+            'SESSION_REQUIRED',
+          ),
+        ),
+      );
+      clock = now.add(elapsed);
+      api.pendingRead!.complete({
+        'result': {'tables': []},
+      });
+      await rejected;
+    });
+  }
+
+  test(
     'order reads use the bound store and discard replies after logout',
     () async {
       final auth = TestAuth()
