@@ -249,11 +249,10 @@ class OpeningJournal {
         await _write([...entries, pending]);
       });
 
-  /// Remove only a confirmed, matching receipt. Unknown results survive logout and restart.
+  /// Remove only a matching server-confirmed receipt or permanent cancellation.
   Future<void> acknowledge(StaffSession session, OpeningLookup lookup) =>
       _serial(() async {
-        if (lookup.state != OpeningLookupState.confirmed ||
-            lookup.receipt == null) {
+        if (lookup.state == OpeningLookupState.notObserved) {
           throw const CcsopFailure('OPENING_RESULT_UNCONFIRMED');
         }
         final entries = await _read();
@@ -261,7 +260,19 @@ class OpeningJournal {
             .where((e) => e.requestId == lookup.requestId)
             .toList();
         if (matches.isEmpty) return;
-        final pending = matches.single, receipt = lookup.receipt!;
+        final pending = matches.single;
+        if (!pending.belongsTo(session) ||
+            lookup.storeRef != pending.storeRef ||
+            lookup.tableId != pending.tableId) {
+          throw const CcsopFailure('OPENING_RECEIPT_MISMATCH');
+        }
+        if (lookup.state == OpeningLookupState.cancelled) {
+          await _write(
+            entries.where((e) => e.requestId != lookup.requestId).toList(),
+          );
+          return;
+        }
+        final receipt = lookup.receipt!;
         final expectedMembers = List<String>.of(
           pending._params['memberRefs'] as List<String>,
         )..sort();

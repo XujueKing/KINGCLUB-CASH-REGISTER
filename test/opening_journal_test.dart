@@ -58,6 +58,27 @@ OpeningLookup confirmed(
 
 void main() {
   test(
+    'cancelled lookup is bound to original table and identity before removal',
+    () async {
+      final storage = auth.TestStorage(), p = pending();
+      final journal = OpeningJournal(storage: storage);
+      await journal.save(p, identity);
+      final wrongTable = OpeningLookup.parse(
+        {
+          'result': {'state': 'cancelled', 'requestId': p.requestId},
+        },
+        storeRef: p.storeRef,
+        tableId: 'other-table',
+        requestId: p.requestId,
+      );
+      await expectLater(
+        journal.acknowledge(identity, wrongTable),
+        throwsA(isA<CcsopFailure>()),
+      );
+      expect(await journal.load(identity), hasLength(1));
+    },
+  );
+  test(
     'lost write is detected; write-then-error can be recovered after restart',
     () async {
       final storage = WriteStorage()..dropWrite = true;

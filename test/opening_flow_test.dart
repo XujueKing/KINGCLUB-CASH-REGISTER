@@ -69,6 +69,110 @@ Object lookup(Map<String, dynamic> params, bool confirmed) => {
 };
 
 void main() {
+  test('explicit cancellation clears only after server fence, then permits a fresh request', () async {
+    final storage = auth.TestStorage(), api = FlowApi();
+    final c = controller(storage, api);
+    await auth.login(c);
+    api.handler = (_, _) async =>
+        throw const CcsopFailure('TRANSPORT_FAILED', deliveryUncertain: true);
+    await expectLater(submit(c), throwsA(isA<CcsopFailure>()));
+    final id = (await c.pendingOpenings()).single.requestId;
+    await expectLater(
+      c.cancelOpening(id, confirmed: false),
+      throwsA(isA<CcsopFailure>()),
+    );
+    expect(api.calls, hasLength(1));
+    api.handler = (endpoint, params) async {
+      expect(endpoint, 'K260929001909');
+      expect(params, {
+        'storeRef': 'test-store',
+        'tableId': 'test-table',
+        'requestId': id,
+      });
+      return {
+        'result': {'state': 'cancelled', 'requestId': id},
+      };
+    };
+    expect(
+      (await c.cancelOpening(id, confirmed: true)).state,
+      OpeningLookupState.cancelled,
+    );
+    expect(await c.pendingOpenings(), isEmpty);
+    api.handler = (_, _) async => response();
+    await submit(c);
+    expect(api.calls.last.params['requestId'], isNot(id));
+    c.dispose();
+  });
+  test(
+    'cancellation losing race to opening returns the original success',
+    () async {
+      final storage = auth.TestStorage(), api = FlowApi();
+      final c = controller(storage, api);
+      await auth.login(c);
+      api.handler = (_, _) async =>
+          throw const CcsopFailure('TRANSPORT_FAILED', deliveryUncertain: true);
+      await expectLater(submit(c), throwsA(isA<CcsopFailure>()));
+      final id = (await c.pendingOpenings()).single.requestId;
+      api.handler = (_, params) async => lookup(params, true);
+      expect(
+        (await c.cancelOpening(id, confirmed: true)).state,
+        OpeningLookupState.confirmed,
+      );
+      expect(await c.pendingOpenings(), isEmpty);
+      c.dispose();
+    },
+  );
+  test('uncertain cancellation keeps record; recovery of cancelled never retries opening', () async {
+    final storage = auth.TestStorage(), api = FlowApi();
+    final c = controller(storage, api);
+    await auth.login(c);
+    api.handler = (_, _) async =>
+        throw const CcsopFailure('TRANSPORT_FAILED', deliveryUncertain: true);
+    await expectLater(submit(c), throwsA(isA<CcsopFailure>()));
+    final id = (await c.pendingOpenings()).single.requestId;
+    await expectLater(
+      c.cancelOpening(id, confirmed: true),
+      throwsA(isA<CcsopFailure>()),
+    );
+    expect(await c.pendingOpenings(), hasLength(1));
+    api.handler = (endpoint, params) async {
+      expect(endpoint, 'K260929001908');
+      return {
+        'result': {'state': 'cancelled', 'requestId': id},
+      };
+    };
+    expect(
+      (await c.recoverOpening(id, retryOriginal: true)).state,
+      OpeningLookupState.cancelled,
+    );
+    expect(api.calls.where((call) => call.id == 'K260929001906'), hasLength(1));
+    expect(await c.pendingOpenings(), isEmpty);
+    c.dispose();
+  });
+  test('unknown or contradictory cancellation response never clears pending request', () async {
+    for (final state in ['not_observed', 'cancelled']) {
+      final storage = auth.TestStorage(), api = FlowApi();
+      final c = controller(storage, api);
+      await auth.login(c);
+      api.handler = (_, _) async =>
+          throw const CcsopFailure('TRANSPORT_FAILED');
+      await expectLater(submit(c), throwsA(isA<CcsopFailure>()));
+      final id = (await c.pendingOpenings()).single.requestId;
+      api.handler = (_, _) async => {
+        'result': {
+          'state': state,
+          'requestId': id,
+          if (state == 'cancelled') 'receipt': fixture.receipt(),
+        },
+      };
+      await expectLater(
+        c.cancelOpening(id, confirmed: true),
+        throwsA(isA<CcsopFailure>()),
+      );
+      expect(await c.pendingOpenings(), hasLength(1));
+      c.dispose();
+    }
+  });
   test(
     'save completes before command; confirmed receipt clears journal',
     () async {
@@ -209,7 +313,7 @@ void main() {
         },
       ]) {
         final storage = auth.TestStorage(),
-          api = FlowApi()..handler = (_, _) async => raw;
+            api = FlowApi()..handler = (_, _) async => raw;
         final c = controller(storage, api);
         await auth.login(c);
         await expectLater(submit(c), throwsA(isA<CcsopFailure>()));

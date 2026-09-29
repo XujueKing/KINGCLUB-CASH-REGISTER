@@ -369,13 +369,45 @@ class StaffAuthController extends ChangeNotifier {
       requestId: requestId,
     );
     _check(epoch);
-    if (result.state == OpeningLookupState.confirmed) {
+    if (result.state != OpeningLookupState.notObserved) {
       await _openingJournal.acknowledge(identity, result);
       _check(epoch);
       _openingIdentity();
       return result;
     }
     if (retryOriginal) return _sendOpening(pending, identity, epoch);
+    return result;
+  });
+
+  /// Permanently abandon only this original request, never its already-opened session.
+  Future<OpeningLookup> cancelOpening(
+    String requestId, {
+    required bool confirmed,
+  }) => _openingOperation(() async {
+    if (!confirmed) throw const CcsopFailure('OPENING_CONFIRMATION_REQUIRED');
+    final identity = _openingIdentity(), epoch = _epoch;
+    final entries = await _openingJournal.load(identity);
+    _check(epoch);
+    _openingIdentity();
+    final matches = entries.where((e) => e.requestId == requestId).toList();
+    if (matches.length != 1) {
+      throw const CcsopFailure('OPENING_PENDING_NOT_FOUND');
+    }
+    final pending = matches.single;
+    final raw = await _callOpening('K260929001909', {
+      'tableId': pending.tableId,
+      'requestId': requestId,
+    });
+    _check(epoch);
+    final result = OpeningLookup.parse(
+      raw,
+      storeRef: identity.storeRef,
+      tableId: pending.tableId,
+      requestId: requestId,
+    );
+    await _openingJournal.acknowledge(identity, result);
+    _check(epoch);
+    _openingIdentity();
     return result;
   });
 

@@ -182,12 +182,19 @@ class OpeningReceipt {
   late final List<String> memberRefs;
 }
 
-enum OpeningLookupState { confirmed, notObserved }
+enum OpeningLookupState { confirmed, notObserved, cancelled }
 
 class OpeningLookup {
-  OpeningLookup._(this.state, this.requestId, this.receipt);
+  OpeningLookup._(
+    this.state,
+    this.requestId,
+    this.receipt,
+    this.storeRef,
+    this.tableId,
+  );
   final OpeningLookupState state;
   final String requestId;
+  final String storeRef, tableId;
   final OpeningReceipt? receipt;
 
   /// 1906 returns a receipt directly; associate it with the command we sent.
@@ -230,16 +237,36 @@ class OpeningLookup {
           result['requestId'] != requestId) {
         throw const FormatException();
       }
-      final state = _choice(result['state'], {'confirmed', 'not_observed'});
-      if (state == 'not_observed') {
+      _ref(storeRef);
+      _ref(tableId);
+      final state = _choice(result['state'], {
+        'confirmed',
+        'not_observed',
+        'cancelled',
+      });
+      if (state != 'confirmed') {
         if (result.containsKey('receipt')) throw const FormatException();
-        return OpeningLookup._(OpeningLookupState.notObserved, requestId, null);
+        return OpeningLookup._(
+          state == 'cancelled'
+              ? OpeningLookupState.cancelled
+              : OpeningLookupState.notObserved,
+          requestId,
+          null,
+          storeRef,
+          tableId,
+        );
       }
       final receipt = OpeningReceipt._(_map(result['receipt']));
       if (receipt.storeRef != storeRef || receipt.tableId != tableId) {
         throw const FormatException();
       }
-      return OpeningLookup._(OpeningLookupState.confirmed, requestId, receipt);
+      return OpeningLookup._(
+        OpeningLookupState.confirmed,
+        requestId,
+        receipt,
+        storeRef,
+        tableId,
+      );
     } catch (_) {
       throw const CcsopFailure('INVALID_OPENING_RECEIPT');
     }
