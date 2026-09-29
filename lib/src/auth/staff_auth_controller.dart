@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../live/catalog_snapshot.dart';
+
 import '../live/opening_snapshot.dart';
 import '../live/opening_journal.dart';
 import '../network/ccsop_client.dart';
@@ -218,6 +220,37 @@ class StaffAuthController extends ChangeNotifier {
       throw const CcsopFailure('SESSION_REQUIRED');
     }
     return value;
+  }
+
+  Future<CatalogSnapshot> readCatalog({
+    String? categoryRef,
+    String? afterProduct,
+  }) async {
+    final session = _session, api = _api, epoch = _epoch;
+    if (session == null ||
+        api == null ||
+        _busy ||
+        !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!session.permissions.contains('orders.create')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    final raw = await api.call('K260929001910', {
+      'storeRef': session.storeRef,
+      'categoryRef': ?categoryRef,
+      'afterProduct': ?afterProduct,
+    });
+    _check(epoch);
+    if (!session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    return CatalogSnapshot.parse(
+      raw,
+      storeRef: session.storeRef,
+      categoryRef: categoryRef,
+      afterProduct: afterProduct,
+    );
   }
 
   Future<OpeningContext> readOpeningContext({required String tableId}) async {

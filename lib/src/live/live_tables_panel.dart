@@ -9,6 +9,7 @@ import '../strings.dart';
 import 'table_snapshot.dart';
 import 'live_orders_panel.dart';
 import 'live_opening_panel.dart';
+import 'live_catalog_panel.dart';
 
 class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
@@ -31,6 +32,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   TableSnapshot? snapshot;
   LiveTable? selected;
   bool opening = false;
+  bool catalog = false;
   String? openingTable, openingCurrency;
   final cursors = <String?>[null];
   int page = 0, epoch = 0;
@@ -172,6 +174,19 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (catalog) {
+      return LiveCatalogPanel(
+        auth: widget.auth,
+        language: widget.language,
+        revision: realtimeRevision,
+        onBack: () {
+          setState(() {
+            catalog = false;
+          });
+          unawaited(load(reset: true));
+        },
+      );
+    }
     if (opening) {
       return LiveOpeningPanel(
         auth: widget.auth,
@@ -219,6 +234,15 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(widget.auth.session?.displayName ?? ''),
+              if (widget.auth.session?.permissions.contains('orders.create') ==
+                  true)
+                OutlinedButton(
+                  key: const ValueKey('catalog-open'),
+                  onPressed: () => setState(() {
+                    catalog = true;
+                  }),
+                  child: Text(t('catalogTitle')),
+                ),
               if (widget.auth.session?.permissions.contains('table.open') ==
                   true)
                 OutlinedButton(

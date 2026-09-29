@@ -6,6 +6,12 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'catalogTitle': '商品目录|Product catalog|商品目錄|รายการสินค้า',
+  'catalogNotice': '仅浏览实时目录，不锁价、不占用库存。员工下单尚未开放。|Catalog observation only; no price lock or stock reservation. Staff ordering is not enabled.|僅瀏覽即時目錄，不鎖價、不佔用庫存。員工下單尚未開放。|ดูรายการเท่านั้น ไม่ล็อกราคาหรือจองสต็อก ยังไม่เปิดให้พนักงานสั่งซื้อ',
+  'catalogEmpty': '本页暂无商品|No products on this page|本頁暫無商品|ไม่มีสินค้าในหน้านี้',
+  'catalogUnknown': '库存未知|Stock unknown|庫存未知|ไม่ทราบสต็อก',
+  'catalogSoldOut': '暂无可售库存|No available stock|暫無可售庫存|ไม่มีสต็อกพร้อมขาย',
+  'catalogAvailable': '当前可售数量|Available quantity|目前可售數量|จำนวนพร้อมขาย',
   'openingSubmit': '确认开台|Open table|確認開檯|ยืนยันเปิดโต๊ะ',
   'openingPending': '待确认开台请求|Pending openings|待確認開檯請求|คำขอเปิดโต๊ะที่รอยืนยัน',
   'openingRefresh': '刷新开台信息|Refresh opening info|重新整理開檯資訊|รีเฟรชข้อมูลเปิดโต๊ะ',
