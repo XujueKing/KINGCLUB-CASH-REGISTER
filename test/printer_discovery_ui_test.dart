@@ -9,6 +9,7 @@ import 'package:kingclub_cash_register/src/strings.dart';
 
 import 'printer_discovery_test.dart' as p;
 import 'staff_access_page_test.dart' as a;
+import 'usb_printer_descriptor_test.dart' as u;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -171,6 +172,29 @@ void main() {
   });
 
   for (final language in UiLanguage.values) {
+    testWidgets(
+      'USB descriptors remain readable without authorization ${language.name}',
+      (tester) async {
+        messenger.setMockMethodCallHandler(
+          channel,
+          (_) async => {
+            ...p.observation(),
+            'usbPrinterCandidates': 2,
+            'usbPrinters': [
+              u.descriptor(),
+              {...u.descriptor(), 'deviceId': 101},
+            ],
+          },
+        );
+        await show(tester, language: language);
+        expect(find.text('USB 1234:5678'), findsNWidgets(2));
+        await tester.ensureVisible(find.text(tr(language, 'printerUsbNotice')));
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byKey(const ValueKey('printer-inspect-close')));
+        await tester.pumpAndSettle();
+        expect(find.byType(PrinterDiscoveryDialog), findsNothing);
+      },
+    );
     testWidgets('printer discovery fits compact ${language.name}', (
       tester,
     ) async {

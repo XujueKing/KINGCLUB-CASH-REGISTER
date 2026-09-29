@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import 'usb_printer_descriptor.dart';
+
 /// Package/USB discovery is not printer readiness or proof of printing.
 class PrinterDiscovery {
   const PrinterDiscovery._(
@@ -10,20 +12,31 @@ class PrinterDiscovery {
     this.serviceResolvable,
     this.serviceVersion,
     this.usbPrinterCandidates,
+    this.usbPrinters,
   );
   final bool serviceInstalled, serviceEnabled, serviceResolvable;
   final String? serviceVersion;
   final int usbPrinterCandidates;
+  final List<UsbPrinterDescriptor> usbPrinters;
 
   factory PrinterDiscovery.parse(Object? value) {
     if (value is! Map ||
-        value.length != 5 ||
+        value.length != 6 ||
         value['serviceInstalled'] is! bool ||
         value['serviceEnabled'] is! bool ||
         value['serviceResolvable'] is! bool ||
         value['usbPrinterCandidates'] is! int ||
         (value['usbPrinterCandidates'] as int) < 0 ||
         (value['usbPrinterCandidates'] as int) > 256) {
+      throw const FormatException('PRINTER_DISCOVERY_INVALID');
+    }
+    final rawPrinters = value['usbPrinters'];
+    if (rawPrinters is! List ||
+        rawPrinters.length != value['usbPrinterCandidates']) {
+      throw const FormatException('PRINTER_DISCOVERY_INVALID');
+    }
+    final printers = rawPrinters.map(UsbPrinterDescriptor.parse).toList();
+    if (printers.map((p) => p.deviceId).toSet().length != printers.length) {
       throw const FormatException('PRINTER_DISCOVERY_INVALID');
     }
     final version = value['serviceVersion'];
@@ -47,6 +60,7 @@ class PrinterDiscovery {
       value['serviceResolvable'] as bool,
       version as String?,
       value['usbPrinterCandidates'] as int,
+      List.unmodifiable(printers),
     );
   }
 }

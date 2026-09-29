@@ -67,19 +67,47 @@ class PrinterDiscoveryBridge(context: Context, messenger: BinaryMessenger) {
             Intent("woyou.aidlservice.jiuiv5.IWoyouService").setPackage(packageName), 0
         )?.serviceInfo
         val usb = app.getSystemService(Context.USB_SERVICE) as? UsbManager
-        val candidates = usb?.deviceList?.values?.count { device ->
+        val candidates = usb?.deviceList?.values?.filter { device ->
             device.deviceClass == UsbConstants.USB_CLASS_PRINTER ||
                 (0 until device.interfaceCount).any {
                     device.getInterface(it).interfaceClass == UsbConstants.USB_CLASS_PRINTER
                 }
-        } ?: 0
+        }?.sortedBy { it.deviceId } ?: emptyList()
+        require(candidates.size <= 256)
+        val descriptors = candidates.map { device ->
+            require(device.interfaceCount <= 32)
+            mapOf(
+                "deviceId" to device.deviceId,
+                "vendorId" to device.vendorId,
+                "productId" to device.productId,
+                "deviceClass" to device.deviceClass,
+                "hasPermission" to (usb?.hasPermission(device) == true),
+                "interfaces" to (0 until device.interfaceCount).map { index ->
+                    val usbInterface = device.getInterface(index)
+                    require(usbInterface.endpointCount <= 32)
+                    mapOf(
+                        "id" to usbInterface.id,
+                        "alternate" to usbInterface.alternateSetting,
+                        "class" to usbInterface.interfaceClass,
+                        "subclass" to usbInterface.interfaceSubclass,
+                        "protocol" to usbInterface.interfaceProtocol,
+                        "endpoints" to (0 until usbInterface.endpointCount).map { endpointIndex ->
+                            val endpoint = usbInterface.getEndpoint(endpointIndex)
+                            mapOf("address" to endpoint.address, "type" to endpoint.type,
+                                "maxPacketSize" to endpoint.maxPacketSize)
+                        }
+                    )
+                }
+            )
+        }
         return mapOf(
             "serviceInstalled" to (info != null),
             "serviceEnabled" to (info?.applicationInfo?.enabled == true),
             "serviceVersion" to info?.versionName,
             "serviceResolvable" to (service != null && service.packageName == packageName &&
                 service.enabled && service.exported && service.applicationInfo.enabled),
-            "usbPrinterCandidates" to candidates
+            "usbPrinterCandidates" to candidates.size,
+            "usbPrinters" to descriptors
         )
     }
 

@@ -1,5 +1,21 @@
 # 打印接入：设备事实与只读检查
 
+## 芯烨 XP-80U 与 USB 描述真机验证（2026-09-29）
+
+用户现场照片铭牌确认：Xprinter芯烨 XP-80U、80mm纸宽、USB+网口、支持ESC/POS，照片中USB线已接。型号/纸宽/协议来自铭牌，不是从商米paperCode推断；铭牌不证明实际出纸成功。照片/序列号不入仓库。只读dumpsys USB显示当前打印候选VID:PID为0483:5743，厂家通用字段printer、产品USB Printer Port，接口class/subclass/protocol=7/1/2；这些描述本身不含型号，不把VID/PID永久硬编码为芯烨。
+
+发现通道由5字段增为严格6字段，新增usbPrinters：临时deviceId、VID/PID、设备类、本应用hasPermission、接口/备用设置/协议及端点地址/类型/最大包长。只读取Android元数据；不读串号/USB路径、不申请权限、不openDevice/claimInterface/传输。候选数、重复临时ID/接口/端点、范围和数量边界均校验；失败不解释为没有设备。deviceId仅本次连接使用，不作跨拔插持久身份。Manifest声明可选USB host能力，没有自动USB附着接管或新的权限申请。
+
+依据[Android USB Host](https://developer.android.com/develop/connectivity/usb/host)区分发现、授权、通信；依据[USB-IF打印类规范5.3–5.4](https://www.usb.org/sites/default/files/usbprint11a021811.pdf)仅将class7/subclass1、protocol1或2且有Bulk OUT的接口列为直连输出候选，不将1284.4协议3当成相同裸输出协议。USB端点存在仍不证明ESC/POS型号能力、纸宽或打印完成。
+
+四语言界面展示每个候选及授权/接口，原状态按钮改名“商米内置状态”，明确不代表外接芯烨。5项模型及4项四语言UI新增测试，全量410项通过/4可选跳过、analyze无问题、ARM32 release构建通过。测试描述符为明确TEST夹具，不冒充真机。
+
+备份旧APK并核对源/副本SHA256 `A9741BE7BD37DB014C56020531A0362D71E5C532D51B3AA47302F16E3EAFBC2B`，私有路径 `D:\DeviceBackups\KINGCLUB-CASH-REGISTER\20260929-usb-descriptor-upgrade\previous-preview.apk`，不含应用数据/Keystore。保留数据升级DAB6264H90115，仍独立0.1.1+2开发签名；新APK和安装后文件SHA256一致 `D48FEFDB83A549600ADEF43A928193C99D9A6D30683E03E19AE6C77576283EE2`，冷启动936ms/等待977ms。
+
+21:29:46应用内实际观察：USB候选1、0483:5743、接口0/备用0、7/1/2、批量输出候选存在、**本应用USB授权=false**。真实截图/UI树已核对并留私有目录，随后关闭检查。PID5493限定300条日志的崩溃/ANR/E-flutter匹配0，仅短窗口。没有请求权限、占用USB、试打、切刀、钱箱或业务操作。
+
+下一步：实现显式选择当前设备、系统授权结果与拔插/身份失效处理；确认实际连接并获试打授权后验证80mm/四语言ESC/POS输出与不确定任务恢复。不能将发现端点或铭牌确认标为打印完成。前一轮拟做的原生生命周期抽取补丁未应用，现有原生超时/断连竞争自动化缺口仍保留。
+
 ## 状态 UI 与实际 Binder 查询（2026-09-29）
 
 检查弹窗新增四语言“读取硬件状态”按钮。打开弹窗只发现服务；用户明确点击且当前服务可解析才短暂绑定查询。后台清空发现/状态，恢复前台须重新发现，不自动重连。等待期间禁重复读取/刷新，关闭可用；错误、超时、后台/关闭后的迟到结果不成为当前观察。状态按[官方文档第8–9页](https://cdn.sunmi.com/public/generalfile/mgt-document/841c6680d673447ba9c5d9b1e1131d01.pdf)明确码表翻译；未知值保持未知，纸张原始码不映射为毫米。这份表说明纸张规格可配置，但没有完整编码映射，不从默认值推断现场纸卷。

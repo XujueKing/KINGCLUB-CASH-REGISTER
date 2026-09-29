@@ -8,6 +8,7 @@ Map<String, Object?> observation() => {
   'serviceResolvable': true,
   'serviceVersion': 'TEST_ONLY_1.0',
   'usbPrinterCandidates': 0,
+  'usbPrinters': <Object?>[],
 };
 
 void main() {
@@ -29,10 +30,11 @@ void main() {
         'serviceEnabled': false,
         'serviceResolvable': false,
         'serviceVersion': null,
-        'usbPrinterCandidates': 1,
+        'usbPrinterCandidates': 0,
+        'usbPrinters': <Object?>[],
       });
       expect(absent.serviceInstalled, false);
-      expect(absent.usbPrinterCandidates, 1);
+      expect(absent.usbPrinterCandidates, 0);
     },
   );
 

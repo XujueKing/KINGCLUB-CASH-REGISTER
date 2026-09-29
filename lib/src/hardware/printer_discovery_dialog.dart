@@ -163,6 +163,20 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
                   '${t('printerUsbCandidates')}: ${data.usbPrinterCandidates}',
                 ),
                 Text('${t('printerObservedAt')}: ${observedAt!.toLocal()}'),
+                for (final usb in data.usbPrinters) ...[
+                  const Divider(),
+                  Text('USB ${usb.vendorProduct}'),
+                  Text(
+                    '${t('printerUsbPermission')}: ${flag(usb.hasPermission)}',
+                  ),
+                  for (final interface in usb.interfaces)
+                    Text(
+                      '${t('printerUsbInterface')} ${interface.id}/${interface.alternate} '
+                      '(${interface.classCode}/${interface.subclass}/${interface.protocol}) · '
+                      '${t('printerUsbBulkOut')}: ${flag(interface.hasBulkOutput)}',
+                    ),
+                ],
+                if (data.usbPrinters.isNotEmpty) Text(t('printerUsbNotice')),
               ],
               const SizedBox(height: 12),
               Text(t('printerReadinessUnknown')),
