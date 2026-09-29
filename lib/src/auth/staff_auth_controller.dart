@@ -4,6 +4,8 @@ import '../live/catalog_snapshot.dart';
 import '../live/order_context_snapshot.dart';
 import '../live/order_command.dart';
 import '../live/order_journal.dart';
+import '../live/cash_command.dart';
+import '../live/cash_journal.dart';
 
 import '../live/opening_snapshot.dart';
 import '../live/opening_journal.dart';
@@ -22,6 +24,7 @@ class StaffAuthController extends ChangeNotifier {
     DateTime Function()? now,
     OpeningJournal? openingJournal,
     OrderJournal? orderJournal,
+    CashJournal? cashJournal,
   }) : _vault = vault ?? SessionVault(),
        _authFactory = authFactory ?? ((base) => CcsopHandshakeClient(base)),
        _sessionFactory =
@@ -30,7 +33,10 @@ class StaffAuthController extends ChangeNotifier {
                CcsopClient(session.base.toString(), session.credentials)),
        _now = now ?? DateTime.now,
        _openingJournal = openingJournal ?? OpeningJournal(),
-       _orderJournal = orderJournal ?? OrderJournal();
+       _orderJournal = orderJournal ?? OrderJournal(),
+       _cashJournal = cashJournal ?? CashJournal();
+  final CashJournal _cashJournal;
+  bool _cashBusy = false;
   final OrderJournal _orderJournal;
   bool _orderBusy = false;
   final OpeningJournal _openingJournal;
@@ -293,6 +299,186 @@ class StaffAuthController extends ChangeNotifier {
       afterMember: afterMember,
     );
   }
+
+  StaffSession _cashIdentity() {
+    final identity = _session;
+    if (_disposed ||
+        identity == null ||
+        _api == null ||
+        _busy ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('payment.cash')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    return identity;
+  }
+
+  Future<T> _cashOperation<T>(Future<T> Function() operation) async {
+    if (_cashBusy) {
+      throw const CcsopFailure('CASH_IN_PROGRESS');
+    }
+    _cashBusy = true;
+    try {
+      return await operation();
+    } finally {
+      _cashBusy = false;
+    }
+  }
+
+  Future<List<PendingCash>> pendingCash() async {
+    final identity = _cashIdentity(), epoch = _epoch;
+    final entries = await _cashJournal.load(identity);
+    _check(epoch);
+    _cashIdentity();
+    return entries;
+  }
+
+  Future<PendingCash> _pendingCash(
+    String requestId,
+    StaffSession identity,
+    int epoch,
+  ) async {
+    final entries = await _cashJournal.load(identity);
+    _check(epoch);
+    _cashIdentity();
+    final matches = entries.where((e) => e.requestId == requestId).toList();
+    if (matches.length != 1) {
+      throw const CcsopFailure('CASH_PENDING_NOT_FOUND');
+    }
+    return matches.single;
+  }
+
+  Future<CashResult> _cashCall(
+    CashResponse response,
+    PendingCash command,
+    StaffSession identity,
+    int epoch,
+  ) async {
+    _check(epoch);
+    _cashIdentity();
+    if (!command.belongsTo(identity)) {
+      throw const CcsopFailure('CASH_SCOPE_CHANGED');
+    }
+    final (id, params) = switch (response) {
+      CashResponse.prepare => ('K260929001915', command.params),
+      CashResponse.confirm => ('K260929001916', command.confirm),
+      CashResponse.lookup => ('K260929001917', command.lookup),
+      CashResponse.close => ('K260929001918', command.close),
+    };
+    final raw = await _api!.call(id, params);
+    _check(epoch);
+    _cashIdentity();
+    final result = CashResult.parse(raw, command, response: response);
+    if (result.terminal) {
+      await _cashJournal.acknowledge(identity, result);
+    } else if (result.intentRef != null) {
+      final updated = command.observe(result);
+      await _cashJournal.save(updated, identity, previous: command);
+    }
+    _check(epoch);
+    _cashIdentity();
+    return result;
+  }
+
+  Future<CashResult> prepareCash({
+    required String orderRef,
+    required int totalCents,
+    required bool confirmed,
+  }) => _cashOperation(() async {
+    if (!confirmed) {
+      throw const CcsopFailure('CASH_CONFIRMATION_REQUIRED');
+    }
+    final identity = _cashIdentity(), epoch = _epoch;
+    final command = PendingCash.prepare(
+      identity: identity,
+      orderRef: orderRef,
+      totalCents: totalCents,
+      now: _now(),
+    );
+    await _cashJournal.save(command, identity);
+    _check(epoch);
+    _cashIdentity();
+    return _cashCall(CashResponse.prepare, command, identity, epoch);
+  });
+
+  /// Recovery is read-only unless explicitly asked to retry the original preparation.
+  Future<CashResult> recoverCash(
+    String requestId, {
+    bool retryOriginalPreparation = false,
+  }) => _cashOperation(() async {
+    final identity = _cashIdentity(), epoch = _epoch;
+    final command = await _pendingCash(requestId, identity, epoch);
+    final result = await _cashCall(
+      CashResponse.lookup,
+      command,
+      identity,
+      epoch,
+    );
+    if (result.state == CashState.notObserved &&
+        retryOriginalPreparation &&
+        command.initial) {
+      return _cashCall(CashResponse.prepare, command, identity, epoch);
+    }
+    return result;
+  });
+
+  /// Persist the employee's physical-cash decision BEFORE any further network call.
+  Future<CashResult> confirmCash(
+    String requestId, {
+    required int receivedCents,
+    required bool cashReceivedConfirmed,
+  }) => _cashOperation(() async {
+    if (!cashReceivedConfirmed) {
+      throw const CcsopFailure('CASH_CONFIRMATION_REQUIRED');
+    }
+    final identity = _cashIdentity(), epoch = _epoch;
+    final previous = await _pendingCash(requestId, identity, epoch);
+    final command = previous.recordConfirmation(
+      receivedCents,
+      cashReceivedConfirmed: true,
+    );
+    await _cashJournal.save(command, identity, previous: previous);
+    _check(epoch);
+    _cashIdentity();
+    final result = await _cashCall(
+      CashResponse.lookup,
+      command,
+      identity,
+      epoch,
+    );
+    if (result.terminal) return result;
+    if (result.state != CashState.prepared || !result.canConfirmCash) {
+      throw const CcsopFailure('CASH_REVIEW_REQUIRED');
+    }
+    return _cashCall(CashResponse.confirm, command, identity, epoch);
+  });
+  Future<CashResult> closeCash(
+    String requestId, {
+    required bool noCashCollectedConfirmed,
+  }) => _cashOperation(() async {
+    if (!noCashCollectedConfirmed) {
+      throw const CcsopFailure('CASH_CONFIRMATION_REQUIRED');
+    }
+    final identity = _cashIdentity(), epoch = _epoch;
+    final previous = await _pendingCash(requestId, identity, epoch);
+    final command = previous.recordClosure(noCashCollectedConfirmed: true);
+    await _cashJournal.save(command, identity, previous: previous);
+    _check(epoch);
+    _cashIdentity();
+    final result = await _cashCall(
+      CashResponse.lookup,
+      command,
+      identity,
+      epoch,
+    );
+    if (result.terminal) return result;
+    if (result.state != CashState.prepared) {
+      throw const CcsopFailure('CASH_REVIEW_REQUIRED');
+    }
+    return _cashCall(CashResponse.close, command, identity, epoch);
+  });
 
   StaffSession _orderIdentity() {
     final identity = _session;
