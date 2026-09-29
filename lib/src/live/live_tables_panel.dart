@@ -11,6 +11,7 @@ import 'live_orders_panel.dart';
 import 'live_opening_panel.dart';
 import 'live_catalog_panel.dart';
 import 'live_order_members_panel.dart';
+import 'live_order_recovery_panel.dart';
 
 class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
@@ -35,6 +36,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   LiveTable? orderingTable;
   bool opening = false;
   bool catalog = false;
+  bool orderRecovery = false;
   String? openingTable, openingCurrency;
   final cursors = <String?>[null];
   int page = 0, epoch = 0;
@@ -176,6 +178,18 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (orderRecovery) {
+      return LiveOrderRecoveryPanel(
+        auth: widget.auth,
+        language: widget.language,
+        onBack: () {
+          setState(() {
+            orderRecovery = false;
+          });
+          unawaited(load(reset: true));
+        },
+      );
+    }
     if (orderingTable != null) {
       return LiveOrderMembersPanel(
         auth: widget.auth,
@@ -251,6 +265,15 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(widget.auth.session?.displayName ?? ''),
+              if (widget.auth.session?.permissions.contains('orders.create') ==
+                  true)
+                OutlinedButton(
+                  key: const ValueKey('order-recovery-open'),
+                  onPressed: () => setState(() {
+                    orderRecovery = true;
+                  }),
+                  child: Text(t('orderRecoveryTitle')),
+                ),
               if (widget.auth.session?.permissions.contains('orders.create') ==
                   true)
                 OutlinedButton(

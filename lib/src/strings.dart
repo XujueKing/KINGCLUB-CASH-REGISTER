@@ -6,6 +6,19 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'orderRecoveryTitle':
+      '待确认订单请求|Pending order requests|待確認訂單請求|คำขอสั่งซื้อที่รอยืนยัน',
+  'orderRecoveryNotice': '仅处理当前员工在本设备保存的原请求。查回不重新下单；记录金额不是付款凭证。|Original requests saved for this employee on this device only. Lookup does not resubmit; the amount is not proof of payment.|僅處理目前員工在本裝置儲存的原請求。查回不重新下單；記錄金額不是付款憑證。|เฉพาะคำขอเดิมของพนักงานนี้ที่บันทึกในอุปกรณ์นี้ การตรวจสอบไม่ส่งคำสั่งซื้อซ้ำ ยอดเงินไม่ใช่หลักฐานการชำระเงิน',
+  'orderRecoveryRetry': '查回并重试原订单|Look up and retry original order|查回並重試原訂單|ตรวจสอบและลองคำสั่งซื้อเดิมอีกครั้ง',
+  'orderRecoveryCancel':
+      '终止原下单请求|Terminate original request|終止原下單請求|ยุติคำขอสั่งซื้อเดิม',
+  'orderRecoveryConfirm': '重试可能实际成单并预留或扣减库存，沿用原商品、数量与价格。终止仅阻止尚未成单的原请求，不退单、不退款。|Retry may create the order and reserve or issue stock using the original items, quantities and prices. Termination only blocks an unsubmitted request; it does not void or refund an order.|重試可能實際成單並預留或扣減庫存，沿用原商品、數量與價格。終止僅阻止尚未成單的原請求，不退單、不退款。|การลองใหม่อาจสร้างคำสั่งซื้อและจองหรือตัดสต็อกโดยใช้สินค้า จำนวน และราคาเดิม การยุติจะปิดกั้นเฉพาะคำขอที่ยังไม่เป็นคำสั่งซื้อ ไม่ยกเลิกคำสั่งซื้อหรือคืนเงิน',
+  'orderRecoveryConfirmed': '原请求已成单，不代表已付款。请返回桌台查看订单。|Original order confirmed, not payment. Return to the table to view orders.|原請求已成單，不代表已付款。請返回桌檯查看訂單。|ยืนยันคำสั่งซื้อเดิมแล้ว ไม่ใช่การยืนยันชำระเงิน กลับไปดูคำสั่งซื้อที่โต๊ะ',
+  'orderRecoveryCancelled': '原下单请求已终止，不代表退单或退款。|Original request terminated, not an order cancellation or refund.|原下單請求已終止，不代表退單或退款。|ยุติคำขอเดิมแล้ว ไม่ใช่การยกเลิกคำสั่งซื้อหรือคืนเงิน',
+  'orderRecoveryUnknown': '仍未确认原请求结果，不要另建重复订单。|Original result is not confirmed. Do not create a duplicate order.|仍未確認原請求結果，不要另建重複訂單。|ยังไม่ยืนยันผลคำขอเดิม อย่าสร้างคำสั่งซื้อซ้ำ',
+  'orderRecoveryUnconfirmed': '本次未能确认结果，原请求保留待查。|Result could not be confirmed. Keep the original request for lookup.|本次未能確認結果，原請求保留待查。|ยังยืนยันผลไม่ได้ เก็บคำขอเดิมไว้ตรวจสอบ',
+  'orderRecoveryFailed': '无法读取待确认记录，请重试；不会清除记录。|Unable to read pending records. Retry; records will not be cleared.|無法讀取待確認記錄，請重試；不會清除記錄。|อ่านรายการที่รอยืนยันไม่ได้ โปรดลองใหม่ ระบบจะไม่ลบบันทึก',
+  'orderRecoveryEmpty': '本设备当前员工暂无待确认订单请求。|No pending requests for this employee on this device.|本裝置目前員工暫無待確認訂單請求。|ไม่มีคำขอที่รอยืนยันของพนักงานนี้ในอุปกรณ์นี้',
   'orderMembersTitle': '入座会员|Seated members|入座會員|สมาชิกที่นั่งอยู่',
   'orderMembersNotice': '仅核对本场次会员。选择不代表付款授权；员工下单尚未开放。|Check members in this session. Selection is not payment consent; staff ordering is not enabled.|僅核對本場次會員。選擇不代表付款授權；員工下單尚未開放。|ตรวจสอบสมาชิกในรอบนี้ การเลือกไม่ใช่การอนุมัติชำระเงิน ยังไม่เปิดให้พนักงานสั่งซื้อ',
   'orderMembersEmpty': '本页暂无入座会员；人数不等于会员入座记录。|No seated members on this page. Guest count is not a membership record.|本頁暫無入座會員；人數不等於會員入座記錄。|ไม่มีสมาชิกที่นั่งในหน้านี้ จำนวนคนไม่ใช่บันทึกสมาชิก',
