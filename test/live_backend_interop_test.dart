@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/auth/staff_session.dart';
 import 'package:kingclub_cash_register/src/live/table_snapshot.dart';
 import 'package:kingclub_cash_register/src/live/serving_command.dart';
+import 'package:kingclub_cash_register/src/live/payment_admission.dart';
 import 'package:kingclub_cash_register/src/network/cashier_socket.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_handshake.dart';
@@ -138,12 +139,30 @@ void main() {
             ),
           );
           final workbench = TableSnapshot.parse(
+            // Actual projection stays independent from internal payment admission states.
             await client.call('K260929001902', {'storeRef': session.storeRef}),
             storeRef: session.storeRef,
             employeeRef: session.employeeRef,
           );
           expect(workbench.tables.single.reference, 'TEST_HTTP_TABLE');
           expect(workbench.tables.single.name, 'TEST COMMITTED');
+          await expectLater(
+            client.call('K260929001923', {
+              'storeRef': session.storeRef,
+              'orderRef': 'D00000000001',
+              'requestId': '213b8914-29cb-41ca-924c-5ebdb3dcaaef',
+              'channel': 'cash',
+              'expectedTotalCents': 200,
+              'currency': 'CNY',
+            }),
+            throwsA(
+              isA<CcsopFailure>().having(
+                (e) => e.code,
+                'code',
+                'CASHIER_PERMISSION_DENIED',
+              ),
+            ),
+          );
           codec = CcsopRealtimeCodec(
             session.credentials,
             'store:${session.storeRef}',
@@ -310,6 +329,77 @@ void main() {
               await servingClient.call('K260929001904', {});
             } finally {
               servingClient.close();
+            }
+          }
+          final paymentFixtures = jsonDecode(
+            env['CASHIER_TEST_PAYMENT_LOOKUP_FIXTURES'] ?? '[]',
+          ) as List;
+          if (paymentFixtures.isNotEmpty) {
+            expect(paymentFixtures.length, 4);
+            final first = paymentFixtures.first as Map;
+            final login = await handshake.call('K260929001901', {
+              'loginName': first['loginName'],
+              'password': env['CASHIER_TEST_PASSWORD']!,
+              'storeRef': first['storeRef'],
+              'deviceId': env['CASHIER_TEST_DEVICE']!,
+            });
+            final owner = StaffSession.fromServer(
+              login,
+              base: base,
+              deviceId: env['CASHIER_TEST_DEVICE']!,
+              expectedStore: first['storeRef'] as String,
+            );
+            expect(owner.employeeRef, 'E00000000001');
+            final paymentClient = CcsopClient(base, owner.credentials);
+            try {
+              for (final raw in paymentFixtures) {
+                final row = raw as Map;
+                final query = PaymentAdmissionQuery.original(
+                  identity: owner,
+                  orderRef: row['orderRef'] as String,
+                  requestId: row['requestId'] as String,
+                  channel: row['channel'] as String,
+                  expectedTotalCents: row['totalCents'] as int,
+                  currency: row['currency'] as String,
+                );
+                final result = PaymentAdmissionResult.parse(
+                  await paymentClient.call('K260929001923', query.params),
+                  query,
+                );
+                expect(result.observed, true);
+                expect(result.admissionStatus, 'prepared');
+                final missing = PaymentAdmissionQuery.original(
+                  identity: owner,
+                  orderRef: row['orderRef'] as String,
+                  requestId: 'aacb25e9-4c15-46ac-8374-4f8f329412ad',
+                  channel: query.channel,
+                  expectedTotalCents: row['totalCents'] as int,
+                  currency: 'CNY',
+                );
+                expect(
+                  PaymentAdmissionResult.parse(
+                    await paymentClient.call('K260929001923', missing.params),
+                    missing,
+                  ).observed,
+                  false,
+                );
+                await expectLater(
+                  paymentClient.call('K260929001923', {
+                    ...query.params,
+                    'expectedTotalCents': (row['totalCents'] as int) + 1,
+                  }),
+                  throwsA(
+                    isA<CcsopFailure>().having(
+                      (e) => e.code,
+                      'code',
+                      'CASHIER_PAYMENT_ORDER_CHANGED',
+                    ),
+                  ),
+                );
+              }
+              await paymentClient.call('K260929001904', {});
+            } finally {
+              paymentClient.close();
             }
           }
         } finally {
