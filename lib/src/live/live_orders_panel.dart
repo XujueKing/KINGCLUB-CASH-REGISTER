@@ -41,6 +41,18 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   BuildContext? cashDialog;
   BuildContext? previewDialog;
   bool previewOpening = false;
+  Widget discardStaleConfirmation(BuildContext context) {
+    final route = ModalRoute.of(context);
+    // The invalidation may precede the dialog builder, before cashDialog exists.
+    // Never build old order content; remove only this route after build unlocks.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted && route != null && route.isActive) {
+        Navigator.of(context).removeRoute(route);
+      }
+    });
+    return const SizedBox.shrink();
+  }
+
   Future<void> previewOrder(LiveOrder order) async {
     final snapshot = data, identity = widget.auth.session;
     if (!foreground ||
@@ -124,6 +136,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
         context: context,
         builder: (ctx) {
           cashDialog = ctx;
+          if (!current()) return discardStaleConfirmation(ctx);
           return AlertDialog(
             title: Text(t('cashPrepare')),
             content: SingleChildScrollView(
@@ -214,8 +227,10 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
         context: context,
         builder: (ctx) {
           cashDialog = ctx;
+          if (!current()) return discardStaleConfirmation(ctx);
           return StatefulBuilder(
             builder: (ctx, update) {
+              if (!current()) return discardStaleConfirmation(ctx);
               final count = RegExp(r'^[1-9][0-9]{0,3}$').hasMatch(text)
                   ? int.tryParse(text)
                   : null;

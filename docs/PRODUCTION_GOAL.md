@@ -1,5 +1,9 @@
 # 收银端生产目标（进行中）
 
+最新订单确认修复：现金/上菜确认在路由已推入但首帧未构建时，身份/后台/revision失效不再显示旧确认内容；新增6项回归，全量487通过/5可选跳过，analyze通过，见 [ORDER_CONFIRMATION_FIRST_FRAME.md](ORDER_CONFIRMATION_FIRST_FRAME.md)。没有真实经营写入。
+
+汇总HTTPS状态更新：后端938027dd与收银a7a448f已完成独立MySQL/Redis下的真实Dart HTTPS/WSS补验，汇总与独立SQL核算相符、空页保留整场汇总、无权限和跨店拒绝、14业务表不变；临时服务停止。覆盖下文历史“Dart HTTPS待补”，不代表Android业务验收、整桌结账或生产部署完成。
+
 场次汇总MySQL补验：后端ea52f077在新建隔离库执行208迁移并验证分页/明细/汇总跨并发提交仍保持同事务快照，后续请求看到提交结果，游标不裁剪汇总；完整隔离脚本及后端verify197文件/1599测试通过，临时服务已停止。未部署或迁移线上，Dart HTTPS与真机汇总验收仍待补，见 [SESSION_ORDER_SUMMARY.md](SESSION_ORDER_SUMMARY.md)。
 
 场次汇总前后端增量：统一后端f9569091在1905同一REPEATABLE READ事务内返回不受分页影响的paid/pending/expired金额及笔数，完整verify通过1599测试；201仅更新接口返回说明，未执行迁移/部署。客户端已严格解析并四语言展示，旧服务缺失字段明确未知，不用本页代算，全量481项通过/5可选跳过、analyze无问题；真实MySQL并发与设备验收待补，见 [SESSION_ORDER_SUMMARY.md](SESSION_ORDER_SUMMARY.md)。
