@@ -11,6 +11,33 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  test('official status mapping does not promote unknown codes to normal', () {
+    final expected = {
+      1: 'printerStateNormal',
+      2: 'printerStatePreparing',
+      3: 'printerStateCommunication',
+      4: 'printerStateNoPaper',
+      5: 'printerStateHot',
+      6: 'printerStateCover',
+      7: 'printerStateCutterError',
+      8: 'printerStateCutterRecovered',
+      9: 'printerStateBlackMark',
+      505: 'printerStateNotDetected',
+      507: 'printerStateFirmware',
+      0: 'printerUnknown',
+      -1: 'printerUnknown',
+      999: 'printerUnknown',
+      null: 'printerUnknown',
+    };
+    for (final entry in expected.entries) {
+      expect(
+        PrinterStatus.parse({'statusCode': entry.key, 'paperCode': null})
+            .stateLabelKey,
+        entry.value,
+      );
+    }
+  });
+
   test('raw codes including unknown future codes survive without readiness inference', () {
     for (final status in [null, 0, 1, 4, 505, 507, 999, -1]) {
       final result = PrinterStatus.parse({

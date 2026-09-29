@@ -9,6 +9,22 @@ class PrinterStatus {
   final int? statusCode;
   final int? paperCode;
 
+  /// The service's instantaneous report, not print completion or permission.
+  String get stateLabelKey => switch (statusCode) {
+    1 => 'printerStateNormal',
+    2 => 'printerStatePreparing',
+    3 => 'printerStateCommunication',
+    4 => 'printerStateNoPaper',
+    5 => 'printerStateHot',
+    6 => 'printerStateCover',
+    7 => 'printerStateCutterError',
+    8 => 'printerStateCutterRecovered',
+    9 => 'printerStateBlackMark',
+    505 => 'printerStateNotDetected',
+    507 => 'printerStateFirmware',
+    _ => 'printerUnknown',
+  };
+
   factory PrinterStatus.parse(Object? value) {
     if (value is! Map ||
         value.length != 2 ||

@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../strings.dart';
 import 'printer_discovery.dart';
+import 'printer_status.dart';
 
-/// Read-only device metadata, accessible without a store/employee login.
+/// Discovery and explicitly requested read-only status, without employee login.
 class PrinterDiscoveryDialog extends StatefulWidget {
   const PrinterDiscoveryDialog({
     super.key,
@@ -22,6 +23,9 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
     with WidgetsBindingObserver {
   PrinterDiscovery? observation;
   DateTime? observedAt;
+  PrinterStatus? status;
+  DateTime? statusObservedAt;
+  bool statusBusy = false, statusFailed = false;
   bool busy = false, failed = false, foreground = true;
   int epoch = 0;
   String t(String key) => tr(widget.language, key);
@@ -34,13 +38,16 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
   }
 
   Future<void> inspect() async {
-    if (!mounted || busy || !foreground) return;
+    if (!mounted || busy || statusBusy || !foreground) return;
     final generation = ++epoch;
     setState(() {
       busy = true;
       failed = false;
       observation = null;
       observedAt = null;
+      status = null;
+      statusObservedAt = null;
+      statusFailed = false;
     });
     try {
       final result =
@@ -60,6 +67,38 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
     }
   }
 
+  Future<void> inspectStatus() async {
+    if (!mounted ||
+        busy ||
+        statusBusy ||
+        !foreground ||
+        observation?.serviceResolvable != true) {
+      return;
+    }
+    final generation = epoch;
+    setState(() {
+      statusBusy = true;
+      statusFailed = false;
+      status = null;
+      statusObservedAt = null;
+    });
+    try {
+      final result = await const PrinterStatusClient().inspect();
+      if (mounted && foreground && generation == epoch) {
+        setState(() {
+          status = result;
+          statusObservedAt = DateTime.now();
+        });
+      }
+    } catch (_) {
+      if (mounted && foreground && generation == epoch) {
+        setState(() => statusFailed = true);
+      }
+    } finally {
+      if (mounted) setState(() => statusBusy = false);
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
@@ -69,6 +108,9 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
         observation = null;
         observedAt = null;
         failed = false;
+        status = null;
+        statusObservedAt = null;
+        statusFailed = false;
       }
     });
   }
@@ -124,6 +166,27 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
               ],
               const SizedBox(height: 12),
               Text(t('printerReadinessUnknown')),
+              const Divider(),
+              Text(t('printerStatusNotice')),
+              if (statusBusy) const LinearProgressIndicator(),
+              if (statusFailed)
+                Text(
+                  t('printerInspectFailed'),
+                  key: const ValueKey('printer-status-failed'),
+                ),
+              if (status case final report?) ...[
+                Text(
+                  '${t('printerStatusReport')}: ${t(report.stateLabelKey)} (${report.statusCode ?? t('printerUnknown')})',
+                  key: const ValueKey('printer-status-report'),
+                ),
+                Text(
+                  '${t('printerPaperRaw')}: ${report.paperCode ?? t('printerUnknown')}',
+                  key: const ValueKey('printer-paper-code'),
+                ),
+                Text(
+                  '${t('printerObservedAt')}: ${statusObservedAt!.toLocal()}',
+                ),
+              ],
             ],
           ),
         ),
@@ -136,8 +199,21 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
         ),
         FilledButton(
           key: const ValueKey('printer-inspect-refresh'),
-          onPressed: busy || !foreground ? null : () => unawaited(inspect()),
+          onPressed: busy || statusBusy || !foreground
+              ? null
+              : () => unawaited(inspect()),
           child: Text(t('printerInspectRefresh')),
+        ),
+        OutlinedButton(
+          key: const ValueKey('printer-status-inspect'),
+          onPressed:
+              busy ||
+                  statusBusy ||
+                  !foreground ||
+                  data?.serviceResolvable != true
+              ? null
+              : () => unawaited(inspectStatus()),
+          child: Text(t('printerStatusInspect')),
         ),
       ],
     );

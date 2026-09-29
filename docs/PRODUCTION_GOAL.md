@@ -1,5 +1,7 @@
 # 收银端生产目标（进行中）
 
+打印状态UI/真机增量：四语言显式只读查询已接，备份旧APK后保留数据升级目标收银机；真实Binder返回内置服务statusCode=505、paperCode=1，同时发现USB打印类候选1个。不得以服务安装或纸张码宣称可打印；下一步核对外接型号/协议。新增10项测试，全量401项通过/4可选跳过、analyze/ARM32构建通过；未试打或交易，详情见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。
+
 打印状态通道增量：已审计官方SDK 1.0.24并加入显式短绑定只读状态/纸张原始码通道，不初始化、不打印，不使用按串号推断的hasPrinter。6项新增替身测试；全量391项通过/4可选跳过，analyze/ARM32构建通过。尚未接状态UI、安装或调用真机Binder，原生生命周期竞争测试及纸宽解释仍待完成，详见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。
 
 打印发现界面及真机增量：登录页四语言只读检查入口已接并保留数据安装目标SUNMI；真实原生通道返回服务6.9.7已安装/启用/可解析、USB打印类候选1个，现场截图核对。10项新增UI测试，全量385项通过/4可选跳过，analyze/ARM32构建通过。未绑定或打印，纸宽、有纸状态、实际出纸与经营票据仍未验收，见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。
