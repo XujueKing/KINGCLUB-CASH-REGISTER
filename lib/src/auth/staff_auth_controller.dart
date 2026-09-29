@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../live/opening_snapshot.dart';
 import '../network/ccsop_client.dart';
 import '../network/ccsop_crypto.dart';
 import '../network/ccsop_handshake.dart';
@@ -206,6 +207,60 @@ class StaffAuthController extends ChangeNotifier {
       'tableRef': tableRef,
       'sessionRef': sessionRef,
       'afterOrder': ?afterOrder,
+    });
+    _check(epoch);
+    if (!session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    return value;
+  }
+
+  Future<OpeningContext> readOpeningContext({required String tableId}) async {
+    final session = _session, epoch = _epoch;
+    final raw = await _readOpening('K260929001907', {'tableId': tableId});
+    _check(epoch);
+    return OpeningContext.parse(
+      raw,
+      storeRef: session!.storeRef,
+      tableId: tableId,
+    );
+  }
+
+  Future<OpeningLookup> readOpeningReceipt({
+    required String tableId,
+    required String requestId,
+  }) async {
+    final session = _session, epoch = _epoch;
+    final raw = await _readOpening('K260929001908', {
+      'tableId': tableId,
+      'requestId': requestId,
+    });
+    _check(epoch);
+    return OpeningLookup.parse(
+      raw,
+      storeRef: session!.storeRef,
+      tableId: tableId,
+      requestId: requestId,
+    );
+  }
+
+  Future<Object?> _readOpening(
+    String interfaceId,
+    Map<String, dynamic> params,
+  ) async {
+    final session = _session, api = _api, epoch = _epoch;
+    if (session == null ||
+        api == null ||
+        _busy ||
+        !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!session.permissions.contains('table.open')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    final value = await api.call(interfaceId, {
+      ...params,
+      'storeRef': session.storeRef,
     });
     _check(epoch);
     if (!session.expiresAt.isAfter(_now())) {
