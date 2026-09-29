@@ -105,3 +105,5 @@ Node 24.19.0 下后台 151 文件、852 项断言通过，但既有 voice-transc
 清台原请求增量：后端198/199已实现默认关闭清台事务及1921/1922；客户端PendingTableClear、独立安全日志和会话控制器已接入，先保存再发送、默认只查回、明确恢复才原样重发、严格历史回执才清除。16项专项、全量282项通过，未接UI或真机业务验收，详见[TABLE_CLEAR_REQUEST_RECOVERY.md](TABLE_CLEAR_REQUEST_RECOVERY.md)。后台未部署启用，未操作真实门店。
 
 清台UI增量：工作台桌台清台核对、二次确认和原请求查询/明确恢复已接四语言界面，返回重新读取当前桌台，不用历史清台回执覆盖新场次。17项widget测试、全量299项通过，analyze无问题，更新上段“未接UI”状态。尚未执行真实清台或后台部署，详见[TABLE_CLEAR_UI.md](TABLE_CLEAR_UI.md)。
+
+清台UI设备补验：c0b2b69构建已对指定SUNMI保留数据升级，旧APK备份与设备哈希一致，新APK设备哈希与构建一致；冷启动979ms，实际截图为独立员工空白登录页，限定启动日志无匹配异常。没有真实登录、清台、交易或线上部署。APK备份不包含应用数据/Keystore；隔离HTTPS清台互通与真机业务验收仍待补，见[TABLE_CLEAR_UI.md](TABLE_CLEAR_UI.md)。

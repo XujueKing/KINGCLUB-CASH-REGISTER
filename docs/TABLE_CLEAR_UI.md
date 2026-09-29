@@ -13,3 +13,13 @@
 未执行真实门店清台、未部署/启用后台接口。支付渠道、美团/抖音官方核销及完整生产目标保持未完成。后续需补真实隔离HTTPS清台互通、真机操作及正式授权门店验收。
 
 ARM32 release构建通过：CASHIER_PREVIEW=false、CASHIER_REALTIME=true，APK SHA256 `91D34593811A5F4411BFB86007062FF9250848D29A0FF29CF73D5628504B1E54`。仍使用现有独立preview包名及开发签名，不是正式生产签名发布。本轮未安装新包。
+
+## 目标收银机升级补验
+
+2026-09-29 对代码 c0b2b69 构建产物完成指定设备升级：SUNMI D2_2nd-SQB，Android 11 / armeabi-v7a，目标序列号 DAB6264H90115。只对 `cn.kingclub.cashregister.preview` 执行 `adb -s ... install -r`，返回 Success；没有清数据、覆盖收钱吧或操作其他手机。系统 lastUpdateTime=2026-09-29 19:17:29，版本0.1.1+2。设备新APK SHA256与上述构建哈希一致。
+
+升级前旧APK拉取至本机私有备份目录 `D:\DeviceBackups\KINGCLUB-CASH-REGISTER\20260929-table-clear-ui-upgrade\previous-preview.apk`，SHA256 `260E9D7D3A828C4D79F26FBB5D473A191DE0866AC99FB8AB19DA500617804920`，与升级前设备原文件一致。此备份仅APK，不含应用数据、Keystore或系统分区；不能承诺还原业务数据。未执行回退。
+
+启动原独立应用MainActivity返回Status ok / COLD / TotalTime 979ms / WaitTime 996ms。实际检查1366×768截图，页面为独立员工登录，服务地址、门店、账号、密码为空；没有输入真实员工或会员凭据，没有业务写操作。当前进程4486的限定300条启动日志，FATAL EXCEPTION、ANR in、AndroidRuntime及E/flutter匹配数0；此为短时启动检查，不是长期稳定性或交互性能证明。截图仅在上述私有目录start.png，不提交Git。
+
+此补验更新上一段“未安装新包”的阶段状态。登录后的清台/恢复界面真机业务、Android断电安全日志恢复、真实门店授权及HTTPS清台端到端验收仍未完成。后台未部署或启用1921/1922。
