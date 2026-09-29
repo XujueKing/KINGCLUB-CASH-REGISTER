@@ -6,6 +6,33 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'cashRecoveryTitle': '现金请求处理|Cash request recovery|現金請求處理|จัดการคำขอเงินสด',
+  'cashRecoveryNotice': '只处理当前员工在本设备保存的原请求。先查回状态；请求金额不是付款凭证。|Original requests saved for this employee on this device. Look up first; amounts are not payment evidence.|只處理目前員工在本裝置儲存的原請求。先查回狀態；請求金額不是付款憑證。|จัดการเฉพาะคำขอเดิมของพนักงานนี้บนอุปกรณ์นี้ ตรวจสอบก่อน ยอดเงินไม่ใช่หลักฐานการชำระเงิน',
+  'cashConfirm': '核对现金收妥|Review cash received|核對現金收妥|ตรวจสอบเงินสดที่รับ',
+  'cashClose': '终止未收款意图|Close uncollected cash intent|終止未收款意圖|ยุติรายการที่ยังไม่ได้รับเงินสด',
+  'cashRetry': '查回并重试原准备请求|Look up and retry original preparation|查回並重試原準備請求|ตรวจสอบและลองเตรียมคำขอเดิมอีกครั้ง',
+  'cashDue': '应收|Amount due|應收|ยอดที่ต้องชำระ',
+  'cashReceived': '实收现金|Cash received|實收現金|เงินสดที่รับ',
+  'cashChange': '应找零|Change due|應找零|เงินทอน',
+  'cashAmountInvalid': '请输入不低于应收的现金金额，最多两位小数。|Enter cash received, at least the amount due, with up to two decimals.|請輸入不低於應收的現金金額，最多兩位小數。|กรอกเงินสดที่รับไม่น้อยกว่ายอดชำระ ทศนิยมไม่เกินสองตำแหน่ง',
+  'cashReceivedNotice': '仅在现金确已收到后确认。实收金额会持久保存，超时后不能改成未收款终止。|Confirm only after physically receiving cash. The amount is saved and cannot be changed to uncollected after a timeout.|僅在現金確已收到後確認。實收金額會持久儲存，逾時後不能改成未收款終止。|ยืนยันเมื่อได้รับเงินสดจริงเท่านั้น ยอดจะถูกบันทึก หากหมดเวลาจะเปลี่ยนเป็นยังไม่ได้รับเงินไม่ได้',
+  'cashCloseNotice': '仅在确认未收取现金时终止。此操作不是退款，也不取消订单；已收到或不确定时请勿继续。|Close only if no cash was collected. This is not a refund or order cancellation. Do not continue if cash was received or you are unsure.|僅在確認未收取現金時終止。此操作不是退款，也不取消訂單；已收到或不確定時請勿繼續。|ยุติเฉพาะเมื่อยังไม่ได้รับเงินสด ไม่ใช่การคืนเงินหรือยกเลิกคำสั่งซื้อ หากรับเงินแล้วหรือไม่แน่ใจห้ามดำเนินการ',
+  'cashRetryNotice': '仅重试原收款准备，不确认付款、不生成新请求号。|Retries the original preparation only; no payment confirmation or new request ID.|僅重試原收款準備，不確認付款、不產生新請求號。|ลองเตรียมคำขอเดิมเท่านั้น ไม่ยืนยันการชำระเงินหรือสร้างรหัสใหม่',
+  'cashReceivedConfirm':
+      '我确认现金已收妥|I have received the cash|我確認現金已收妥|ฉันได้รับเงินสดแล้ว',
+  'cashNotReceivedConfirm':
+      '我确认未收取现金|I have not collected cash|我確認未收取現金|ฉันยังไม่ได้รับเงินสด',
+  'cashPaid': '服务器已确认该笔现金付款。|Server confirmed this cash payment.|伺服器已確認該筆現金付款。|เซิร์ฟเวอร์ยืนยันการชำระเงินสดนี้แล้ว',
+  'cashClosed': '原现金意图已终止；不是退款或订单取消。|Original cash intent closed; not a refund or order cancellation.|原現金意圖已終止；不是退款或訂單取消。|รายการเงินสดเดิมยุติแล้ว ไม่ใช่การคืนเงินหรือยกเลิกคำสั่งซื้อ',
+  'cashUnknown': '原请求尚待查回，不代表取消或付款失败。|Original request needs lookup; this does not mean cancellation or failed payment.|原請求尚待查回，不代表取消或付款失敗。|ต้องตรวจสอบคำขอเดิม ไม่ได้หมายถึงยกเลิกหรือชำระเงินล้มเหลว',
+  'cashNeedsLookup': '已有现金意图，请查回当前状态。|Cash intent exists. Look up its current state.|已有現金意圖，請查回目前狀態。|มีรายการเงินสดแล้ว โปรดตรวจสอบสถานะปัจจุบัน',
+  'cashPrepared': '服务器返回待确认；请核对金额及现金。|Server reports prepared. Verify the amount and physical cash.|伺服器回傳待確認；請核對金額及現金。|เซิร์ฟเวอร์แจ้งว่าพร้อมยืนยัน โปรดตรวจยอดและเงินสด',
+  'cashCannotConfirm': '当前不可确认收款。若现金已收到，请保留记录并联系负责人核实。|Cannot confirm now. If cash was received, keep this record and ask a manager to reconcile.|目前不可確認收款。若現金已收到，請保留記錄並聯絡負責人核實。|ยังยืนยันไม่ได้ หากได้รับเงินแล้วให้เก็บบันทึกนี้และติดต่อผู้จัดการตรวจสอบ',
+  'cashUnconfirmed': '结果未确认，原请求已保留。请查回；勿重复收钱或改换请求。|Result unconfirmed. Original request retained. Look it up; do not collect again or replace the request.|結果未確認，原請求已保留。請查回；勿重複收錢或改換請求。|ยังไม่ยืนยันผล เก็บคำขอเดิมไว้แล้ว โปรดตรวจสอบ ห้ามเก็บเงินซ้ำหรือเปลี่ยนคำขอ',
+  'cashLoadFailed': '无法读取现金记录；不能将其视为空。请检查安全存储或员工会话。|Cannot read cash records; this is not an empty list. Check secure storage or the employee session.|無法讀取現金記錄；不能將其視為空。請檢查安全儲存或員工會話。|อ่านบันทึกเงินสดไม่ได้ ไม่ได้หมายความว่าไม่มีรายการ โปรดตรวจที่เก็บปลอดภัยหรือเซสชันพนักงาน',
+  'cashEmpty': '本设备当前员工没有待处理现金请求。|No pending cash requests for this employee on this device.|本裝置目前員工沒有待處理現金請求。|ไม่มีคำขอเงินสดค้างของพนักงานนี้บนอุปกรณ์นี้',
+  'cashDecisionReceived': '本机已记录现金收妥，服务器结果待核实。|Cash receipt recorded locally; server result needs verification.|本機已記錄現金收妥，伺服器結果待核實。|บันทึกว่ารับเงินสดแล้วในเครื่อง ต้องตรวจสอบผลจากเซิร์ฟเวอร์',
+  'cashDecisionClose': '本机已记录未收款终止决定，服务器结果待核实。|Uncollected-cash closure recorded locally; server result needs verification.|本機已記錄未收款終止決定，伺服器結果待核實。|บันทึกการยุติโดยไม่ได้รับเงินสดในเครื่อง ต้องตรวจสอบผลจากเซิร์ฟเวอร์',
   'cartTitle': '点单购物车|Order cart|點單購物車|ตะกร้าสั่งซื้อ',
   'cartNotice': '商品与库存为查询时快照，下单由服务器重新核对。|Catalog and stock are observations, rechecked by the server on submission.|商品與庫存為查詢時快照，下單由伺服器重新核對。|สินค้าและสต็อกเป็นข้อมูลขณะค้นหา เซิร์ฟเวอร์จะตรวจสอบอีกครั้งเมื่อสั่งซื้อ',
   'cartAdd': '加入／增加|Add|加入／增加|เพิ่ม',
