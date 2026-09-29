@@ -19,3 +19,15 @@
 隔离入口现在临时启用六个接口的元数据，运行结束恢复禁用；上菜业务写入开关仍关闭。Flutter进程前后对订单商品行、上菜回执、库存流水、付款记录及outbox完整排序快照比较相等，证明本次拒绝未修改这些业务表。隔离MySQL in5ETy从空库应用204迁移、Redis LZP99fQb及真实Dart HTTPS/WSS测试通过，专属服务均停止；analyze无问题。
 
 这补足传输层到实际服务端门禁验证，不代表成功上菜及其回执/数量的Dart正向互通已完成，也不代表设备或生产验收。
+
+## 成功上菜与原请求互通补验
+
+后续新增可选 `CASHIER_TEST_SERVING=1` 隔离模式；只在新建测试进程中启用上菜及outbox写入，使用已有TEST_ONLY现金已付订单（2件、已上1件）和测试员工的独立门店会话，不修改真实账号。
+
+真实Dart使用PendingServing构造命令，经HTTPS执行1920未观察到原请求、并发两次1919、ServingResult严格回执解析、1920查回完全相同结果。相同UUID修改原参数拒绝REQUEST_CONFLICT，新UUID携带过期数量拒绝REVISION_CONFLICT；没有通过更换UUID覆盖冲突。
+
+后端比较测试前后全表证据：只有目标商品行已上数1→2及该行更新时间可变化，新增恰好一条员工上菜回执和一条对应门店orders事件；已有回执/事件不变，订单、付款、库存余额、批次、库存流水全部不变。测试不调用支付渠道，不新增真实交付。
+
+该补验更新前文“Dart成功上菜互通未完成”的阶段状态，但尚不覆盖Android Keystore/断电恢复、UI真实员工流程或Dart收到本次事务事件触发重读；没有部署、安装新APK或生产验收。
+
+最终双模式实测：关闭模式MySQL hC4Pq2 / Redis rDqvt6ji；开启模式MySQL zp6dtd / Redis GTIkW6UW，均空库204迁移、HTTPS/WSS及原隔离SQL检查通过，专属服务停止。analyze无问题；后端194文件1455项及完整verify通过（Docker不可用）。
