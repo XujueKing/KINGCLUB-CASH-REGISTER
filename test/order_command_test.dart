@@ -7,6 +7,7 @@ import 'package:kingclub_cash_register/src/auth/staff_auth_controller.dart';
 import 'package:kingclub_cash_register/src/live/catalog_snapshot.dart';
 import 'package:kingclub_cash_register/src/live/order_command.dart';
 import 'package:kingclub_cash_register/src/live/order_journal.dart';
+import 'package:kingclub_cash_register/src/live/cart_draft_store.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 
 import 'staff_session_test.dart' as a;
@@ -109,6 +110,7 @@ Future<StaffAuthController> controller(
   final value = StaffAuthController(
     vault: SessionVault(storage: storage),
     orderJournal: OrderJournal(storage: storage),
+    cartDraftStore: CartDraftStore(storage: storage),
     authFactory: (_) => auth,
     sessionFactory: (_) => api,
     now: now ?? () => a.now,

@@ -12,6 +12,13 @@ bool _ref(Object? v) =>
     v is String && RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(v);
 bool _int(Object? v, int max) => v is int && v > 0 && v <= max;
 
+class RestoredCart {
+  RestoredCart(this.draft, this.context, this.items);
+  final CartDraft draft;
+  final OrderContextSnapshot context;
+  final List<OrderSelection> items;
+}
+
 /// Unsubmitted selection only. No business request ID, receipt or credentials.
 class CartDraft {
   CartDraft._(this._value);

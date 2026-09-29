@@ -11,6 +11,8 @@ import '../live/serving_journal.dart';
 import '../live/table_clear_command.dart';
 import '../live/table_clear_journal.dart';
 import '../live/payment_admission.dart';
+import '../live/cart_draft.dart';
+import '../live/cart_draft_store.dart';
 
 import '../live/opening_snapshot.dart';
 import '../live/opening_journal.dart';
@@ -32,6 +34,7 @@ class StaffAuthController extends ChangeNotifier {
     CashJournal? cashJournal,
     ServingJournal? servingJournal,
     TableClearJournal? tableClearJournal,
+    CartDraftStore? cartDraftStore,
   }) : _vault = vault ?? SessionVault(),
        _authFactory = authFactory ?? ((base) => CcsopHandshakeClient(base)),
        _sessionFactory =
@@ -43,7 +46,9 @@ class StaffAuthController extends ChangeNotifier {
        _orderJournal = orderJournal ?? OrderJournal(),
        _cashJournal = cashJournal ?? CashJournal(),
        _servingJournal = servingJournal ?? ServingJournal(),
-       _tableClearJournal = tableClearJournal ?? TableClearJournal();
+       _tableClearJournal = tableClearJournal ?? TableClearJournal(),
+       _cartDraftStore = cartDraftStore ?? CartDraftStore();
+  final CartDraftStore _cartDraftStore;
   final TableClearJournal _tableClearJournal;
   bool _tableClearBusy = false;
   final ServingJournal _servingJournal;
@@ -51,7 +56,8 @@ class StaffAuthController extends ChangeNotifier {
   final CashJournal _cashJournal;
   bool _cashBusy = false;
   final OrderJournal _orderJournal;
-  bool _orderBusy = false;
+  // Also coordinates draft handoff across controller instances in this isolate.
+  static bool _orderBusy = false;
   final OpeningJournal _openingJournal;
   bool _openingBusy = false;
   final SessionVault _vault;
@@ -771,11 +777,124 @@ class StaffAuthController extends ChangeNotifier {
     return entries;
   }
 
+  Future<List<CartDraft>> cartDrafts() async {
+    final identity = _orderIdentity(), epoch = _epoch;
+    final drafts = await _cartDraftStore.load(identity);
+    _check(epoch);
+    _orderIdentity();
+    return drafts;
+  }
+
+  Future<void> _requireNoPendingCart(String tableRef) async {
+    if ((await pendingOrders()).any((p) => p.tableRef == tableRef)) {
+      throw const CcsopFailure('ORDER_ALREADY_PENDING');
+    }
+  }
+
+  Future<CartDraft> saveCartDraft({
+    required OrderContextSnapshot context,
+    required String memberRef,
+    required List<OrderSelection> items,
+    required CartDraft? previous,
+  }) => _orderOperation(() async {
+    final identity = _orderIdentity(), epoch = _epoch;
+    final draft = CartDraft.capture(
+      identity: identity,
+      context: context,
+      memberRef: memberRef,
+      items: items,
+      now: _now(),
+    );
+    await _requireNoPendingCart(context.tableRef);
+    _check(epoch);
+    _orderIdentity();
+    await _cartDraftStore.save(draft, identity, previous: previous);
+    _check(epoch);
+    _orderIdentity();
+    return draft;
+  });
+
+  Future<void> discardCartDraft(CartDraft draft, {required bool confirmed}) =>
+      _orderOperation(() async {
+        if (!confirmed) throw const CcsopFailure('ORDER_CONFIRMATION_REQUIRED');
+        final identity = _orderIdentity(), epoch = _epoch;
+        if (!draft.belongsTo(identity)) {
+          throw const CcsopFailure('CART_DRAFT_CONTEXT_CHANGED');
+        }
+        await _requireNoPendingCart(draft.tableRef);
+        _check(epoch);
+        _orderIdentity();
+        await _cartDraftStore.remove(draft, identity);
+        _check(epoch);
+        _orderIdentity();
+      });
+
+  /// Refreshes actual membership and catalogue; never reuses persisted prices as truth.
+  Future<RestoredCart> restoreCartDraft(
+    CartDraft draft,
+  ) => _orderOperation(() async {
+    final identity = _orderIdentity(), epoch = _epoch;
+    if (!draft.belongsTo(identity)) {
+      throw const CcsopFailure('CART_DRAFT_CONTEXT_CHANGED');
+    }
+    final saved = await cartDrafts();
+    if (!saved.any((d) => d.signature == draft.signature)) {
+      throw const CcsopFailure('CART_DRAFT_EDIT_CONFLICT');
+    }
+    await _requireNoPendingCart(draft.tableRef);
+    OrderContextSnapshot? context;
+    String? cursor;
+    for (var page = 0; page < 200; page++) {
+      final next = await readOrderContext(
+        tableRef: draft.tableRef,
+        sessionRef: draft.sessionRef,
+        afterMember: cursor,
+      );
+      if (next.members.any((m) => m.reference == draft.memberRef)) {
+        context = next;
+        break;
+      }
+      if (next.nextAfterMember == null) break;
+      if (cursor != null && next.nextAfterMember!.compareTo(cursor) <= 0) {
+        throw const CcsopFailure('CART_DRAFT_CONTEXT_CHANGED');
+      }
+      cursor = next.nextAfterMember;
+    }
+    if (context == null) throw const CcsopFailure('CART_DRAFT_CONTEXT_CHANGED');
+    final needed = draft.lines.map((l) => l['productRef'] as String).toSet();
+    final products = <CatalogProduct>[];
+    cursor = null;
+    for (var page = 0; page < 200; page++) {
+      final next = await readCatalog(afterProduct: cursor);
+      if (next.currency != context.currency) {
+        throw const CcsopFailure('CART_DRAFT_CATALOG_CHANGED');
+      }
+      products.addAll(next.products.where((p) => needed.contains(p.reference)));
+      if (products.length == needed.length || next.nextAfterProduct == null) {
+        break;
+      }
+      if (cursor != null && next.nextAfterProduct!.compareTo(cursor) <= 0) {
+        throw const CcsopFailure('CART_DRAFT_CATALOG_CHANGED');
+      }
+      cursor = next.nextAfterProduct;
+    }
+    _check(epoch);
+    _orderIdentity();
+    final items = draft.restore(
+      identity: identity,
+      context: context,
+      products: products,
+      now: _now(),
+    );
+    return RestoredCart(draft, context, items);
+  });
+
   Future<OrderRequestResult> submitOrder({
     required OrderContextSnapshot context,
     required String memberRef,
     required List<OrderSelection> items,
     required bool confirmed,
+    CartDraft? cartDraft,
   }) => _orderOperation(() async {
     if (!confirmed) throw const CcsopFailure('ORDER_CONFIRMATION_REQUIRED');
     final identity = _orderIdentity(), epoch = _epoch;
@@ -785,7 +904,25 @@ class StaffAuthController extends ChangeNotifier {
       memberRef: memberRef,
       items: items,
       now: _now(),
+      cartDraft: cartDraft,
     );
+    final drafts = await _cartDraftStore.load(identity);
+    _check(epoch);
+    _orderIdentity();
+    final matching = drafts
+        .where(
+          (d) =>
+              d.tableRef == context.tableRef &&
+              d.sessionRef == context.sessionRef &&
+              d.memberRef == memberRef,
+        )
+        .toList();
+    if (cartDraft == null
+        ? matching.isNotEmpty
+        : matching.length != 1 ||
+              matching.single.signature != cartDraft.signature) {
+      throw const CcsopFailure('CART_DRAFT_EDIT_CONFLICT');
+    }
     // No packet is sent until encrypted persistence and exact readback both succeed.
     await _orderJournal.save(command, identity);
     _check(epoch);
@@ -803,6 +940,13 @@ class StaffAuthController extends ChangeNotifier {
     _orderIdentity();
     if (!command.belongsTo(identity)) {
       throw const CcsopFailure('ORDER_SCOPE_CHANGED');
+    }
+    // The durable command is the recovery owner. Consume only its exact linked
+    // draft BEFORE delivery or receipt acknowledgement, including crash recovery.
+    if (command.cartDraft != null) {
+      await _cartDraftStore.remove(command.cartDraft!, identity);
+      _check(epoch);
+      _orderIdentity();
     }
     final raw = await _api!.call(
       interfaceId,

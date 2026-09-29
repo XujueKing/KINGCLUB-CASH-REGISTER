@@ -4,6 +4,7 @@ import 'dart:math';
 import '../auth/staff_session.dart';
 import '../network/ccsop_client.dart';
 import 'catalog_snapshot.dart';
+import 'cart_draft.dart';
 import 'order_context_snapshot.dart';
 
 bool _ref(Object? v) =>
@@ -36,10 +37,12 @@ class PendingOrder {
     this.deviceId,
     this._params,
     this.totalCents,
+    this.cartDraft,
   );
   final String base, employeeRef, deviceId;
   final Map<String, dynamic> _params;
   final int totalCents;
+  final CartDraft? cartDraft;
   String get storeRef => _params['storeRef'] as String;
   String get tableRef => _params['tableRef'] as String;
   String get sessionRef => _params['sessionRef'] as String;
@@ -63,6 +66,7 @@ class PendingOrder {
     'employeeRef': employeeRef,
     'deviceId': deviceId,
     'params': params,
+    if (cartDraft != null) 'cartDraft': cartDraft!.encode(),
   };
   String get signature => jsonEncode(encode());
 
@@ -72,6 +76,7 @@ class PendingOrder {
     required String memberRef,
     required List<OrderSelection> items,
     required DateTime now,
+    CartDraft? cartDraft,
   }) {
     if (!identity.expiresAt.isAfter(now) ||
         !identity.permissions.contains('orders.create') ||
@@ -93,6 +98,7 @@ class PendingOrder {
       'base': identity.base.toString(),
       'employeeRef': identity.employeeRef,
       'deviceId': identity.deviceId,
+      if (cartDraft != null) 'cartDraft': cartDraft.encode(),
       'params': {
         'storeRef': identity.storeRef,
         'tableRef': context.tableRef,
@@ -120,7 +126,7 @@ class PendingOrder {
       final uri = v['base'] is String
           ? Uri.tryParse(v['base'] as String)
           : null;
-      if (v.length != 4 ||
+      if (v.length != (v.containsKey('cartDraft') ? 5 : 4) ||
           p.length != 7 ||
           uri == null ||
           uri.scheme != 'https' ||
@@ -174,6 +180,32 @@ class PendingOrder {
         (a, b) =>
             (a['productRef'] as String).compareTo(b['productRef'] as String),
       );
+      final draft = v.containsKey('cartDraft')
+          ? CartDraft.decode(v['cartDraft'])
+          : null;
+      if (draft != null) {
+        final d = draft.encode();
+        if (d['base'] != v['base'] ||
+            d['employeeRef'] != v['employeeRef'] ||
+            d['deviceId'] != v['deviceId'] ||
+            draft.storeRef != p['storeRef'] ||
+            draft.tableRef != p['tableRef'] ||
+            draft.sessionRef != p['sessionRef'] ||
+            draft.memberRef != p['memberRef'] ||
+            d['paymentTiming'] != p['expectedPaymentTiming'] ||
+            draft.lines.length != items.length) {
+          throw const FormatException();
+        }
+        for (var i = 0; i < items.length; i++) {
+          final line = items[i], saved = draft.lines[i];
+          if (saved['productRef'] != line['productRef'] ||
+              saved['quantity'] != line['quantity'] ||
+              saved['priceCents'] != line['expectedPriceCents'] ||
+              saved['revision'] != line['expectedRevision']) {
+            throw const FormatException();
+          }
+        }
+      }
       return PendingOrder._(
         v['base'] as String,
         v['employeeRef'] as String,
@@ -188,6 +220,7 @@ class PendingOrder {
           'items': List<Map<String, dynamic>>.unmodifiable(items),
         }),
         total,
+        draft,
       );
     } catch (_) {
       throw const CcsopFailure('ORDER_COMMAND_INVALID');

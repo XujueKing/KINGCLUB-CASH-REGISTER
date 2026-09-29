@@ -6,6 +6,7 @@ import 'package:kingclub_cash_register/src/live/catalog_snapshot.dart';
 import 'package:kingclub_cash_register/src/live/live_cart_panel.dart';
 import 'package:kingclub_cash_register/src/live/live_order_members_panel.dart';
 import 'package:kingclub_cash_register/src/live/order_command.dart';
+import 'package:kingclub_cash_register/src/live/cart_draft.dart';
 import 'package:kingclub_cash_register/src/live/order_context_snapshot.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 
@@ -52,6 +53,7 @@ class CartAuth extends m.MemberAuth {
     required String memberRef,
     required List<OrderSelection> items,
     required bool confirmed,
+    CartDraft? cartDraft,
   }) async {
     expect(confirmed, isTrue);
     expect(memberRef, 'member-000');
