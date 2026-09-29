@@ -20,3 +20,15 @@ flutter analyze无问题，全量217项测试通过，1项可选截图测试跳�
 未登录真实员工、未安装本轮APK、未执行真实收款或核销。真机安全存储断电恢复、真实HTTP/TLS/会话及门店营业闭环仍待验收；其他支付渠道和整桌结账未因此完成。
 
 ARM32 release构建通过（26秒、15.8MB），CASHIER_PREVIEW=false、CASHIER_REALTIME=true。APK SHA256：571A39387CCFBCA516FA671F3CFEB04F79FD67081C1D90DF3B1F872758DC9A0E。仍为独立preview包及开发签名，不是正式签名/商店发布验收。
+
+## 真机升级补验（覆盖上文未安装状态）
+
+同日已在指定的SUNMI D2_2nd-SQB收银机执行保留应用数据的`adb install -r`，返回Success。只操作本项目独立preview包，未覆盖收钱吧、未清应用数据、未操作其他手机或修改系统限制。
+
+升级前从设备拉取旧base.apk，SHA256为C4608FF894A1202E1273A5EF4D802DBE12B5A4D6BF8EDB7A48AEF32F4A57A7D0，单独保存在私有DeviceBackups的20260929-cash-entry-upgrade目录。此为安装包备份，不是应用数据/密钥/固件备份，不能据此承诺业务数据回滚。
+
+安装后设备端base.apk的SHA256与上述571A…新构建完全一致。显式启动MainActivity返回Status ok、COLD、TotalTime841ms、WaitTime858ms，前台Activity及进程存在。截图实查1366×768横屏显示简体中文独立员工登录页：HTTPS服务地址、门店编号、员工账号/密码和登录按钮，未显示演示营业记录，未填写凭证或提交登录。该启动用时不代表点单/网络/收款响应性能。
+
+对本次应用PID的最近300条日志筛查未命中FATAL EXCEPTION/Fatal signal/Unhandled Exception/E/flutter/ANR；这是有限启动观察，不是长期无崩溃证明。设备截图与旧APK保留在私有备份目录，不入Git。
+
+现金入口/恢复仍只有自动化测试证据：缺少已部署启用的员工接口及授权测试员工，不能从登录成功启动推断实际下单、现金确认、WebSocket或安全存储断电恢复已验收。本次无真实交易、无权限授予、无线上部署。
