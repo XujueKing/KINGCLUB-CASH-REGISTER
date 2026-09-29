@@ -14,6 +14,7 @@ import 'live_order_members_panel.dart';
 import 'live_order_recovery_panel.dart';
 import 'live_cash_recovery_panel.dart';
 import 'live_serving_recovery_panel.dart';
+import 'live_table_clear_panel.dart';
 
 class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
@@ -41,6 +42,8 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   bool orderRecovery = false;
   bool cashRecovery = false;
   bool servingRecovery = false;
+  bool tableClear = false;
+  LiveTable? clearingTable;
   String? openingTable, openingCurrency;
   final cursors = <String?>[null];
   int page = 0, epoch = 0;
@@ -182,6 +185,21 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (tableClear) {
+      return LiveTableClearPanel(
+        auth: widget.auth,
+        language: widget.language,
+        table: clearingTable,
+        revision: realtimeRevision,
+        onBack: () {
+          setState(() {
+            tableClear = false;
+            clearingTable = null;
+          });
+          unawaited(load(reset: true));
+        },
+      );
+    }
     if (servingRecovery) {
       return LiveServingRecoveryPanel(
         auth: widget.auth,
@@ -291,6 +309,16 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(widget.auth.session?.displayName ?? ''),
+              if (widget.auth.session?.permissions.contains('table.clear') ==
+                  true)
+                OutlinedButton(
+                  key: const ValueKey('tableClear-recovery-open'),
+                  onPressed: () => setState(() {
+                    tableClear = true;
+                    clearingTable = null;
+                  }),
+                  child: Text(t('tableClearRecoveryTitle')),
+                ),
               if (widget.auth.session?.permissions.contains('orders.serve') ==
                   true)
                 OutlinedButton(
@@ -437,6 +465,20 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
               ],
             ),
             if (session != null) ...[
+              if (table.status == 'active' &&
+                  widget.auth.session?.permissions.contains('table.clear') ==
+                      true)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton(
+                    key: ValueKey('tableClear-table-${table.reference}'),
+                    onPressed: () => setState(() {
+                      tableClear = true;
+                      clearingTable = table;
+                    }),
+                    child: Text(t('tableClearConfirm')),
+                  ),
+                ),
               if (table.status == 'active' &&
                   session.status == 'open' &&
                   widget.auth.session?.permissions.contains('orders.create') ==

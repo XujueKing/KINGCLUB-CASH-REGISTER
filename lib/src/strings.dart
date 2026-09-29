@@ -6,6 +6,20 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'tableClearConfirm': '核对并清台|Review and clear table|核對並清台|ตรวจสอบและปิดโต๊ะ',
+  'tableClearCancel': '暂不清台|Not now|暫不清台|ยังไม่ปิดโต๊ะ',
+  'tableClearConfirmNotice': '确认顾客已离座且现场已整理。本操作关闭这个场次，不收款、不退款，也不删除历史。服务器将核对全部订单、付款与上菜记录；未满足条件会拒绝。|Confirm guests have left and the table is ready. Closes this session only; no payment, refund or history deletion. The server checks all orders, payments and delivery records and rejects unmet conditions.|確認顧客已離座且現場已整理。本操作關閉這個場次，不收款、不退款，也不刪除歷史。伺服器將核對全部訂單、付款與上菜記錄；未滿足條件會拒絕。|ยืนยันว่าลูกค้าออกและจัดโต๊ะเรียบร้อย ปิดเฉพาะรอบนี้ ไม่รับเงิน คืนเงิน หรือลบประวัติ เซิร์ฟเวอร์ตรวจคำสั่งซื้อ การชำระเงิน และการเสิร์ฟทั้งหมด และจะปฏิเสธหากไม่ผ่านเงื่อนไข',
+  'tableClearRecoveryTitle':
+      '清台请求处理|Table clearing requests|清台請求處理|จัดการคำขอปิดโต๊ะ',
+  'tableClearRecoveryNotice': '仅处理本员工本设备的原请求。历史清台回执不代表当前桌台为空；返回后重新读取当前桌台。|Original requests for this employee and device only. A historical receipt does not mean the table is empty now. Return to reload current tables.|僅處理本員工本裝置的原請求。歷史清台回執不代表目前桌台為空；返回後重新讀取目前桌台。|จัดการคำขอเดิมของพนักงานและเครื่องนี้เท่านั้น ใบยืนยันย้อนหลังไม่ได้แปลว่าโต๊ะว่างตอนนี้ กลับไปโหลดสถานะโต๊ะใหม่',
+  'tableClearLookup': '查询原请求|Look up original|查詢原請求|ตรวจสอบคำขอเดิม',
+  'tableClearRetry':
+      '恢复原清台请求|Resume original clearing|恢復原清台請求|ดำเนินคำขอปิดโต๊ะเดิมต่อ',
+  'tableClearRetryNotice': '仅重发原场次、原请求号，不清除新场次。请再次核对该场次已具备清台条件；未查到不代表原请求已取消。|Resend only the original session and request ID, never a new session. Recheck that this session is ready to clear. Not observed does not mean cancelled.|僅重發原場次、原請求號，不清除新場次。請再次核對該場次已具備清台條件；未查到不代表原請求已取消。|ส่งเฉพาะรอบและรหัสคำขอเดิม ไม่ปิดรอบใหม่ ตรวจสอบอีกครั้งว่ารอบนี้พร้อมปิด การไม่พบผลไม่ได้หมายถึงยกเลิก',
+  'tableClearConfirmed': '服务器已确认原场次清台。返回重新读取当前桌台。|Server confirmed clearing the original session. Return to reload current tables.|伺服器已確認原場次清台。返回重新讀取目前桌台。|เซิร์ฟเวอร์ยืนยันปิดรอบเดิมแล้ว กลับไปโหลดสถานะโต๊ะปัจจุบันใหม่',
+  'tableClearUnresolved': '尚未查到结果，保留原请求，未自动重发。|No result observed. Original request retained; not resent automatically.|尚未查到結果，保留原請求，未自動重發。|ยังไม่พบผล เก็บคำขอเดิมไว้ ไม่ส่งซ้ำอัตโนมัติ',
+  'tableClearNoPending': '暂无可见未决清台请求|No visible unresolved clearing requests|暫無可見未決清台請求|ไม่มีคำขอปิดโต๊ะที่ยังไม่ทราบผลที่แสดงได้',
+  'tableClearFailed': '清台或查询未完成。请核对员工权限、订单及原请求；不能视为已清台或记录为空。|Clearing or lookup did not complete. Review permissions, orders and original requests; do not assume success or an empty journal.|清台或查詢未完成。請核對員工權限、訂單及原請求；不能視為已清台或記錄為空。|ปิดโต๊ะหรือตรวจสอบไม่สำเร็จ ตรวจสิทธิ์ คำสั่งซื้อ และคำขอเดิม ห้ามถือว่าสำเร็จหรือไม่มีบันทึก',
   'servingConfirm': '确认上菜记录|Confirm delivery|確認上菜記錄|ยืนยันบันทึกการเสิร์ฟ',
   'servingThisQuantity': '本次实际已上数量|Quantity actually delivered now|本次實際已上數量|จำนวนที่เสิร์ฟจริงครั้งนี้',
   'servingConfirmNotice': '仅登记已实际交付的数量，不是下单、出库或收款。请核对后确认。|Record goods actually delivered, not a new order, stock issue or payment. Verify before confirming.|僅登記已實際交付的數量，不是下單、出庫或收款。請核對後確認。|บันทึกเฉพาะจำนวนที่เสิร์ฟจริง ไม่ใช่การสั่งซื้อ ตัดสต็อก หรือชำระเงิน โปรดตรวจสอบก่อนยืนยัน',

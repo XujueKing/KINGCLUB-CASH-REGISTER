@@ -1,5 +1,7 @@
 # 清台原请求与恢复（UI未接入）
 
+后续状态：清台操作及恢复UI已实现，见[TABLE_CLEAR_UI.md](TABLE_CLEAR_UI.md)。下文保留数据层阶段验证边界，不代表真实门店验收。
+
 PendingTableClear固定HTTPS服务、员工、设备、门店、桌台及原场次，明确确认后生成UUID，命令只含storeRef/tableRef/sessionRef/requestId/clearConfirmed=true。不携带客户端订单或结清金额，不把本地判断作为清台授权。
 
 TableClearJournal复用平台安全存储接口，独立pending_staff_table_clear_v1，单isolate串行、最多100条/1M字符、写后精确读回。相同场次或原请求不得被另一请求替换；不同员工不能查看/确认旧记录，也不能覆盖同场次未决请求。读取损坏、写入不明或确认清除失败均保留不确定性，不自动清理、不退回明文、不因退出登录删除。
