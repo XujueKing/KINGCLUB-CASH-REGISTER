@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import '../live/catalog_snapshot.dart';
 import '../live/order_context_snapshot.dart';
+import '../live/order_command.dart';
+import '../live/order_journal.dart';
 
 import '../live/opening_snapshot.dart';
 import '../live/opening_journal.dart';
@@ -19,6 +21,7 @@ class StaffAuthController extends ChangeNotifier {
     SessionChannel Function(StaffSession)? sessionFactory,
     DateTime Function()? now,
     OpeningJournal? openingJournal,
+    OrderJournal? orderJournal,
   }) : _vault = vault ?? SessionVault(),
        _authFactory = authFactory ?? ((base) => CcsopHandshakeClient(base)),
        _sessionFactory =
@@ -26,7 +29,10 @@ class StaffAuthController extends ChangeNotifier {
            ((session) =>
                CcsopClient(session.base.toString(), session.credentials)),
        _now = now ?? DateTime.now,
-       _openingJournal = openingJournal ?? OpeningJournal();
+       _openingJournal = openingJournal ?? OpeningJournal(),
+       _orderJournal = orderJournal ?? OrderJournal();
+  final OrderJournal _orderJournal;
+  bool _orderBusy = false;
   final OpeningJournal _openingJournal;
   bool _openingBusy = false;
   final SessionVault _vault;
@@ -287,6 +293,135 @@ class StaffAuthController extends ChangeNotifier {
       afterMember: afterMember,
     );
   }
+
+  StaffSession _orderIdentity() {
+    final identity = _session;
+    if (_disposed ||
+        identity == null ||
+        _api == null ||
+        _busy ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('orders.create')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    return identity;
+  }
+
+  Future<T> _orderOperation<T>(Future<T> Function() operation) async {
+    if (_orderBusy) throw const CcsopFailure('ORDER_IN_PROGRESS');
+    _orderBusy = true;
+    try {
+      return await operation();
+    } finally {
+      _orderBusy = false;
+    }
+  }
+
+  Future<List<PendingOrder>> pendingOrders() async {
+    final identity = _orderIdentity(), epoch = _epoch;
+    final entries = await _orderJournal.load(identity);
+    _check(epoch);
+    _orderIdentity();
+    return entries;
+  }
+
+  Future<OrderRequestResult> submitOrder({
+    required OrderContextSnapshot context,
+    required String memberRef,
+    required List<OrderSelection> items,
+    required bool confirmed,
+  }) => _orderOperation(() async {
+    if (!confirmed) throw const CcsopFailure('ORDER_CONFIRMATION_REQUIRED');
+    final identity = _orderIdentity(), epoch = _epoch;
+    final command = PendingOrder.prepare(
+      identity: identity,
+      context: context,
+      memberRef: memberRef,
+      items: items,
+      now: _now(),
+    );
+    // No packet is sent until encrypted persistence and exact readback both succeed.
+    await _orderJournal.save(command, identity);
+    _check(epoch);
+    _orderIdentity();
+    return _orderCall('K260929001912', command, identity, epoch);
+  });
+
+  Future<OrderRequestResult> _orderCall(
+    String interfaceId,
+    PendingOrder command,
+    StaffSession identity,
+    int epoch,
+  ) async {
+    _check(epoch);
+    _orderIdentity();
+    if (!command.belongsTo(identity)) {
+      throw const CcsopFailure('ORDER_SCOPE_CHANGED');
+    }
+    final raw = await _api!.call(
+      interfaceId,
+      interfaceId == 'K260929001912' ? command.params : command.lookup,
+    );
+    _check(epoch);
+    _orderIdentity();
+    final result = OrderRequestResult.parse(
+      raw,
+      command,
+      submission: interfaceId == 'K260929001912',
+    );
+    if (result.state != OrderRequestState.notObserved) {
+      await _orderJournal.acknowledge(identity, result);
+      _check(epoch);
+      _orderIdentity();
+    }
+    return result;
+  }
+
+  Future<PendingOrder> _pendingOrder(
+    String requestId,
+    StaffSession identity,
+    int epoch,
+  ) async {
+    final entries = await _orderJournal.load(identity);
+    _check(epoch);
+    _orderIdentity();
+    final matches = entries.where((e) => e.requestId == requestId).toList();
+    if (matches.length != 1) {
+      throw const CcsopFailure('ORDER_PENDING_NOT_FOUND');
+    }
+    return matches.single;
+  }
+
+  /// Read-only by default. An explicit retry reuses the stored command, never the current cart.
+  Future<OrderRequestResult> recoverOrder(
+    String requestId, {
+    bool retryOriginal = false,
+  }) => _orderOperation(() async {
+    final identity = _orderIdentity(), epoch = _epoch;
+    final command = await _pendingOrder(requestId, identity, epoch);
+    final result = await _orderCall('K260929001913', command, identity, epoch);
+    if (result.state == OrderRequestState.notObserved && retryOriginal) {
+      return _orderCall('K260929001912', command, identity, epoch);
+    }
+    return result;
+  });
+
+  /// Cancels only an uncommitted command. A confirmed result must be presented as an existing order.
+  Future<OrderRequestResult> cancelOrder(
+    String requestId, {
+    required bool confirmed,
+  }) => _orderOperation(() async {
+    if (!confirmed) throw const CcsopFailure('ORDER_CONFIRMATION_REQUIRED');
+    final identity = _orderIdentity(), epoch = _epoch;
+    final command = await _pendingOrder(requestId, identity, epoch);
+    final result = await _orderCall('K260929001914', command, identity, epoch);
+    if (result.state == OrderRequestState.notObserved) {
+      throw const CcsopFailure('ORDER_RESULT_UNCONFIRMED');
+    }
+    return result;
+  });
 
   Future<OpeningContext> readOpeningContext({required String tableId}) async {
     final session = _session, epoch = _epoch;
