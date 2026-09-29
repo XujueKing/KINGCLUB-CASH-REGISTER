@@ -7,6 +7,7 @@ import 'package:kingclub_cash_register/src/auth/staff_session.dart';
 import 'package:kingclub_cash_register/src/live/table_snapshot.dart';
 import 'package:kingclub_cash_register/src/live/serving_command.dart';
 import 'package:kingclub_cash_register/src/live/payment_admission.dart';
+import 'package:kingclub_cash_register/src/live/order_snapshot.dart';
 import 'package:kingclub_cash_register/src/network/cashier_socket.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_handshake.dart';
@@ -27,6 +28,10 @@ void main() {
     'real TLS backend: Dart handshake, staff projection, workbench, WSS and rotation',
     () async {
       final base = env['CASHIER_TEST_BASE']!;
+      if (env['CASHIER_TEST_SUMMARY'] == '1') {
+        expect(env['CASHIER_TEST_SUMMARY_FIXTURE'], isNotNull);
+        expect(env['CASHIER_TEST_SUMMARY_FIXTURE'], isNotEmpty);
+      }
       final uri = Uri.parse(base);
       expect(uri.scheme, 'https');
       expect(uri.host, '127.0.0.1');
@@ -69,6 +74,22 @@ void main() {
           );
           expect(session.employeeRef, 'E00000000008');
           client = CcsopClient(base, session.credentials);
+          if (env['CASHIER_TEST_SUMMARY'] == '1') {
+            await expectLater(
+              client.call('K260929001905', {
+                'storeRef': session.storeRef,
+                'tableRef': 'TEST_HTTP_TABLE',
+                'sessionRef': 'H00000000001',
+              }),
+              throwsA(
+                isA<CcsopFailure>().having(
+                  (e) => e.code,
+                  'code',
+                  'CASHIER_PERMISSION_DENIED',
+                ),
+              ),
+            );
+          }
           expect(session.permissions, isNot(contains('orders.serve')));
           expect(session.permissions, isNot(contains('table.clear')));
           final clearScope = <String, dynamic>{
@@ -329,6 +350,83 @@ void main() {
               await servingClient.call('K260929001904', {});
             } finally {
               servingClient.close();
+            }
+          }
+          if ((env['CASHIER_TEST_SUMMARY_FIXTURE'] ?? '').isNotEmpty) {
+            final fixture = jsonDecode(
+              env['CASHIER_TEST_SUMMARY_FIXTURE']!,
+            ) as Map<String, dynamic>;
+            final scope = <String, dynamic>{
+              for (final key in ['storeRef', 'tableRef', 'sessionRef'])
+                key: fixture[key],
+            };
+            final login = await handshake.call('K260929001901', {
+              'loginName': 'test-http-only',
+              'password': env['CASHIER_TEST_PASSWORD']!,
+              'storeRef': scope['storeRef'],
+              'deviceId': env['CASHIER_TEST_DEVICE']!,
+            });
+            final reader = StaffSession.fromServer(
+              login,
+              base: base,
+              deviceId: env['CASHIER_TEST_DEVICE']!,
+              expectedStore: scope['storeRef'] as String,
+            );
+            final summaryClient = CcsopClient(base, reader.credentials);
+            try {
+              for (final cursor in [
+                fixture['afterOrder'],
+                fixture['lastOrder'],
+              ]) {
+                final snapshot = OrderSnapshot.parse(
+                  await summaryClient.call('K260929001905', {
+                    ...scope,
+                    'afterOrder': cursor,
+                  }),
+                  storeRef: scope['storeRef'] as String,
+                  tableRef: scope['tableRef'] as String,
+                  sessionRef: scope['sessionRef'] as String,
+                  afterOrder: cursor as String,
+                );
+                final summary = snapshot.sessionSummary!;
+                expect(summary.currency, fixture['currency']);
+                for (final status in ['paid', 'pending', 'expired']) {
+                  final expected = (fixture['expected'] as Map)[status] as Map;
+                  expect(
+                    summary.buckets[status]!.orderCount,
+                    expected['orderCount'],
+                  );
+                  expect(
+                    summary.buckets[status]!.totalCents,
+                    expected['totalCents'],
+                  );
+                }
+                if (cursor == fixture['lastOrder']) {
+                  expect(snapshot.orders, isEmpty);
+                  expect(snapshot.nextAfterOrder, isNull);
+                } else {
+                  expect(
+                    snapshot.orders.map((o) => o.reference),
+                    contains(fixture['orderRef']),
+                  );
+                }
+              }
+              await expectLater(
+                summaryClient.call('K260929001905', {
+                  ...scope,
+                  'storeRef': 'TEST_OTHER_STORE',
+                }),
+                throwsA(
+                  isA<CcsopFailure>().having(
+                    (e) => e.code,
+                    'code',
+                    'CASHIER_STORE_FORBIDDEN',
+                  ),
+                ),
+              );
+              await summaryClient.call('K260929001904', {});
+            } finally {
+              summaryClient.close();
             }
           }
           final paymentFixtures = jsonDecode(
