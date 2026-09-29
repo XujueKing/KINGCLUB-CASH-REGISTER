@@ -69,6 +69,39 @@ void main() {
           expect(session.employeeRef, 'E00000000008');
           client = CcsopClient(base, session.credentials);
           expect(session.permissions, isNot(contains('orders.serve')));
+          expect(session.permissions, isNot(contains('table.clear')));
+          final clearScope = <String, dynamic>{
+            'storeRef': session.storeRef,
+            'tableRef': 'TEST_HTTP_TABLE',
+            'sessionRef': 'H00000000001',
+            'requestId': '3e52c131-9a39-48ae-8b28-e8a21a14b958',
+          };
+          // Actual encrypted HTTPS, deliberately bypassing client permission guards.
+          await expectLater(
+            client.call('K260929001921', {
+              ...clearScope,
+              'clearConfirmed': true,
+            }),
+            throwsA(
+              isA<CcsopFailure>().having(
+                (e) => e.code,
+                'code',
+                env['CASHIER_TEST_TABLE_CLEAR'] == '1'
+                    ? 'CASHIER_PERMISSION_DENIED'
+                    : 'CASHIER_TABLE_CLEAR_NOT_ENABLED',
+              ),
+            ),
+          );
+          await expectLater(
+            client.call('K260929001922', clearScope),
+            throwsA(
+              isA<CcsopFailure>().having(
+                (e) => e.code,
+                'code',
+                'CASHIER_PERMISSION_DENIED',
+              ),
+            ),
+          );
           final servingScope = <String, dynamic>{
             'storeRef': session.storeRef,
             'tableRef': 'TEST_HTTP_TABLE',
@@ -226,13 +259,19 @@ void main() {
               for (final result in results) {
                 expect(ServingResult.parse(result, command).confirmed, true);
               }
-              expect((results[0] as Map)['result'], (results[1] as Map)['result']);
+              expect(
+                (results[0] as Map)['result'],
+                (results[1] as Map)['result'],
+              );
               final recovered = await servingClient.call(
                 'K260929001920',
                 command.lookup,
               );
               expect(ServingResult.parse(recovered, command).confirmed, true);
-              expect((recovered as Map)['result'], (results[0] as Map)['result']);
+              expect(
+                (recovered as Map)['result'],
+                (results[0] as Map)['result'],
+              );
               await expectLater(
                 servingClient.call('K260929001919', {
                   ...command.params,
