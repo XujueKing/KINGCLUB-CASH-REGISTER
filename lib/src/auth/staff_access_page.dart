@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../strings.dart';
 import '../live/live_tables_panel.dart';
+import '../hardware/printer_discovery_dialog.dart';
 import 'staff_auth_controller.dart';
 
 /// Live entry point. Preview records never enter this widget or its session.
@@ -141,6 +142,14 @@ class _StaffAccessPageState extends State<StaffAccessPage>
       appBar: AppBar(
         title: const Text('KINGCLUB POS'),
         actions: [
+          TextButton(
+            key: const ValueKey('printer-inspect-open'),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => PrinterDiscoveryDialog(language: language),
+            ),
+            child: Text(t('printerInspectTitle')),
+          ),
           if (session != null)
             TextButton(
               key: const ValueKey('staff-logout'),

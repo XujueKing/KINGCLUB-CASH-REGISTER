@@ -1,5 +1,17 @@
 # 打印接入：设备事实与只读检查
 
+## 四语言检查入口与真机通道验证
+
+登录/工作台顶栏新增“打印设备检查”，无需员工身份、不读取经营资料。弹窗仅调用无参数inspect，显示发现证据与明确“打印头/纸张/纸宽未验证”提示。错误不解释为无打印机；超时、关闭弹窗、后台后迟到响应不回填，返回前台须手动重查。简中/繁中/英文/泰语均使用可滚动内容，关闭按钮始终可用。
+
+10项UI/平台通道替身测试覆盖未登录入口、无业务认证调用、错误脱敏、手动重试、前后台、关闭/超时后的迟到响应及四语言紧凑布局。完整385项通过/4可选跳过，analyze无问题，ARM32 release构建通过（preview=false/realtime=true）。这些测试不代表设备打印；以下另列实际通道证据。
+
+指定DAB6264H90115保留数据安装成功，独立包仍0.1.1+2/开发签名；未覆盖收钱吧、清数据或操作其他设备。先备份旧APK并核对源/副本哈希B8343AE3F9A92AABE933BCCBE8241D2257B2383CDEB69A91CAF3359E552CF3B2，保存在本机私有 `D:\DeviceBackups\KINGCLUB-CASH-REGISTER\20260929-printer-discovery-upgrade\previous-preview.apk`；备份不包含应用数据或密钥。
+
+新APK SHA256 `ACFCF4930AE9A8228403254E7CE6022047FAA2AFE49C45F7FF74F5A8CD2FCE1A` 与安装后设备文件一致；冷启动858ms/等待873ms。根据设备UI实际按钮bounds打开只读入口，2026-09-29 20:58:11返回：serviceInstalled=true、serviceEnabled=true、serviceResolvable=true、serviceVersion=6.9.7、usbPrinterCandidates=1。实际截图及UI层级均已核对，随后关闭弹窗回登录页；PID4973限定300条日志的崩溃/ANR/E-flutter模式匹配0，仅短窗口证据。
+
+这是应用内原生通道真实结果，不是预览夹具。USB打印类候选仍不等于正式驱动/协议支持，也不证明纸宽或打印机就绪。没有绑定SUNMI服务、申请USB权限、初始化、打印、自检、走纸、切刀、开钱箱、登录真实员工或调用支付核销。现场截图保留私有目录result.png，不上传。下文“未接UI/安装调用”为上一阶段记录，本节更新发现层验收；实际出纸与业务小票仍未验收。
+
 ## 2026-09-29 实查
 
 指定 D2_2nd-SQB 收银机安装 `woyou.aidlservice.jiuiv5`，版本6.9.7（250928001）。只读包元数据及运行服务显示 `woyou.aidlservice.jiuiv5.IWoyouService` 对应 `sunmi.inner.pkg.service.PrinterService`，另有扩展打印/入口服务。没有读取其他应用的私有配置、业务数据或打印内容，没有停止这些服务。

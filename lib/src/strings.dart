@@ -6,6 +6,24 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'printerInspectTitle': '打印设备检查|Printer check|列印設備檢查|ตรวจสอบเครื่องพิมพ์',
+  'printerInspectNotice': '只读查看本机服务及USB打印类候选设备。不绑定、不打印、不走纸、不切纸、不开钱箱，不需要员工登录。|Read-only local service and USB printer-class discovery. No binding, printing, feeding, cutting or drawer opening. No staff login required.|唯讀查看本機服務及USB列印類候選設備。不綁定、不列印、不走紙、不切紙、不開錢箱，不需要員工登入。|ตรวจสอบบริการในเครื่องและอุปกรณ์ USB ประเภทเครื่องพิมพ์แบบอ่านอย่างเดียว ไม่เชื่อมผูก ไม่พิมพ์ ไม่เลื่อนหรือตัดกระดาษ ไม่เปิดลิ้นชัก ไม่ต้องเข้าสู่ระบบพนักงาน',
+  'printerInspectFailed': '无法完成检查；不代表没有打印机。请稍后手动重试。|Check unavailable; this does not mean no printer exists. Retry manually later.|無法完成檢查；不代表沒有印表機。請稍後手動重試。|ตรวจสอบไม่ได้ ไม่ได้หมายความว่าไม่มีเครื่องพิมพ์ โปรดลองใหม่ภายหลัง',
+  'printerInspectStale': '旧结果已清除，请重新检查。|Previous results cleared. Run a new check.|舊結果已清除，請重新檢查。|ล้างผลเดิมแล้ว โปรดตรวจสอบใหม่',
+  'printerDetected': '是|Yes|是|ใช่',
+  'printerNotDetected': '否|No|否|ไม่ใช่',
+  'printerUnknown': '未知|Unknown|未知|ไม่ทราบ',
+  'printerServiceInstalled':
+      'SUNMI服务已安装|SUNMI service installed|SUNMI服務已安裝|ติดตั้งบริการ SUNMI แล้ว',
+  'printerServiceEnabled': '服务已启用|Service enabled|服務已啟用|เปิดใช้บริการแล้ว',
+  'printerServiceResolvable':
+      '系统可解析服务|Service resolves in system|系統可解析服務|ระบบค้นหาบริการได้',
+  'printerServiceVersion': '服务版本|Service version|服務版本|เวอร์ชันบริการ',
+  'printerUsbCandidates': 'USB打印类候选数量|USB printer-class candidates|USB列印類候選數量|จำนวนอุปกรณ์ USB ประเภทเครื่องพิมพ์',
+  'printerObservedAt': '本次检查时间|Checked at|本次檢查時間|เวลาตรวจสอบ',
+  'printerReadinessUnknown': '打印头、有纸状态及纸宽尚未验证。发现服务或USB设备不代表可打印，也不代表小票已打印。|Print head, paper status and width are not verified. Finding a service or USB device does not prove readiness or a printed receipt.|列印頭、有紙狀態及紙寬尚未驗證。發現服務或USB設備不代表可列印，也不代表收據已列印。|ยังไม่ตรวจสอบหัวพิมพ์ สถานะกระดาษ และความกว้าง การพบบริการหรืออุปกรณ์ USB ไม่ได้ยืนยันว่าพร้อมพิมพ์หรือพิมพ์ใบเสร็จแล้ว',
+  'printerInspectRefresh': '重新检查|Check again|重新檢查|ตรวจสอบอีกครั้ง',
+  'printerInspectClose': '关闭|Close|關閉|ปิด',
   'cartDraftsTitle': '本机草稿|Local drafts|本機草稿|ร่างในเครื่อง',
   'cartDraftsNotice': '仅显示当前员工在本门店、本设备保存的未提交草稿，包含旧场次。恢复请返回当前桌台选择仍在座的会员；不能把旧草稿转到新场次。有待确认订单时先处理原请求。|Unsubmitted drafts saved by this employee for this store and device, including old sessions. To restore, return to the current table and select a seated member. Never transfer old drafts to a new session. Resolve pending order requests first.|僅顯示當前員工在本門店、本裝置儲存的未提交草稿，包含舊場次。恢復請返回當前桌台選擇仍在座的會員；不能把舊草稿轉到新場次。有待確認訂單時先處理原請求。|แสดงร่างที่ยังไม่ส่งของพนักงานนี้สำหรับร้านและเครื่องนี้ รวมรอบเก่า หากต้องการเรียกคืน ให้กลับไปโต๊ะปัจจุบันและเลือกสมาชิกที่ยังนั่งอยู่ ห้ามย้ายร่างเก่าไปรอบใหม่ จัดการคำขอคำสั่งซื้อที่ยังไม่ทราบผลก่อน',
   'cartDraftsEmpty': '没有可见的本机草稿|No visible local drafts|沒有可見的本機草稿|ไม่มีร่างในเครื่องที่แสดงได้',
