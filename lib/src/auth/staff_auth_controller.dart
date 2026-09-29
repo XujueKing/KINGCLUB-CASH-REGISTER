@@ -10,6 +10,7 @@ import '../live/serving_command.dart';
 import '../live/serving_journal.dart';
 import '../live/table_clear_command.dart';
 import '../live/table_clear_journal.dart';
+import '../live/payment_admission.dart';
 
 import '../live/opening_snapshot.dart';
 import '../live/opening_journal.dart';
@@ -435,6 +436,34 @@ class StaffAuthController extends ChangeNotifier {
       throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
     }
     return identity;
+  }
+
+  /// Read only: no journal acknowledgement, channel retries or payment confirmation.
+  Future<PaymentAdmissionResult> lookupPaymentAdmission(
+    PaymentAdmissionQuery query,
+  ) async {
+    final epoch = _epoch;
+    void validate() {
+      _check(epoch);
+      final identity = _session;
+      if (identity == null ||
+          _api == null ||
+          _busy ||
+          !identity.expiresAt.isAfter(_now())) {
+        throw const CcsopFailure('SESSION_REQUIRED');
+      }
+      if (!query.belongsTo(identity)) {
+        throw const CcsopFailure('PAYMENT_ADMISSION_SCOPE_CHANGED');
+      }
+      if (!identity.permissions.contains(query.permission)) {
+        throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+      }
+    }
+
+    validate();
+    final raw = await _api!.call('K260929001923', query.params);
+    validate();
+    return PaymentAdmissionResult.parse(raw, query);
   }
 
   Future<T> _tableClearOperation<T>(Future<T> Function() work) async {

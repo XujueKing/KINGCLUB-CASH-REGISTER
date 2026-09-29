@@ -1,5 +1,7 @@
 # 收银端生产目标（进行中）
 
+原收款查询客户端增量：四渠道PaymentAdmissionQuery/Result及1923只读控制器已实现，严格核对原范围/金额/员工会话，内部confirmed不作为付款凭证，不写日志或自动重试。17项专项、全量319项通过/3可选跳过；无查询UI或非现金创建/持久化链路，未部署/交易，见[PAYMENT_ADMISSION_CLIENT.md](PAYMENT_ADMISSION_CLIENT.md)。
+
 最新增量：员工开台上下文与原请求回执只读查询已接入客户端，详见 [OPENING_CLIENT.md](OPENING_CLIENT.md)。
 开台提交/恢复/终止控制器及四语言横屏页面已实现，加密待确认记录已接入；AA 会员选择、真实后端及设备验收仍待完成。
 下文早期分阶段记录保留历史时点，不作为当前生产验收证明。
