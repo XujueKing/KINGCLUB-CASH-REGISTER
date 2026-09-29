@@ -24,10 +24,15 @@ const copy = <String, String>{
   'printerReadinessUnknown': '发现服务或USB设备不代表可打印。硬件状态须单独读取；即使报告正常，也不代表小票已打印。|Finding a service or USB device does not prove readiness. Read hardware status separately; even a normal report does not prove a printed receipt.|發現服務或USB設備不代表可列印。硬體狀態須單獨讀取；即使報告正常，也不代表收據已列印。|การพบบริการหรืออุปกรณ์ USB ไม่ยืนยันว่าพร้อมพิมพ์ ต้องอ่านสถานะฮาร์ดแวร์แยกต่างหาก แม้รายงานปกติก็ไม่ยืนยันว่าพิมพ์ใบเสร็จแล้ว',
   'printerInspectRefresh': '重新检查|Check again|重新檢查|ตรวจสอบอีกครั้ง',
   'printerInspectClose': '关闭|Close|關閉|ปิด',
-  'printerStatusInspect': '商米内置状态|SUNMI internal status|商米內建狀態|สถานะภายใน SUNMI',
-  'printerUsbPermission': '本应用USB授权|USB permission for this app|本應用USB授權|สิทธิ์ USB ของแอปนี้',
+  'printerStatusInspect':
+      '商米内置状态|SUNMI internal status|商米內建狀態|สถานะภายใน SUNMI',
+  'printerUsbPermission':
+      '本应用USB授权|USB permission for this app|本應用USB授權|สิทธิ์ USB ของแอปนี้',
   'printerUsbAuthorize': '申请USB授权|Request USB access|申請USB授權|ขอสิทธิ์ USB',
   'printerTestTitle': '测试小票 / 非交易凭证|TEST SLIP / NOT A TRANSACTION|測試小票 / 非交易憑證|ใบทดสอบ / ไม่ใช่หลักฐานธุรกรรม',
+  'printerTestPreview': '测试单预览（未打印）|Test preview (not printed)|測試單預覽（未列印）|ดูใบทดสอบ (ยังไม่พิมพ์)',
+  'printerTestPreviewNotice': '仅生成本地点阵图，不连接打印机。宽度是候选点数，不是已验证纸宽；真实出纸仍需另行确认。|Local bitmap only; no printer connection. Width is a candidate dot count, not verified paper width. Physical printing requires separate confirmation.|僅產生本機點陣圖，不連接印表機。寬度是候選點數，不是已驗證紙寬；實際出紙仍需另行確認。|สร้างภาพในเครื่องเท่านั้น ไม่เชื่อมต่อเครื่องพิมพ์ ความกว้างเป็นจำนวนจุดทดลอง ไม่ใช่ขนาดกระดาษที่ยืนยัน การพิมพ์จริงต้องยืนยันแยกต่างหาก',
+  'printerTestPreviewFailed': '无法生成预览，请重试。未连接打印机。|Could not render preview. Retry; no printer was connected.|無法產生預覽，請重試。未連接印表機。|สร้างภาพตัวอย่างไม่ได้ โปรดลองใหม่ ยังไม่ได้เชื่อมต่อเครื่องพิมพ์',
   'printerTestBody': '仅检查文字、宽度和清晰度。|Text, width and legibility check only.|僅檢查文字、寬度和清晰度。|ตรวจสอบข้อความ ความกว้าง และความชัดเจนเท่านั้น',
   'printerTestDotWidth': '候选宽度（点，未实测）|Candidate width (dots, unverified)|候選寬度（點，未實測）|ความกว้างทดลอง (จุด ยังไม่ยืนยัน)',
   'printerTestGlyphs': '简体中文：酒水、桌台、会员|English: drinks, tables, members|繁體中文：酒水、桌檯、會員|ภาษาไทย: เครื่องดื่ม โต๊ะ สมาชิก',
@@ -39,11 +44,14 @@ const copy = <String, String>{
   'printerUsbBulkOut': '打印类批量输出端点|Printer-class bulk output endpoint|列印類批量輸出端點|ปลายทางส่งออกแบบ bulk ของคลาสเครื่องพิมพ์',
   'printerUsbNotice': '仅列出USB描述和当前授权；未打开或占用接口、未发送数据。USB编号不能单独确定品牌或打印协议，外接打印机不受下方商米内置状态代表。|USB descriptors and current permission only; no interface opened or claimed, no data sent. IDs alone do not identify brand or print protocol. The SUNMI internal status below does not describe external printers.|僅列出USB描述及目前授權；未開啟或占用介面、未傳送資料。USB編號不能單獨確定品牌或列印協定，外接印表機不受下方商米內建狀態代表。|แสดงรายละเอียด USB และสิทธิ์ปัจจุบันเท่านั้น ไม่เปิดหรือยึดอินเทอร์เฟซและไม่ส่งข้อมูล รหัสไม่ยืนยันยี่ห้อหรือคำสั่งพิมพ์ สถานะ SUNMI ด้านล่างไม่ใช่สถานะเครื่องพิมพ์ภายนอก',
   'printerStatusNotice': '“商米内置状态”仅短暂查询商米内置服务，不代表外接芯烨打印机。不初始化、不打印；纸张原始码不等于毫米，实际纸宽及出纸仍需核验。|SUNMI internal status briefly queries only the internal service, not an external Xprinter. No initialization or printing. Raw paper codes are not millimetres; physical width and output still need verification.|「商米內建狀態」僅短暫查詢商米內建服務，不代表外接芯燁印表機。不初始化、不列印；紙張原始碼不等於毫米，實際紙寬及出紙仍需核驗。|สถานะภายใน SUNMI ตรวจเฉพาะบริการภายในชั่วคราว ไม่ใช่เครื่อง Xprinter ภายนอก ไม่เริ่มต้นหรือพิมพ์ รหัสกระดาษไม่ใช่มิลลิเมตร ยังต้องตรวจความกว้างและการพิมพ์จริง',
-  'printerStatusReport': '商米内置服务状态|SUNMI internal service status|商米內建服務狀態|สถานะบริการภายใน SUNMI',
-  'printerPaperRaw': '纸张原始码（非毫米）|Raw paper code (not mm)|紙張原始碼（非毫米）|รหัสกระดาษ (ไม่ใช่ มม.)',
+  'printerStatusReport':
+      '商米内置服务状态|SUNMI internal service status|商米內建服務狀態|สถานะบริการภายใน SUNMI',
+  'printerPaperRaw':
+      '纸张原始码（非毫米）|Raw paper code (not mm)|紙張原始碼（非毫米）|รหัสกระดาษ (ไม่ใช่ มม.)',
   'printerStateNormal': '报告正常（未试打）|Reported normal (not print-tested)|報告正常（未試印）|รายงานปกติ (ยังไม่ทดลองพิมพ์)',
   'printerStatePreparing': '准备中|Preparing|準備中|กำลังเตรียม',
-  'printerStateCommunication': '通信异常|Communication error|通訊異常|การสื่อสารผิดพลาด',
+  'printerStateCommunication':
+      '通信异常|Communication error|通訊異常|การสื่อสารผิดพลาด',
   'printerStateNoPaper': '缺纸|Out of paper|缺紙|กระดาษหมด',
   'printerStateHot': '过热|Overheated|過熱|ร้อนเกินไป',
   'printerStateCover': '纸仓盖打开|Cover open|紙倉蓋開啟|ฝาเปิด',
@@ -51,7 +59,8 @@ const copy = <String, String>{
   'printerStateCutterRecovered': '切刀恢复|Cutter recovered|切刀恢復|ใบมีดกลับสู่ปกติ',
   'printerStateBlackMark': '未检测到黑标|Black mark not detected|未偵測到黑標|ไม่พบแถบดำ',
   'printerStateNotDetected': '服务未检测到打印机|Service did not detect a printer|服務未偵測到印表機|บริการไม่พบเครื่องพิมพ์',
-  'printerStateFirmware': '固件更新失败|Firmware update failed|韌體更新失敗|อัปเดตเฟิร์มแวร์ล้มเหลว',
+  'printerStateFirmware':
+      '固件更新失败|Firmware update failed|韌體更新失敗|อัปเดตเฟิร์มแวร์ล้มเหลว',
   'cartDraftsTitle': '本机草稿|Local drafts|本機草稿|ร่างในเครื่อง',
   'cartDraftsNotice': '仅显示当前员工在本门店、本设备保存的未提交草稿，包含旧场次。恢复请返回当前桌台选择仍在座的会员；不能把旧草稿转到新场次。有待确认订单时先处理原请求。|Unsubmitted drafts saved by this employee for this store and device, including old sessions. To restore, return to the current table and select a seated member. Never transfer old drafts to a new session. Resolve pending order requests first.|僅顯示當前員工在本門店、本裝置儲存的未提交草稿，包含舊場次。恢復請返回當前桌台選擇仍在座的會員；不能把舊草稿轉到新場次。有待確認訂單時先處理原請求。|แสดงร่างที่ยังไม่ส่งของพนักงานนี้สำหรับร้านและเครื่องนี้ รวมรอบเก่า หากต้องการเรียกคืน ให้กลับไปโต๊ะปัจจุบันและเลือกสมาชิกที่ยังนั่งอยู่ ห้ามย้ายร่างเก่าไปรอบใหม่ จัดการคำขอคำสั่งซื้อที่ยังไม่ทราบผลก่อน',
   'cartDraftsEmpty': '没有可见的本机草稿|No visible local drafts|沒有可見的本機草稿|ไม่มีร่างในเครื่องที่แสดงได้',

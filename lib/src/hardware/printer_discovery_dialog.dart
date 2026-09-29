@@ -6,6 +6,7 @@ import '../strings.dart';
 import 'printer_discovery.dart';
 import 'printer_status.dart';
 import 'usb_printer_permission.dart';
+import 'test_receipt_preview_dialog.dart';
 
 /// Discovery and explicitly requested read-only status, without employee login.
 class PrinterDiscoveryDialog extends StatefulWidget {
@@ -302,6 +303,17 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
         ),
       ),
       actions: [
+        TextButton(
+          key: const ValueKey('test-receipt-open'),
+          onPressed: busy || statusBusy || permissionBusy || !foreground
+              ? null
+              : () => showDialog<void>(
+                  context: context,
+                  builder: (_) =>
+                      TestReceiptPreviewDialog(language: widget.language),
+                ),
+          child: Text(t('printerTestPreview')),
+        ),
         TextButton(
           key: const ValueKey('printer-inspect-close'),
           onPressed: () => Navigator.of(context).pop(),

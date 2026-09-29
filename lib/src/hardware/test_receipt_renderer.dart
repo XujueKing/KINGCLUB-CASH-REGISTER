@@ -1,11 +1,36 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
+import 'package:flutter/foundation.dart';
 
 import '../strings.dart';
 import 'escpos_raster.dart';
+
+// Pixel loops run off the UI isolate on Android. No dart:ui objects cross isolates.
+({MonochromeRaster raster, Uint8List pixels}) _preparePreview(
+  ({int width, int height, Uint8List rgba}) input,
+) {
+  final raster = MonochromeRaster.fromStraightRgba(
+    width: input.width,
+    height: input.height,
+    rgba: input.rgba,
+  );
+  final pixels = Uint8List(input.width * input.height * 4);
+  for (var pixel = 0; pixel < input.width * input.height; pixel++) {
+    final row = pixel ~/ input.width, column = pixel % input.width;
+    final black =
+        raster.pixels[row * raster.rowBytes + column ~/ 8] &
+            (0x80 >> (column % 8)) !=
+        0;
+    final shade = black ? 0 : 255;
+    pixels[pixel * 4] = shade;
+    pixels[pixel * 4 + 1] = shade;
+    pixels[pixel * 4 + 2] = shade;
+    pixels[pixel * 4 + 3] = 255;
+  }
+  return (raster: raster, pixels: pixels);
+}
 
 class RenderedTestReceipt {
   RenderedTestReceipt(this.raster, Uint8List png)
@@ -82,27 +107,14 @@ Future<RenderedTestReceipt> renderTestReceipt({
       format: ui.ImageByteFormat.rawStraightRgba,
     );
     if (bytes == null) throw const FormatException('TEST_RECEIPT_IMAGE_FAILED');
-    final raster = MonochromeRaster.fromStraightRgba(
+    final prepared = await compute(_preparePreview, (
       width: widthDots,
       height: rows,
       rgba: bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
-    );
-    final monochrome = Uint8List(widthDots * rows * 4);
-    for (var pixel = 0; pixel < widthDots * rows; pixel++) {
-      final row = pixel ~/ widthDots, column = pixel % widthDots;
-      final black =
-          raster.pixels[row * raster.rowBytes + column ~/ 8] &
-              (0x80 >> (column % 8)) !=
-          0;
-      final shade = black ? 0 : 255;
-      monochrome[pixel * 4] = shade;
-      monochrome[pixel * 4 + 1] = shade;
-      monochrome[pixel * 4 + 2] = shade;
-      monochrome[pixel * 4 + 3] = 255;
-    }
+    ), debugLabel: 'test-receipt-raster');
     final decoded = Completer<ui.Image>();
     ui.decodeImageFromPixels(
-      monochrome,
+      prepared.pixels,
       widthDots,
       rows,
       ui.PixelFormat.rgba8888,
@@ -112,7 +124,7 @@ Future<RenderedTestReceipt> renderTestReceipt({
     final png = await preview.toByteData(format: ui.ImageByteFormat.png);
     if (png == null) throw const FormatException('TEST_RECEIPT_PNG_FAILED');
     return RenderedTestReceipt(
-      raster,
+      prepared.raster,
       Uint8List.fromList(
         png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
       ),
