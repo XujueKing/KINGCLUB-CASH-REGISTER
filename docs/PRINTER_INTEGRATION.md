@@ -1,5 +1,17 @@
 # 打印接入：设备事实与只读检查
 
+## 官方 SDK 只读状态通道增量（尚未接 UI / 真机调用）
+
+固定依赖 `com.sunmi:printerlibrary:1.0.24`，从 Maven Central 获取 AAR；下载样本与本次 Gradle 实际缓存 SHA256 均为 `6FE3BACBBDD8616E78F23A04E5A8265BB26EB5C7B75A64BE6B3356C8782D92A8`。这只是本次产物核对，尚不是构建时依赖校验锁。AAR manifest 没有新增权限或组件。用 JDK javap 检查 Manager、Callback、Proxy 构造及两个查询方法：连接仅 bindService，回调创建代理，代理根据硬件属性选 SDK 自带协议表；没有自动初始化/自检/打印。SDK hasPrinter 的异常路径使用序列号推断，故本应用不调用它。
+
+依据：[官方示例](https://github.com/shangmisunmi/SunmiPrinterDemo)、[官方示例查询实现](https://raw.githubusercontent.com/shangmisunmi/SunmiPrinterDemo/master/app/src/main/java/com/sunmi/printerhelper/utils/SunmiPrintHelper.java)、[Maven 发布项](https://central.sonatype.com/artifact/com.sunmi/printerlibrary/1.0.24)。示例的纸宽三元表达式将所有非1值解释为80mm，不能直接搬到未知版本的生产判断。本次保留原始 paperCode，不转换为毫米；后续按官方规范明确允许值并将其他值显示未知。
+
+新增独立无参数 `printer-status/inspect` 通道，只有明确调用才短暂绑定；后台线程依次查询 updatePrinterState/getPrinterPaper，分别失败则该字段为null。绝不调用打印机初始化、缓冲区、打印、自检、切纸、钱箱或固件修改方法，不读取设备串号。查询完成、断连、空绑定、超时、引擎销毁时解除本应用绑定。2.5秒原生期限；若Binder查询卡住，超时后仍阻止新任务排队，直至旧调用实际返回，并丢弃迟到结果。Dart层4秒期限、严格2字段与32位整数解析、错误脱敏；没有ready/printed属性。
+
+验证：6项新增Dart/通道替身测试（未知码、null、坏数据、只读调用、错误与超时迟到）；完整391项通过/4可选跳过，analyze无问题，ARM32 release构建通过（preview=false/realtime=true，仍开发签名）。实际只读getprop核对目标硬件属性为D2_2nd。SDK内部会为该型号走默认桌面协议分支，不能以编译成功代替设备兼容验收。
+
+边界：当前原检查弹窗仍只调用发现通道，本增量尚未绑定到UI、安装新包或实测Binder；原生绑定/断连/超时竞争没有自动化运行测试。没有试打或操作真实交易。下一轮须补生命周期测试、四语言状态UI与真机只读调用，然后才能评估实际纸张规格；不能把当前构建说成已能正常打印。
+
 ## 四语言检查入口与真机通道验证
 
 登录/工作台顶栏新增“打印设备检查”，无需员工身份、不读取经营资料。弹窗仅调用无参数inspect，显示发现证据与明确“打印头/纸张/纸宽未验证”提示。错误不解释为无打印机；超时、关闭弹窗、后台后迟到响应不回填，返回前台须手动重查。简中/繁中/英文/泰语均使用可滚动内容，关闭按钮始终可用。

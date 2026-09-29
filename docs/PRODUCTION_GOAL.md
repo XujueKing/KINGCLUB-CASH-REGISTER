@@ -1,5 +1,7 @@
 # 收银端生产目标（进行中）
 
+打印状态通道增量：已审计官方SDK 1.0.24并加入显式短绑定只读状态/纸张原始码通道，不初始化、不打印，不使用按串号推断的hasPrinter。6项新增替身测试；全量391项通过/4可选跳过，analyze/ARM32构建通过。尚未接状态UI、安装或调用真机Binder，原生生命周期竞争测试及纸宽解释仍待完成，详见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。
+
 打印发现界面及真机增量：登录页四语言只读检查入口已接并保留数据安装目标SUNMI；真实原生通道返回服务6.9.7已安装/启用/可解析、USB打印类候选1个，现场截图核对。10项新增UI测试，全量385项通过/4可选跳过，analyze/ARM32构建通过。未绑定或打印，纸宽、有纸状态、实际出纸与经营票据仍未验收，见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。
 
 打印硬件前置增量：实查目标收银机有SUNMI打印服务6.9.7，已实现不绑定、不打印的原生包/USB能力检查通道及Dart严格解析；5项专项、全量375项通过/4可选跳过，analyze及ARM32 release构建通过。还未接UI/安装调用，服务存在不代表可出纸；实际打印机/纸宽待用户确认。没有打印、切纸或开启钱箱，见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。
