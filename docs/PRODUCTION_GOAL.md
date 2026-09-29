@@ -1,5 +1,7 @@
 # 收银端生产目标（进行中）
 
+购物车草稿恢复数据层增量：已实现严格范围隔离的草稿模型、加密存储适配、并发编辑冲突检测与恢复前目录校验。14项专项、全量333项通过/3项可选跳过，analyze无问题。尚未接入控制器/UI，现有页面仍为内存草稿，不宣称断电恢复或下单交接已完成；见 [CART_DRAFTS.md](CART_DRAFTS.md)。
+
 原收款查询客户端增量：四渠道PaymentAdmissionQuery/Result及1923只读控制器已实现，严格核对原范围/金额/员工会话，内部confirmed不作为付款凭证，不写日志或自动重试。17项专项、全量319项通过/3可选跳过；无查询UI或非现金创建/持久化链路，未部署/交易，见[PAYMENT_ADMISSION_CLIENT.md](PAYMENT_ADMISSION_CLIENT.md)。
 
 最新增量：员工开台上下文与原请求回执只读查询已接入客户端，详见 [OPENING_CLIENT.md](OPENING_CLIENT.md)。
