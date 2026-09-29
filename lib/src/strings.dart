@@ -6,6 +6,10 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'cashPrepare': '准备现金收款|Prepare cash payment|準備現金收款|เตรียมรับเงินสด',
+  'cashPrepareCancel': '暂不收款|Not now|暫不收款|ยังไม่รับเงิน',
+  'cashPrepareNotice': '仅准备本笔订单的现金请求，不代表已收款。准备后先查询状态，再核对实际收妥金额。异常时处理原请求，不重复创建。|Prepare a cash request for this order only; this does not mark it paid. Then look up its state and review cash actually received. Recover the original request after an error; do not create another.|僅準備本筆訂單的現金請求，不代表已收款。準備後先查詢狀態，再核對實際收妥金額。異常時處理原請求，不重複建立。|สร้างคำขอเงินสดสำหรับคำสั่งซื้อนี้เท่านั้น ยังไม่ถือว่าชำระแล้ว ตรวจสอบสถานะและยอดเงินที่รับจริง หากผิดพลาดให้กู้คืนคำขอเดิม ไม่สร้างซ้ำ',
+  'ordersSnapshotNotice': '订单明细不是整桌结账单。现金入口仅适用于获授权的员工订单，结果以服务端确认为准。|These orders are not a whole-table bill. Cash preparation is limited to authorized staff orders; the server confirms the outcome.|訂單明細不是整桌結帳單。現金入口僅適用於獲授權的員工訂單，結果以服務端確認為準。|รายการนี้ไม่ใช่บิลรวมทั้งโต๊ะ รับเงินสดได้เฉพาะคำสั่งซื้อของพนักงานที่มีสิทธิ์ ผลยืนยันจากเซิร์ฟเวอร์',
   'cashRecoveryTitle': '现金请求处理|Cash request recovery|現金請求處理|จัดการคำขอเงินสด',
   'cashRecoveryNotice': '只处理当前员工在本设备保存的原请求。先查回状态；请求金额不是付款凭证。|Original requests saved for this employee on this device. Look up first; amounts are not payment evidence.|只處理目前員工在本裝置儲存的原請求。先查回狀態；請求金額不是付款憑證。|จัดการเฉพาะคำขอเดิมของพนักงานนี้บนอุปกรณ์นี้ ตรวจสอบก่อน ยอดเงินไม่ใช่หลักฐานการชำระเงิน',
   'cashConfirm': '核对现金收妥|Review cash received|核對現金收妥|ตรวจสอบเงินสดที่รับ',

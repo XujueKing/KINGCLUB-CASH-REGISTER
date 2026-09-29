@@ -67,6 +67,9 @@ class OrderItem {
 class LiveOrder {
   LiveOrder(Map<String, dynamic> value)
     : reference = _ref(value['orderRef']),
+      cashierOrder = value.containsKey('cashierOrder')
+          ? _cashierOrigin(value['cashierOrder'])
+          : false,
       status = value['status'] as String,
       currency = value['currency'] as String,
       totalCents = _positive(value['totalCents']),
@@ -85,9 +88,15 @@ class LiveOrder {
     }
   }
   final String reference, status, currency;
+  final bool cashierOrder;
   final int totalCents;
   final DateTime createdAt;
   final List<OrderItem> items;
+}
+
+bool _cashierOrigin(Object? value) {
+  if (value is! bool) throw const FormatException();
+  return value;
 }
 
 class OrderSnapshot {

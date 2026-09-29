@@ -5,6 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/live_orders_panel.dart';
 import 'package:kingclub_cash_register/src/live/table_snapshot.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
+import 'package:kingclub_cash_register/src/auth/staff_session.dart';
+import 'package:kingclub_cash_register/src/live/cash_command.dart';
+import 'package:kingclub_cash_register/src/live/live_cash_recovery_panel.dart';
+
+import 'cash_command_test.dart' as c;
 
 import 'live_tables_panel_test.dart' show TableAuth;
 import 'support/order_fixture.dart';
@@ -26,18 +31,62 @@ class OrdersAuth extends TableAuth {
   }
 }
 
+class CashOrdersAuth extends OrdersAuth {
+  @override
+  StaffSession get session => c.identity;
+  bool origin = true, failPreparation = false;
+  String status = 'pending';
+  int preparations = 0;
+  List<PendingCash> pending = [];
+  @override
+  Future<Object?> readOrders({
+    required String tableRef,
+    required String sessionRef,
+    String? afterOrder,
+  }) async {
+    final raw = orderFixture(), data = raw['result'] as Map;
+    data['storeRef'] = session.storeRef;
+    final order = (data['orders'] as List).first as Map;
+    order['cashierOrder'] = origin;
+    order['status'] = status;
+    return raw;
+  }
+
+  @override
+  Future<List<PendingCash>> pendingCash() async => pending;
+  @override
+  Future<CashResult> prepareCash({
+    required String orderRef,
+    required int totalCents,
+    required bool confirmed,
+  }) async {
+    preparations++;
+    expect(orderRef, 'D00000000001');
+    expect(totalCents, 1200);
+    expect(confirmed, true);
+    if (failPreparation) throw StateError('NETWORK');
+    final command = c.command();
+    return CashResult.parse(
+      {'result': c.prepared(command)},
+      command,
+      response: CashResponse.prepare,
+    );
+  }
+}
+
 void main() {
   Future<void> show(
     WidgetTester tester,
     OrdersAuth auth, {
     int revision = 0,
+    UiLanguage language = UiLanguage.en,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: LiveOrdersPanel(
             auth: auth,
-            language: UiLanguage.en,
+            language: language,
             revision: revision,
             onBack: () {},
             table: LiveTable(
@@ -49,6 +98,103 @@ void main() {
       ),
     );
     await tester.pump();
+  }
+
+  testWidgets('cash requires staff origin and pending status', (tester) async {
+    final auth = CashOrdersAuth()..origin = false;
+    await show(tester, auth);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('cash-prepare-D00000000001')),
+      findsNothing,
+    );
+    auth.origin = true;
+    auth.status = 'paid';
+    await tester.tap(find.byKey(const ValueKey('orders-refresh')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('cash-prepare-D00000000001')),
+      findsNothing,
+    );
+  });
+  for (final fail in [false, true]) {
+    testWidgets('explicit preparation routes to recovery, failure=$fail', (
+      tester,
+    ) async {
+      final auth = CashOrdersAuth()..failPreparation = fail;
+      await show(tester, auth);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cash-prepare-D00000000001')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(auth.preparations, 0);
+      expect(find.textContaining('CNY 12.00'), findsWidgets);
+      await tester.tap(find.byKey(const ValueKey('cash-prepare-confirm')));
+      await tester.pumpAndSettle();
+      expect(auth.preparations, 1);
+      expect(find.byType(LiveCashRecoveryPanel), findsOneWidget);
+    });
+  }
+  testWidgets(
+    'existing original request opens recovery without a new preparation',
+    (tester) async {
+      final auth = CashOrdersAuth()..pending = [c.command()];
+      await show(tester, auth);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cash-prepare-D00000000001')));
+      await tester.pumpAndSettle();
+      expect(auth.preparations, 0);
+      expect(find.byType(LiveCashRecoveryPanel), findsOneWidget);
+    },
+  );
+  for (final change in ['identity', 'revision', 'background']) {
+    testWidgets('$change invalidates preparation confirmation', (tester) async {
+      final auth = CashOrdersAuth();
+      await show(tester, auth);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cash-prepare-D00000000001')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(AlertDialog), findsOneWidget);
+      if (change == 'identity') {
+        auth.notifyListeners();
+      } else if (change == 'revision') {
+        await show(tester, auth, revision: 1);
+      } else {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(auth.preparations, 0);
+    });
+  }
+  for (final language in UiLanguage.values) {
+    testWidgets(
+      'cash preparation dialog fits ${language.name} landscape and cancels without writes',
+      (tester) async {
+        tester.view.physicalSize = const Size(1024, 600);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final auth = CashOrdersAuth();
+        await show(tester, auth, language: language);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('cash-prepare-D00000000001')),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text(tr(language, 'cashPrepareCancel')));
+        await tester.pumpAndSettle();
+        expect(auth.preparations, 0);
+        expect(find.byType(LiveCashRecoveryPanel), findsNothing);
+      },
+    );
   }
 
   testWidgets(

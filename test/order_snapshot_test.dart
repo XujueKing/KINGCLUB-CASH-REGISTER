@@ -12,6 +12,27 @@ OrderSnapshot parse(Object? raw, {String? after}) => OrderSnapshot.parse(
   afterOrder: after,
 );
 void main() {
+  test(
+    'missing origin is ineligible; only explicit boolean origin is accepted',
+    () {
+      expect(parse(orderFixture()).orders.single.cashierOrder, false);
+      for (final origin in [true, false, null, 1, 'true']) {
+        final raw = orderFixture();
+        final orders = (raw['result'] as Map)['orders'] as List;
+        (raw['result'] as Map)['orders'] = [
+          <String, dynamic>{
+            ...orders.first as Map<String, dynamic>,
+            'cashierOrder': origin,
+          },
+        ];
+        if (origin is bool) {
+          expect(parse(raw).orders.single.cashierOrder, origin);
+        } else {
+          expect(() => parse(raw), throwsFormatException);
+        }
+      }
+    },
+  );
   test('parses scoped cents and all four languages without inferring expired payment', () {
     final data = parse(orderFixture());
     expect(data.orders.single.status, 'pending');
