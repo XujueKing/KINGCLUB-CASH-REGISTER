@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../live/opening_snapshot.dart';
+import '../live/opening_journal.dart';
 import '../network/ccsop_client.dart';
 import '../network/ccsop_crypto.dart';
 import '../network/ccsop_handshake.dart';
@@ -14,13 +15,17 @@ class StaffAuthController extends ChangeNotifier {
     AuthChannel Function(String)? authFactory,
     SessionChannel Function(StaffSession)? sessionFactory,
     DateTime Function()? now,
+    OpeningJournal? openingJournal,
   }) : _vault = vault ?? SessionVault(),
        _authFactory = authFactory ?? ((base) => CcsopHandshakeClient(base)),
        _sessionFactory =
            sessionFactory ??
            ((session) =>
                CcsopClient(session.base.toString(), session.credentials)),
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _openingJournal = openingJournal ?? OpeningJournal();
+  final OpeningJournal _openingJournal;
+  bool _openingBusy = false;
   final SessionVault _vault;
   final AuthChannel Function(String) _authFactory;
   final SessionChannel Function(StaffSession) _sessionFactory;
@@ -217,7 +222,7 @@ class StaffAuthController extends ChangeNotifier {
 
   Future<OpeningContext> readOpeningContext({required String tableId}) async {
     final session = _session, epoch = _epoch;
-    final raw = await _readOpening('K260929001907', {'tableId': tableId});
+    final raw = await _callOpening('K260929001907', {'tableId': tableId});
     _check(epoch);
     return OpeningContext.parse(
       raw,
@@ -231,7 +236,7 @@ class StaffAuthController extends ChangeNotifier {
     required String requestId,
   }) async {
     final session = _session, epoch = _epoch;
-    final raw = await _readOpening('K260929001908', {
+    final raw = await _callOpening('K260929001908', {
       'tableId': tableId,
       'requestId': requestId,
     });
@@ -244,7 +249,7 @@ class StaffAuthController extends ChangeNotifier {
     );
   }
 
-  Future<Object?> _readOpening(
+  Future<Object?> _callOpening(
     String interfaceId,
     Map<String, dynamic> params,
   ) async {
@@ -268,6 +273,111 @@ class StaffAuthController extends ChangeNotifier {
     }
     return value;
   }
+
+  StaffSession _openingIdentity() {
+    final identity = _session;
+    if (identity == null || _busy || !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('table.open')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    return identity;
+  }
+
+  Future<List<PendingOpening>> pendingOpenings() async {
+    final identity = _openingIdentity(), epoch = _epoch;
+    final pending = await _openingJournal.load(identity);
+    _check(epoch);
+    _openingIdentity();
+    return pending;
+  }
+
+  Future<T> _openingOperation<T>(Future<T> Function() operation) async {
+    if (_openingBusy) throw const CcsopFailure('OPENING_IN_PROGRESS');
+    _openingBusy = true;
+    try {
+      return await operation();
+    } finally {
+      _openingBusy = false;
+    }
+  }
+
+  /// Explicit user command only. No transport error clears the journal or retries.
+  Future<OpeningLookup> submitOpening({
+    required OpeningContext context,
+    required int? partySize,
+    required List<String> memberRefs,
+    required bool arrivalConfirmed,
+    required bool reservationChecked,
+  }) => _openingOperation(() async {
+    final identity = _openingIdentity(), epoch = _epoch;
+    final pending = PendingOpening.prepare(
+      session: identity,
+      context: context,
+      partySize: partySize,
+      memberRefs: memberRefs,
+      arrivalConfirmed: arrivalConfirmed,
+      reservationChecked: reservationChecked,
+    );
+    await _openingJournal.save(pending, identity);
+    _check(epoch);
+    _openingIdentity();
+    return _sendOpening(pending, identity, epoch);
+  });
+
+  Future<OpeningLookup> _sendOpening(
+    PendingOpening pending,
+    StaffSession identity,
+    int epoch,
+  ) async {
+    _check(epoch);
+    _openingIdentity();
+    if (!pending.belongsTo(identity)) {
+      throw const CcsopFailure('OPENING_SCOPE_CHANGED');
+    }
+    final raw = await _callOpening('K260929001906', pending.params);
+    _check(epoch);
+    final result = OpeningLookup.fromSubmission(
+      raw,
+      storeRef: pending.storeRef,
+      tableId: pending.tableId,
+      requestId: pending.requestId,
+    );
+    await _openingJournal.acknowledge(identity, result);
+    _check(epoch);
+    _openingIdentity();
+    return result;
+  }
+
+  /// Recovery is read-only by default. An explicit retry first queries the original receipt.
+  Future<OpeningLookup> recoverOpening(
+    String requestId, {
+    bool retryOriginal = false,
+  }) => _openingOperation(() async {
+    final identity = _openingIdentity(), epoch = _epoch;
+    final entries = await _openingJournal.load(identity);
+    _check(epoch);
+    _openingIdentity();
+    final matches = entries.where((e) => e.requestId == requestId).toList();
+    if (matches.length != 1) {
+      throw const CcsopFailure('OPENING_PENDING_NOT_FOUND');
+    }
+    final pending = matches.single;
+    final result = await readOpeningReceipt(
+      tableId: pending.tableId,
+      requestId: requestId,
+    );
+    _check(epoch);
+    if (result.state == OpeningLookupState.confirmed) {
+      await _openingJournal.acknowledge(identity, result);
+      _check(epoch);
+      _openingIdentity();
+      return result;
+    }
+    if (retryOriginal) return _sendOpening(pending, identity, epoch);
+    return result;
+  });
 
   /// Always clears local identity immediately. false means remote revocation was not confirmed.
   Future<bool> logout() async {

@@ -190,6 +190,34 @@ class OpeningLookup {
   final String requestId;
   final OpeningReceipt? receipt;
 
+  /// 1906 returns a receipt directly; associate it with the command we sent.
+  factory OpeningLookup.fromSubmission(
+    Object? raw, {
+    required String storeRef,
+    required String tableId,
+    required String requestId,
+  }) {
+    try {
+      return OpeningLookup.parse(
+        {
+          'result': {
+            'state': 'confirmed',
+            'requestId': requestId,
+            'receipt': _map(raw)['result'],
+          },
+        },
+        storeRef: storeRef,
+        tableId: tableId,
+        requestId: requestId,
+      );
+    } catch (_) {
+      throw const CcsopFailure(
+        'INVALID_OPENING_RECEIPT',
+        deliveryUncertain: true,
+      );
+    }
+  }
+
   factory OpeningLookup.parse(
     Object? raw, {
     required String storeRef,
