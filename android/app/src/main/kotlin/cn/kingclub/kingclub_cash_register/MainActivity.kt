@@ -6,6 +6,7 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity() {
     private var printerDiscovery: PrinterDiscoveryBridge? = null
     private var printerStatus: PrinterStatusBridge? = null
+    private var usbPrinterPermission: UsbPrinterPermissionBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -13,6 +14,8 @@ class MainActivity : FlutterActivity() {
         printerDiscovery = PrinterDiscoveryBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         printerStatus?.dispose()
         printerStatus = PrinterStatusBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        usbPrinterPermission?.dispose()
+        usbPrinterPermission = UsbPrinterPermissionBridge(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -20,6 +23,8 @@ class MainActivity : FlutterActivity() {
         printerDiscovery = null
         printerStatus?.dispose()
         printerStatus = null
+        usbPrinterPermission?.dispose()
+        usbPrinterPermission = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

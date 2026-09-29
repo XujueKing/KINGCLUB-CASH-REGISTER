@@ -1,5 +1,21 @@
 # 打印接入：设备事实与只读检查
 
+## USB 选择与系统授权接入（2026-09-29）
+
+新增每设备/接口/输出端点独立选择入口及四语言二次确认。原生usb-printer-permission通道仅request/cancel；严格校验10字段请求、一次随机请求ID、当前deviceId/VID/PID/设备类/接口ID/备用设置/协议/端点/包长，不把历史hasPermission缓存当授权。仅前台可发起、单个请求互斥；当前设备或端点变化失败关闭。没有openDevice、claimInterface、控制/批量传输、初始化、打印或钱箱调用。
+
+系统请求使用随机action、指定本应用package的不可变一次PendingIntent；API33+接收器不导出。接收回调后不依赖可填充extras，重新查当前设备和UsbManager.hasPermission；等待中目标拔出即结束。原生60秒期限，Dart65秒兜底及仅按自身请求ID取消；关闭/销毁清理接收器、计时器和PendingIntent。取消等待不是撤销系统授权，也不能保证关闭已显示的系统对话框。[UsbManager官方说明](https://developer.android.com/reference/android/hardware/usb/UsbManager#requestPermission(android.hardware.usb.UsbDevice,%20android.app.PendingIntent))和[不可变PendingIntent说明](https://developer.android.com/reference/android/app/PendingIntent#FLAG_IMMUTABLE)是实现依据。
+
+页面授权请求结束后清空旧设备观察并要求手动重新检查，不把授权回调显示成可打印；系统弹窗导致前后台切换也不回填旧快照。确认前进入后台使旧选择失效。临时deviceId及描述匹配不是跨拔插的永久物理身份，没有持久默认设备或自动接管所有USB设备。
+
+新增7项客户端/选择契约及8项四语言UI测试：选错接口/输入端点、未确认、重复提交、系统拒绝、响应错配/脱敏、取消/超时/迟到、过期确认、系统弹窗生命周期和重新检查。全量425项通过/4可选跳过，analyze无问题，ARM32 release构建通过；原生广播/拔插/超时全路径自动化仍待补齐。
+
+目标DAB6264H90115保留数据安装独立开发签名包，旧APK源/备份SHA256一致 `D48FEFDB83A549600ADEF43A928193C99D9A6D30683E03E19AE6C77576283EE2`，私有路径 `D:\DeviceBackups\KINGCLUB-CASH-REGISTER\20260929-usb-permission-upgrade\previous-preview.apk`；不是数据/Keystore备份。新APK及设备安装文件SHA256一致 `1D06938459B660467609BD4D287B51413EF89ABDCD33B0CE891356D6BF335D40`，冷启动897ms/等待911ms。
+
+真机操作范围：从实际UI位置选择0483:5743、接口0/0、OUT1，并点击本应用“申请USB授权”确认；计划验证系统取消路径，但**未观察到系统确认弹窗，授权请求已结束**，没有ADB点击系统允许或取消。随后21:42:29手动重新检查，实际hasPermission由false变为true，截图/UI树均核对。不能据此推定系统内部自动授权策略，也不能声称系统拒绝路径已实测。授权状态发生了真实变化，未撤销；从未打开/占用USB或发送数据。PID5696限定300条日志崩溃/ANR/E-flutter匹配0仅短窗口，随后关闭检查页。
+
+已询问用户是否允许一张明确非交易测试小票（无真实订单/会员资料、不开钱箱、先不切纸），答案尚待返回。授权成功不等于出纸成功；输出/任务不确定恢复、80mm四语言实际排版与拒绝/拔插真机回归仍未完成。
+
 ## 芯烨 XP-80U 与 USB 描述真机验证（2026-09-29）
 
 用户现场照片铭牌确认：Xprinter芯烨 XP-80U、80mm纸宽、USB+网口、支持ESC/POS，照片中USB线已接。型号/纸宽/协议来自铭牌，不是从商米paperCode推断；铭牌不证明实际出纸成功。照片/序列号不入仓库。只读dumpsys USB显示当前打印候选VID:PID为0483:5743，厂家通用字段printer、产品USB Printer Port，接口class/subclass/protocol=7/1/2；这些描述本身不含型号，不把VID/PID永久硬编码为芯烨。

@@ -1,5 +1,7 @@
 # 收银端生产目标（进行中）
 
+USB系统授权增量：每个输出候选显式选择+二次确认、原生单请求/设备匹配/取消/超时及四语言重新检查已接。真机本应用发起请求后未观察到系统确认弹窗、未代点系统允许，重新检查hasPermission确实由false变true；尚未打开接口或打印。新增15项测试，全量425项通过/4可选跳过、analyze/ARM32构建通过，已备份旧APK后保留数据安装。已询问一张非交易测试单授权，实际出纸仍待验证；见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。
+
 外接芯烨USB增量：用户铭牌确认XP-80U/80mm/USB+网口/ESC-POS。应用内USB描述读取与四语言显示已保留数据安装目标收银机，实测0483:5743、接口7/1/2、批量输出候选存在、本应用USB授权=false；商米内置状态明确不代表外接机。新增9项测试，全量410项通过/4可选跳过、analyze/ARM32构建通过。下一步设备选择/系统授权与受控试打，未申请权限、占用接口或打印；见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。
 
 打印状态UI/真机增量：四语言显式只读查询已接，备份旧APK后保留数据升级目标收银机；真实Binder返回内置服务statusCode=505、paperCode=1，同时发现USB打印类候选1个。不得以服务安装或纸张码宣称可打印；下一步核对外接型号/协议。新增10项测试，全量401项通过/4可选跳过、analyze/ARM32构建通过；未试打或交易，详情见 [PRINTER_INTEGRATION.md](PRINTER_INTEGRATION.md)。

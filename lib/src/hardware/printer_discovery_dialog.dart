@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../strings.dart';
 import 'printer_discovery.dart';
 import 'printer_status.dart';
+import 'usb_printer_permission.dart';
 
 /// Discovery and explicitly requested read-only status, without employee login.
 class PrinterDiscoveryDialog extends StatefulWidget {
@@ -26,6 +27,9 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
   PrinterStatus? status;
   DateTime? statusObservedAt;
   bool statusBusy = false, statusFailed = false;
+  bool permissionBusy = false;
+  String? permissionMessage;
+  UsbPrinterPermissionRequest? permissionRequest;
   bool busy = false, failed = false, foreground = true;
   int epoch = 0;
   String t(String key) => tr(widget.language, key);
@@ -38,7 +42,7 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
   }
 
   Future<void> inspect() async {
-    if (!mounted || busy || statusBusy || !foreground) return;
+    if (!mounted || busy || statusBusy || permissionBusy || !foreground) return;
     final generation = ++epoch;
     setState(() {
       busy = true;
@@ -48,6 +52,7 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
       status = null;
       statusObservedAt = null;
       statusFailed = false;
+      permissionMessage = null;
     });
     try {
       final result =
@@ -71,6 +76,7 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
     if (!mounted ||
         busy ||
         statusBusy ||
+        permissionBusy ||
         !foreground ||
         observation?.serviceResolvable != true) {
       return;
@@ -99,6 +105,62 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
     }
   }
 
+  Future<void> authorize(UsbPrinterSelection selection) async {
+    if (!mounted || busy || statusBusy || permissionBusy || !foreground) return;
+    final generation = epoch;
+    setState(() => permissionBusy = true);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(t('printerUsbAuthorize')),
+          content: SingleChildScrollView(
+            child: Text(
+              'USB ${selection.device.vendorProduct} · ${selection.interface.id}/${selection.interface.alternate} · '
+              'OUT ${selection.endpoint.address}\n${t('printerUsbAuthorizeNotice')}',
+            ),
+          ),
+          actions: [
+            TextButton(
+              key: const ValueKey('usb-permission-cancel'),
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(t('printerInspectClose')),
+            ),
+            FilledButton(
+              key: const ValueKey('usb-permission-confirm'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(t('printerUsbAuthorize')),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted || !foreground || generation != epoch) {
+        return;
+      }
+      final request = UsbPrinterPermissionRequest(selection);
+      permissionRequest = request;
+      // Neither the old permission snapshot nor a success callback is print readiness.
+      setState(() {
+        observation = null;
+        observedAt = null;
+        status = null;
+        statusObservedAt = null;
+        permissionMessage = 'printerUsbAuthorizeWaiting';
+      });
+      try {
+        await request.request(confirmed: true);
+      } catch (_) {
+        // Refresh is authoritative for denied, changed, cancelled and unknown outcomes too.
+      }
+      if (mounted) {
+        setState(() => permissionMessage = 'printerUsbAuthorizeRefresh');
+      }
+    } finally {
+      permissionRequest = null;
+      if (mounted) setState(() => permissionBusy = false);
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
@@ -118,6 +180,8 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
   @override
   void dispose() {
     ++epoch;
+    final request = permissionRequest;
+    if (request != null) unawaited(request.cancel());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -139,6 +203,8 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
               Text(t('printerInspectNotice')),
               const SizedBox(height: 12),
               if (busy) const LinearProgressIndicator(),
+              if (permissionMessage case final message?)
+                Text(t(message), key: const ValueKey('usb-permission-message')),
               if (failed)
                 Text(
                   t('printerInspectFailed'),
@@ -175,6 +241,36 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
                       '(${interface.classCode}/${interface.subclass}/${interface.protocol}) · '
                       '${t('printerUsbBulkOut')}: ${flag(interface.hasBulkOutput)}',
                     ),
+                  for (final interface in usb.interfaces.where(
+                    (i) => i.hasBulkOutput,
+                  ))
+                    for (final endpoint in interface.endpoints.where(
+                      (e) => e.type == 2 && e.address < 128,
+                    ))
+                      TextButton(
+                        key: ValueKey(
+                          'usb-permission-${usb.deviceId}-${interface.id}-${interface.alternate}-${endpoint.address}',
+                        ),
+                        onPressed:
+                            busy ||
+                                statusBusy ||
+                                permissionBusy ||
+                                !foreground ||
+                                usb.hasPermission
+                            ? null
+                            : () => unawaited(
+                                authorize(
+                                  UsbPrinterSelection.choose(
+                                    usb,
+                                    interface,
+                                    endpoint,
+                                  ),
+                                ),
+                              ),
+                        child: Text(
+                          '${t('printerUsbAuthorize')} · ${interface.id}/${interface.alternate} · OUT ${endpoint.address}',
+                        ),
+                      ),
                 ],
                 if (data.usbPrinters.isNotEmpty) Text(t('printerUsbNotice')),
               ],
@@ -213,7 +309,7 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
         ),
         FilledButton(
           key: const ValueKey('printer-inspect-refresh'),
-          onPressed: busy || statusBusy || !foreground
+          onPressed: busy || statusBusy || permissionBusy || !foreground
               ? null
               : () => unawaited(inspect()),
           child: Text(t('printerInspectRefresh')),
@@ -223,6 +319,7 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
           onPressed:
               busy ||
                   statusBusy ||
+                  permissionBusy ||
                   !foreground ||
                   data?.serviceResolvable != true
               ? null
