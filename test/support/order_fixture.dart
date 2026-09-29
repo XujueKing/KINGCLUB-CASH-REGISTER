@@ -19,9 +19,11 @@ Map<String, dynamic> orderFixture() => {
         'totalCents': 1200,
         'createdAt': '2026-09-29T08:00:00.000000Z',
         'items': [
-          {
+          <String, dynamic>{
             'productRef': 'test-product',
             'quantity': 2,
+            'servedQuantity': 0,
+            'remainingQuantity': 2,
             'priceCents': 600,
             'subtotalCents': 1200,
             'snapshot': {

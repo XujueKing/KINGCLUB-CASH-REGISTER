@@ -100,6 +100,69 @@ void main() {
     await tester.pump();
   }
 
+  for (final language in UiLanguage.values) {
+    testWidgets(
+      'shows partial serving record in $language without paid inference',
+      (tester) async {
+        final raw = orderFixture();
+        final line =
+            ((((raw['result'] as Map)['orders'] as List).first as Map)['items']
+                        as List)
+                    .first
+                as Map;
+        line['servedQuantity'] = 1;
+        line['remainingQuantity'] = 1;
+        final auth = OrdersAuth()
+          ..ordersGate = (Completer<Object?>()..complete(raw));
+        await show(tester, auth, language: language);
+        await tester.pumpAndSettle();
+        expect(
+          find.text(
+            '${tr(language, 'servingDelivered')}: 1 · ${tr(language, 'servingRemaining')}: 1',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining(tr(language, 'order_pending')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(tr(language, 'servingProgressNotice')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        auth.dispose();
+      },
+    );
+  }
+  testWidgets(
+    'unknown progress is explicit and malformed progress hides the snapshot',
+    (tester) async {
+      final raw = orderFixture();
+      final line =
+          ((((raw['result'] as Map)['orders'] as List).first as Map)['items']
+                      as List)
+                  .first
+              as Map;
+      line.remove('servedQuantity');
+      line.remove('remainingQuantity');
+      final auth = OrdersAuth()
+        ..ordersGate = (Completer<Object?>()..complete(raw));
+      await show(tester, auth);
+      await tester.pumpAndSettle();
+      expect(find.text(tr(UiLanguage.en, 'servingUnknown')), findsOneWidget);
+      line['servedQuantity'] = 3;
+      line['remainingQuantity'] = 0;
+      auth.ordersGate = Completer<Object?>()..complete(raw);
+      await tester.tap(find.byKey(const ValueKey('orders-refresh')));
+      await tester.pumpAndSettle();
+      expect(find.text(tr(UiLanguage.en, 'liveReadFailed')), findsOneWidget);
+      expect(find.text(tr(UiLanguage.en, 'servingUnknown')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   testWidgets('cash requires staff origin and pending status', (tester) async {
     final auth = CashOrdersAuth()..origin = false;
     await show(tester, auth);

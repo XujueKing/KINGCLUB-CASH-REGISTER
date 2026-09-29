@@ -305,6 +305,10 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text(t('ordersSnapshotNotice')),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              child: Text(t('servingProgressNotice')),
+            ),
             if (data != null)
               Padding(
                 padding: const EdgeInsets.all(12),
@@ -351,8 +355,22 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                 for (final item in order.items)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 12),
-                                    child: Text(
-                                      '${item.name(widget.language)} · ${item.specification(widget.language)} · ${item.quantity} × ${formatCents(item.priceCents)} = ${formatCents(item.subtotalCents)}',
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${item.name(widget.language)} · ${item.specification(widget.language)} · ${item.quantity} × ${formatCents(item.priceCents)} = ${formatCents(item.subtotalCents)}',
+                                        ),
+                                        Text(
+                                          item.servingKnown
+                                              ? '${t('servingDelivered')}: ${item.servedQuantity} · ${t('servingRemaining')}: ${item.remainingQuantity}'
+                                              : t('servingUnknown'),
+                                          key: ValueKey(
+                                            'serving-progress-${order.reference}-${item.productRef}',
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                               ],

@@ -52,16 +52,33 @@ class OrderItem {
       quantity = _positive(value['quantity'], 1000),
       priceCents = _positive(value['priceCents'], 100000000),
       subtotalCents = _positive(value['subtotalCents']),
+      servedQuantity = _servingCount(value, 'servedQuantity'),
+      remainingQuantity = _servingCount(value, 'remainingQuantity'),
       names = _localized(_map(value['snapshot'])['names']),
       specifications = _localized(_map(value['snapshot'])['specifications']) {
     _positive(_map(value['snapshot'])['revision']);
     if (quantity * priceCents != subtotalCents) throw const FormatException();
+    if ((servedQuantity == null) != (remainingQuantity == null) ||
+        (servedQuantity != null &&
+            servedQuantity! + remainingQuantity! != quantity)) {
+      throw const FormatException();
+    }
   }
   final String productRef;
   final int quantity, priceCents, subtotalCents;
+  // Both absent means an older server did not provide delivery progress, never zero delivered.
+  final int? servedQuantity, remainingQuantity;
+  bool get servingKnown => servedQuantity != null;
   final List<String> names, specifications;
   String name(UiLanguage language) => names[language.index];
   String specification(UiLanguage language) => specifications[language.index];
+}
+
+int? _servingCount(Map<String, dynamic> value, String key) {
+  if (!value.containsKey(key)) return null;
+  final count = value[key];
+  if (count is! int || count < 0 || count > 1000) throw const FormatException();
+  return count;
 }
 
 class LiveOrder {
@@ -105,11 +122,13 @@ class OrderSnapshot {
     this.observedAt,
     this.nextAfterOrder,
     this.sessionStatus,
+    this.paymentTiming,
   );
   final List<LiveOrder> orders;
   final DateTime observedAt;
   final String? nextAfterOrder;
   final String sessionStatus;
+  final String paymentTiming;
   factory OrderSnapshot.parse(
     Object? raw, {
     required String storeRef,
@@ -154,6 +173,7 @@ class OrderSnapshot {
       _time(data['observedAt']),
       next,
       session['status'] as String,
+      session['paymentTiming'] as String,
     );
   }
 }

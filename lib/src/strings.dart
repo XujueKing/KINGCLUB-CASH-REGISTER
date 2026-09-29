@@ -6,6 +6,10 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'servingDelivered': '已上|Delivered|已上|เสิร์ฟแล้ว',
+  'servingRemaining': '待上|Remaining|待上|ยังไม่เสิร์ฟ',
+  'servingUnknown': '服务器未提供上菜记录|Delivery record unavailable from server|伺服器未提供上菜記錄|เซิร์ฟเวอร์ยังไม่มีข้อมูลการเสิร์ฟ',
+  'servingProgressNotice': '已上数量仅代表系统确认记录，不代表已付款；历史交付需核对。|Delivery counts reflect confirmed records, not payment. Verify historical deliveries.|已上數量僅代表系統確認記錄，不代表已付款；歷史交付需核對。|จำนวนที่เสิร์ฟแสดงเฉพาะบันทึกที่ยืนยัน ไม่ใช่การชำระเงิน โปรดตรวจสอบการเสิร์ฟย้อนหลัง',
   'cashPrepare': '准备现金收款|Prepare cash payment|準備現金收款|เตรียมรับเงินสด',
   'cashPrepareCancel': '暂不收款|Not now|暫不收款|ยังไม่รับเงิน',
   'cashPrepareNotice': '仅准备本笔订单的现金请求，不代表已收款。准备后先查询状态，再核对实际收妥金额。异常时处理原请求，不重复创建。|Prepare a cash request for this order only; this does not mark it paid. Then look up its state and review cash actually received. Recover the original request after an error; do not create another.|僅準備本筆訂單的現金請求，不代表已收款。準備後先查詢狀態，再核對實際收妥金額。異常時處理原請求，不重複建立。|สร้างคำขอเงินสดสำหรับคำสั่งซื้อนี้เท่านั้น ยังไม่ถือว่าชำระแล้ว ตรวจสอบสถานะและยอดเงินที่รับจริง หากผิดพลาดให้กู้คืนคำขอเดิม ไม่สร้างซ้ำ',

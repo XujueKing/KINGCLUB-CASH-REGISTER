@@ -12,6 +12,61 @@ OrderSnapshot parse(Object? raw, {String? after}) => OrderSnapshot.parse(
   afterOrder: after,
 );
 void main() {
+  Map<String, dynamic> line(Map<String, dynamic> raw) =>
+      ((((raw['result'] as Map)['orders'] as List).first as Map)['items']
+                  as List)
+              .first
+          as Map<String, dynamic>;
+  test('keeps delivery progress separate from payment and session timing', () {
+    final raw = orderFixture();
+    line(raw).addAll({'servedQuantity': 1, 'remainingQuantity': 1});
+    final result = parse(raw);
+    expect(result.paymentTiming, 'prepay');
+    expect(result.orders.single.status, 'pending');
+    expect(result.orders.single.items.single.servedQuantity, 1);
+    expect(result.orders.single.items.single.remainingQuantity, 1);
+  });
+  test('old server without either count stays unknown rather than zero', () {
+    final raw = orderFixture();
+    line(raw)
+      ..remove('servedQuantity')
+      ..remove('remainingQuantity');
+    final item = parse(raw).orders.single.items.single;
+    expect(item.servingKnown, false);
+    expect(item.servedQuantity, isNull);
+    expect(item.remainingQuantity, isNull);
+  });
+  for (final patch in <Map<String, dynamic>>[
+    {'servedQuantity': null},
+    {'remainingQuantity': null},
+    {'servedQuantity': true},
+    {'servedQuantity': -1},
+    {'servedQuantity': '0'},
+    {'servedQuantity': 0.5},
+    {'servedQuantity': 3, 'remainingQuantity': 0},
+    {'servedQuantity': 1, 'remainingQuantity': 2},
+    {'servedQuantity': 1001, 'remainingQuantity': 0},
+  ]) {
+    test('rejects malformed or inconsistent progress $patch', () {
+      final raw = orderFixture();
+      line(raw).addAll(patch);
+      expect(() => parse(raw), throwsFormatException);
+    });
+  }
+  test(
+    'rejects partially missing fields and accepts fully delivered history',
+    () {
+      for (final field in ['servedQuantity', 'remainingQuantity']) {
+        final raw = orderFixture();
+        line(raw).remove(field);
+        expect(() => parse(raw), throwsFormatException);
+      }
+      final raw = orderFixture();
+      line(raw).addAll({'servedQuantity': 2, 'remainingQuantity': 0});
+      ((raw['result'] as Map)['session'] as Map)['status'] = 'closed';
+      expect(parse(raw).orders.single.items.single.remainingQuantity, 0);
+    },
+  );
   test(
     'missing origin is ineligible; only explicit boolean origin is accepted',
     () {
