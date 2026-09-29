@@ -132,6 +132,90 @@ Future<void> login(StaffAuthController controller) => controller.login(
 
 void main() {
   test(
+    'logout during secure session save cannot install a business client',
+    () async {
+      final storage = TestStorage()..gate = Completer<void>();
+      var clients = 0;
+      final c = StaffAuthController(
+        vault: SessionVault(storage: storage),
+        authFactory: (_) => TestAuth(),
+        sessionFactory: (_) {
+          clients++;
+          return TestApi();
+        },
+        now: () => now,
+      );
+      addTearDown(c.dispose);
+      final signingIn = login(c);
+      final rejected = expectLater(
+        signingIn,
+        throwsA(
+          isA<CcsopFailure>().having(
+            (error) => error.code,
+            'code',
+            'SESSION_CHANGED',
+          ),
+        ),
+      );
+      await storage.writing.future;
+      final signingOut = c.logout();
+      storage.gate!.complete();
+      await rejected;
+      await signingOut;
+      expect(clients, 0);
+      expect(c.session, isNull);
+      expect(storage.data.containsKey(SessionVault.sessionKey), isFalse);
+    },
+  );
+
+  for (final restoring in [false, true]) {
+    test(
+      'expired during secure save is never installed, restore=$restoring',
+      () async {
+        var clock = now;
+        final storage = TestStorage()
+          ..data[SessionVault.deviceKey] = device
+          ..gate = Completer<void>();
+        if (restoring) {
+          storage.data[SessionVault.sessionKey] = session()
+              .encodeForSecureStorage();
+        }
+        var clients = 0;
+        final c = StaffAuthController(
+          vault: SessionVault(storage: storage),
+          authFactory: (_) => TestAuth(),
+          sessionFactory: (_) {
+            clients++;
+            return TestApi();
+          },
+          now: () => clock,
+        );
+        addTearDown(c.dispose);
+        final operation = restoring ? c.restore() : login(c);
+        final rejected = expectLater(
+          operation,
+          throwsA(
+            isA<CcsopFailure>().having(
+              (error) => error.code,
+              'code',
+              'SESSION_EXPIRED',
+            ),
+          ),
+        );
+        await storage.writing.future;
+        expect(c.session, isNull);
+        clock = now.add(const Duration(minutes: 15));
+        storage.gate!.complete();
+        await rejected;
+        expect(c.session, isNull);
+        expect(clients, 0);
+        expect(storage.data.containsKey(SessionVault.sessionKey), isFalse);
+        expect(c.busy, isFalse);
+      },
+    );
+  }
+
+  test(
     'workbench accepts response just before expiry, then refuses new reads',
     () async {
       var clock = now;

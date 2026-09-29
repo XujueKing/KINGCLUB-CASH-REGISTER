@@ -178,11 +178,23 @@ class StaffAuthController extends ChangeNotifier {
   }
 
   Future<void> _install(StaffSession session, int epoch) async {
-    _check(epoch);
-    if (!await _vault.saveIfCurrent(session, () => _current(epoch))) {
+    void checkInstallable() {
+      _check(epoch);
+      if (!session.expiresAt.isAfter(_now())) {
+        throw const CcsopFailure('SESSION_EXPIRED');
+      }
+    }
+
+    checkInstallable();
+    if (!await _vault.saveIfCurrent(
+      session,
+      () => _current(epoch) && session.expiresAt.isAfter(_now()),
+    )) {
+      // The vault removes a write invalidated while storage was pending.
+      checkInstallable();
       throw const CcsopFailure('SESSION_CHANGED');
     }
-    _check(epoch);
+    checkInstallable();
     final api = _sessionFactory(session);
     _session = session;
     _api = api;

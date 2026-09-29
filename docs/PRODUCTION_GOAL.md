@@ -1,5 +1,7 @@
 # 收银端生产目标（进行中）
 
+员工会话存储交接补验：修复登录/续期安全写入期间到期仍装入内存的问题，两个测试先复现，再验证拒绝过期会话及写入中退出清理；全量447项通过/5可选跳过、analyze无问题。尚未构建安装，见 [SESSION_INSTALL_EXPIRY.md](SESSION_INSTALL_EXPIRY.md)。
+
 工作台有效期补验：1902 返回前补会话到期检查，测试先复现后修复，覆盖恰好到期/到期之后拒绝及到期前正常返回；全量444项通过/5可选跳过、analyze无问题。本修复尚未构建安装，见 [WORKBENCH_EXPIRY_GUARD.md](WORKBENCH_EXPIRY_GUARD.md)。
 
 测试单预览及设备补验：本地四语言点阵预览已接入口，像素转换移至后台 isolate；441项测试通过/5可选跳过，ARM32包保留数据安装指定收银机，四语言真机截图已核对。旧APK有备份且新包哈希一致，未实际打印；更新下文编码阶段“未接UI/未安装”的历史状态，见 [TEST_RECEIPT_PREVIEW.md](TEST_RECEIPT_PREVIEW.md)。
