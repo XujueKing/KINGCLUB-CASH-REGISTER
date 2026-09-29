@@ -95,3 +95,5 @@ Node 24.19.0 下后台 151 文件、852 项断言通过，但既有 voice-transc
 独立Dart/Node互通补验：实际客户端经测试专用信任根HTTPS/WSS完成员工登录、桌台读取、心跳、续期与注销；默认信任根拒绝自签证书，生产证书校验未改。隔离MySQL/Redis联调通过，不代表设备营业或线上验收，详见[LIVE_BACKEND_INTEROP.md](LIVE_BACKEND_INTEROP.md)。
 
 逐项上菜进度：订单页已读后端1905的已上/待上数量，四语言展示，旧后端缺失字段显示未知，损坏数量拒绝；234项测试通过。1919/1920写入及原请求恢复尚未接客户端，未安装新APK或执行真实上菜，详见[SERVING_PROGRESS.md](SERVING_PROGRESS.md)。
+
+上菜恢复增量：PendingServing/ServingJournal/ServingResult 与会话控制器已接1919/1920，先安全保存再发、默认只查询、明确恢复才重发原参数，严格确认回执才清除。16项专项、全量250项通过，覆盖上段“尚未接客户端”的数据/控制器阶段状态；上菜操作与恢复UI仍待接，未安装或真实交付，见[SERVING_REQUEST_RECOVERY.md](SERVING_REQUEST_RECOVERY.md)。

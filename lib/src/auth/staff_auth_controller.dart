@@ -6,6 +6,8 @@ import '../live/order_command.dart';
 import '../live/order_journal.dart';
 import '../live/cash_command.dart';
 import '../live/cash_journal.dart';
+import '../live/serving_command.dart';
+import '../live/serving_journal.dart';
 
 import '../live/opening_snapshot.dart';
 import '../live/opening_journal.dart';
@@ -25,6 +27,7 @@ class StaffAuthController extends ChangeNotifier {
     OpeningJournal? openingJournal,
     OrderJournal? orderJournal,
     CashJournal? cashJournal,
+    ServingJournal? servingJournal,
   }) : _vault = vault ?? SessionVault(),
        _authFactory = authFactory ?? ((base) => CcsopHandshakeClient(base)),
        _sessionFactory =
@@ -34,7 +37,10 @@ class StaffAuthController extends ChangeNotifier {
        _now = now ?? DateTime.now,
        _openingJournal = openingJournal ?? OpeningJournal(),
        _orderJournal = orderJournal ?? OrderJournal(),
-       _cashJournal = cashJournal ?? CashJournal();
+       _cashJournal = cashJournal ?? CashJournal(),
+       _servingJournal = servingJournal ?? ServingJournal();
+  final ServingJournal _servingJournal;
+  bool _servingBusy = false;
   final CashJournal _cashJournal;
   bool _cashBusy = false;
   final OrderJournal _orderJournal;
@@ -299,6 +305,116 @@ class StaffAuthController extends ChangeNotifier {
       afterMember: afterMember,
     );
   }
+
+  StaffSession _servingIdentity() {
+    final identity = _session;
+    if (_disposed ||
+        identity == null ||
+        _api == null ||
+        _busy ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('orders.serve')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    return identity;
+  }
+
+  Future<T> _servingOperation<T>(Future<T> Function() work) async {
+    if (_servingBusy) throw const CcsopFailure('SERVING_IN_PROGRESS');
+    _servingBusy = true;
+    try {
+      return await work();
+    } finally {
+      _servingBusy = false;
+    }
+  }
+
+  Future<List<PendingServing>> pendingServing() async {
+    final identity = _servingIdentity(), epoch = _epoch;
+    final entries = await _servingJournal.load(identity);
+    _check(epoch);
+    _servingIdentity();
+    return entries;
+  }
+
+  Future<ServingResult> _servingCall(
+    PendingServing command,
+    StaffSession identity,
+    int epoch, {
+    required bool lookup,
+  }) async {
+    _check(epoch);
+    _servingIdentity();
+    if (!command.belongsTo(identity)) {
+      throw const CcsopFailure('SERVING_SCOPE_CHANGED');
+    }
+    final raw = await _api!.call(
+      lookup ? 'K260929001920' : 'K260929001919',
+      lookup ? command.lookup : command.params,
+    );
+    _check(epoch);
+    _servingIdentity();
+    final result = ServingResult.parse(raw, command);
+    if (!lookup && !result.confirmed) {
+      throw const CcsopFailure('SERVING_RESPONSE_INVALID');
+    }
+    if (result.confirmed) await _servingJournal.acknowledge(identity, result);
+    _check(epoch);
+    _servingIdentity();
+    return result;
+  }
+
+  Future<ServingResult> confirmServing({
+    required String tableRef,
+    required String sessionRef,
+    required String orderRef,
+    required String productRef,
+    required int quantity,
+    required int expectedServedQuantity,
+    required int targetServedQuantity,
+    required bool confirmed,
+  }) => _servingOperation(() async {
+    final identity = _servingIdentity(), epoch = _epoch;
+    final command = PendingServing.prepare(
+      identity: identity,
+      tableRef: tableRef,
+      sessionRef: sessionRef,
+      orderRef: orderRef,
+      productRef: productRef,
+      quantity: quantity,
+      expectedServedQuantity: expectedServedQuantity,
+      targetServedQuantity: targetServedQuantity,
+      now: _now(),
+      confirmed: confirmed,
+    );
+    await _servingJournal.save(command, identity);
+    _check(epoch);
+    _servingIdentity();
+    return _servingCall(command, identity, epoch, lookup: false);
+  });
+
+  /// Unknown is retained. Only an explicit caller decision may resend the SAME original command.
+  Future<ServingResult> recoverServing(
+    String requestId, {
+    bool retryOriginal = false,
+  }) => _servingOperation(() async {
+    final identity = _servingIdentity(), epoch = _epoch;
+    final entries = await _servingJournal.load(identity);
+    _check(epoch);
+    _servingIdentity();
+    final matches = entries.where((e) => e.requestId == requestId).toList();
+    if (matches.length != 1) {
+      throw const CcsopFailure('SERVING_PENDING_NOT_FOUND');
+    }
+    final command = matches.single;
+    final result = await _servingCall(command, identity, epoch, lookup: true);
+    if (!result.confirmed && retryOriginal) {
+      return _servingCall(command, identity, epoch, lookup: false);
+    }
+    return result;
+  });
 
   StaffSession _cashIdentity() {
     final identity = _session;
