@@ -6,6 +6,12 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'cartDraftsTitle': '本机草稿|Local drafts|本機草稿|ร่างในเครื่อง',
+  'cartDraftsNotice': '仅显示当前员工在本门店、本设备保存的未提交草稿，包含旧场次。恢复请返回当前桌台选择仍在座的会员；不能把旧草稿转到新场次。有待确认订单时先处理原请求。|Unsubmitted drafts saved by this employee for this store and device, including old sessions. To restore, return to the current table and select a seated member. Never transfer old drafts to a new session. Resolve pending order requests first.|僅顯示當前員工在本門店、本裝置儲存的未提交草稿，包含舊場次。恢復請返回當前桌台選擇仍在座的會員；不能把舊草稿轉到新場次。有待確認訂單時先處理原請求。|แสดงร่างที่ยังไม่ส่งของพนักงานนี้สำหรับร้านและเครื่องนี้ รวมรอบเก่า หากต้องการเรียกคืน ให้กลับไปโต๊ะปัจจุบันและเลือกสมาชิกที่ยังนั่งอยู่ ห้ามย้ายร่างเก่าไปรอบใหม่ จัดการคำขอคำสั่งซื้อที่ยังไม่ทราบผลก่อน',
+  'cartDraftsEmpty': '没有可见的本机草稿|No visible local drafts|沒有可見的本機草稿|ไม่มีร่างในเครื่องที่แสดงได้',
+  'cartDraftSavedAt': '保存时间|Saved at|儲存時間|เวลาที่บันทึก',
+  'cartDraftEstimate': '保存时估算金额，非账单|Saved estimate, not a bill|儲存時估算金額，非帳單|ยอดประมาณตอนบันทึก ไม่ใช่ใบเรียกเก็บเงิน',
+  'cartDraftLocalDeleteNotice': '只删除本机这份未提交草稿，不取消订单、不退款，也不清台。请确认桌台、场次和会员。|Delete this local unsubmitted draft only. No order cancellation, refund or table clearing. Check the table, session and member.|只刪除本機這份未提交草稿，不取消訂單、不退款，也不清台。請確認桌台、場次和會員。|ลบเฉพาะร่างที่ยังไม่ส่งในเครื่องนี้ ไม่ยกเลิกคำสั่งซื้อ คืนเงิน หรือปิดโต๊ะ โปรดตรวจสอบโต๊ะ รอบ และสมาชิก',
   'cartDraftSave': '保存草稿|Save draft|儲存草稿|บันทึกร่าง',
   'cartDraftRestore': '恢复草稿|Restore draft|恢復草稿|เรียกคืนร่าง',
   'cartDraftDiscard': '删除草稿|Delete draft|刪除草稿|ลบร่าง',

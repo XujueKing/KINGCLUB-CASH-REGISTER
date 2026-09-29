@@ -15,6 +15,7 @@ import 'live_order_recovery_panel.dart';
 import 'live_cash_recovery_panel.dart';
 import 'live_serving_recovery_panel.dart';
 import 'live_table_clear_panel.dart';
+import 'live_cart_drafts_panel.dart';
 
 class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
@@ -40,6 +41,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   bool opening = false;
   bool catalog = false;
   bool orderRecovery = false;
+  bool cartDrafts = false;
   bool cashRecovery = false;
   bool servingRecovery = false;
   bool tableClear = false;
@@ -222,6 +224,17 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         },
       );
     }
+    if (cartDrafts) {
+      return LiveCartDraftsPanel(
+        auth: widget.auth,
+        language: widget.language,
+        revision: realtimeRevision,
+        onBack: () {
+          setState(() => cartDrafts = false);
+          unawaited(load(reset: true));
+        },
+      );
+    }
     if (orderRecovery) {
       return LiveOrderRecoveryPanel(
         auth: widget.auth,
@@ -334,6 +347,13 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                     orderRecovery = true;
                   }),
                   child: Text(t('orderRecoveryTitle')),
+                ),
+              if (widget.auth.session?.permissions.contains('orders.create') ==
+                  true)
+                OutlinedButton(
+                  key: const ValueKey('cart-drafts-open'),
+                  onPressed: () => setState(() => cartDrafts = true),
+                  child: Text(t('cartDraftsTitle')),
                 ),
               if (widget.auth.session?.permissions.contains('payment.cash') ==
                   true)

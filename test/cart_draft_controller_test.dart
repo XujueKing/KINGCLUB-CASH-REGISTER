@@ -110,6 +110,23 @@ Future<OrderRequestResult> submit(StaffAuthController auth, CartDraft? draft) =>
     );
 
 void main() {
+  test('explicitly discards an old-session departed-member draft without server mutation', () async {
+    final storage = Storage(), api = Api();
+    final auth = await o.controller(storage, api);
+    final current = await save(auth);
+    final old = CartDraft.decode({
+      ...current.encode(),
+      'sessionRef': 'H00000000099',
+      'memberRef': 'left-member',
+    });
+    await CartDraftStore(storage: storage)
+        .save(old, o.identity, previous: null);
+    await auth.discardCartDraft(old, confirmed: true);
+    expect((await auth.cartDrafts()).single.signature, current.signature);
+    expect(api.calls, isEmpty);
+    expect(api.reads, isEmpty);
+    auth.dispose();
+  });
   test('restoration follows both member and catalogue cursors', () async {
     final storage = Storage(), api = Api()..paginated = true;
     final auth = await o.controller(storage, api);
