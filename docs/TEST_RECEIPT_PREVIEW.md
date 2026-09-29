@@ -11,3 +11,13 @@
 验证：flutter analyze 无问题；全量 441 项通过、5 项可选测试跳过；android-arm release 构建成功（CASHIER_PREVIEW=false、CASHIER_REALTIME=true，仍为开发签名）。这些结果不是打印机物理输出验收。
 
 本阶段不含实际 USB 数据输出、真实小票或支付成功证明。新预览界面尚未安装到收银机；Android 字体、触摸性能和实际纸张效果仍需分别验收。生产签名、打印任务持久化、结果不确定处理及补打标识尚未完成。实际试打等待用户确认。
+
+## 真机补验
+
+上述“尚未安装”已由本节更新：d552dfd 构建保留数据升级指定 SUNMI D2_2nd-SQB，未覆盖收钱吧或操作其他手机。新 APK SHA256 为 `886973F23161E9467CACC9607596B829400BC877721522F971EEBFE4262BAC6D`，与设备安装文件一致。冷启动 981ms、等待 1027ms，仍为开发签名独立包。
+
+安装前旧 APK 已备份至本机私有 `D:\DeviceBackups\KINGCLUB-CASH-REGISTER\20260929-receipt-preview-upgrade\previous-preview.apk`，源/副本 SHA256 均为 `1D06938459B660467609BD4D287B51413EF89ABDCD33B0CE891356D6BF335D40`。这只是 APK 备份，不包含应用数据、Keystore 或固件。
+
+实际设备四语言 576 点预览截图逐一检查，文字/底部标尺可见，未见明显缺字或裁切；菜单切换、关闭正常，最后返回独立员工空白登录页。XML 与 zh/en/tw/th.png 保留上述私有目录，不入 Git。检查页当前仍观察到 USB 授权为是，未重复申请、打开接口或发送数据。
+
+进程 6029 的限定最近 300 条日志中 FATAL EXCEPTION / ANR in / E flutter 模式匹配 0，仅为短窗口证据。没有帧耗时/长时间触摸性能基准，不宣称全部卡顿已解决；物理出纸、打印头有效点宽、生产订单小票及真实经营验收仍未完成。
