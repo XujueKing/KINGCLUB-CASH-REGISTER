@@ -8,6 +8,8 @@ import '../live/cash_command.dart';
 import '../live/cash_journal.dart';
 import '../live/serving_command.dart';
 import '../live/serving_journal.dart';
+import '../live/table_clear_command.dart';
+import '../live/table_clear_journal.dart';
 
 import '../live/opening_snapshot.dart';
 import '../live/opening_journal.dart';
@@ -28,6 +30,7 @@ class StaffAuthController extends ChangeNotifier {
     OrderJournal? orderJournal,
     CashJournal? cashJournal,
     ServingJournal? servingJournal,
+    TableClearJournal? tableClearJournal,
   }) : _vault = vault ?? SessionVault(),
        _authFactory = authFactory ?? ((base) => CcsopHandshakeClient(base)),
        _sessionFactory =
@@ -38,7 +41,10 @@ class StaffAuthController extends ChangeNotifier {
        _openingJournal = openingJournal ?? OpeningJournal(),
        _orderJournal = orderJournal ?? OrderJournal(),
        _cashJournal = cashJournal ?? CashJournal(),
-       _servingJournal = servingJournal ?? ServingJournal();
+       _servingJournal = servingJournal ?? ServingJournal(),
+       _tableClearJournal = tableClearJournal ?? TableClearJournal();
+  final TableClearJournal _tableClearJournal;
+  bool _tableClearBusy = false;
   final ServingJournal _servingJournal;
   bool _servingBusy = false;
   final CashJournal _cashJournal;
@@ -412,6 +418,113 @@ class StaffAuthController extends ChangeNotifier {
     final result = await _servingCall(command, identity, epoch, lookup: true);
     if (!result.confirmed && retryOriginal) {
       return _servingCall(command, identity, epoch, lookup: false);
+    }
+    return result;
+  });
+
+  StaffSession _tableClearIdentity() {
+    final identity = _session;
+    if (_disposed ||
+        identity == null ||
+        _api == null ||
+        _busy ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('table.clear')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    return identity;
+  }
+
+  Future<T> _tableClearOperation<T>(Future<T> Function() work) async {
+    if (_tableClearBusy) throw const CcsopFailure('TABLE_CLEAR_IN_PROGRESS');
+    _tableClearBusy = true;
+    try {
+      return await work();
+    } finally {
+      _tableClearBusy = false;
+    }
+  }
+
+  Future<List<PendingTableClear>> pendingTableClear() async {
+    final identity = _tableClearIdentity(), epoch = _epoch;
+    final entries = await _tableClearJournal.load(identity);
+    _check(epoch);
+    _tableClearIdentity();
+    return entries;
+  }
+
+  Future<TableClearResult> _tableClearCall(
+    PendingTableClear command,
+    StaffSession identity,
+    int epoch, {
+    required bool lookup,
+  }) async {
+    _check(epoch);
+    _tableClearIdentity();
+    if (!command.belongsTo(identity)) {
+      throw const CcsopFailure('TABLE_CLEAR_SCOPE_CHANGED');
+    }
+    final raw = await _api!.call(
+      lookup ? 'K260929001922' : 'K260929001921',
+      lookup ? command.lookup : command.params,
+    );
+    _check(epoch);
+    _tableClearIdentity();
+    final result = TableClearResult.parse(raw, command);
+    if (!lookup && !result.confirmed) {
+      throw const CcsopFailure('TABLE_CLEAR_RESPONSE_INVALID');
+    }
+    if (result.confirmed) {
+      await _tableClearJournal.acknowledge(identity, result);
+    }
+    _check(epoch);
+    _tableClearIdentity();
+    return result;
+  }
+
+  Future<TableClearResult> confirmTableClear({
+    required String tableRef,
+    required String sessionRef,
+    required bool confirmed,
+  }) => _tableClearOperation(() async {
+    final identity = _tableClearIdentity(), epoch = _epoch;
+    final command = PendingTableClear.prepare(
+      identity: identity,
+      tableRef: tableRef,
+      sessionRef: sessionRef,
+      now: _now(),
+      confirmed: confirmed,
+    );
+    await _tableClearJournal.save(command, identity);
+    _check(epoch);
+    _tableClearIdentity();
+    return _tableClearCall(command, identity, epoch, lookup: false);
+  });
+
+  /// Unknown is retained. Only an explicit caller decision may resend the SAME original command.
+  Future<TableClearResult> recoverTableClear(
+    String requestId, {
+    bool retryOriginal = false,
+  }) => _tableClearOperation(() async {
+    final identity = _tableClearIdentity(), epoch = _epoch;
+    final entries = await _tableClearJournal.load(identity);
+    _check(epoch);
+    _tableClearIdentity();
+    final matches = entries.where((e) => e.requestId == requestId).toList();
+    if (matches.length != 1) {
+      throw const CcsopFailure('TABLE_CLEAR_PENDING_NOT_FOUND');
+    }
+    final command = matches.single;
+    final result = await _tableClearCall(
+      command,
+      identity,
+      epoch,
+      lookup: true,
+    );
+    if (!result.confirmed && retryOriginal) {
+      return _tableClearCall(command, identity, epoch, lookup: false);
     }
     return result;
   });
