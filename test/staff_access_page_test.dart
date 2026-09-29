@@ -1,0 +1,113 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kingclub_cash_register/src/auth/staff_access_page.dart';
+import 'package:kingclub_cash_register/src/auth/staff_auth_controller.dart';
+
+// UI-only double: never used as an authentication or persistence fallback.
+class UiAuth extends StaffAuthController {
+  int restores = 0, logins = 0;
+  String? submittedPassword;
+  Completer<void>? gate;
+  bool waiting = false;
+  @override
+  bool get busy => waiting;
+  @override
+  Future<void> restore() async {
+    restores++;
+  }
+
+  @override
+  Future<void> login({
+    required String base,
+    required String storeRef,
+    required String loginName,
+    required String password,
+  }) async {
+    logins++;
+    submittedPassword = password;
+    waiting = true;
+    notifyListeners();
+    if (gate != null) await gate!.future;
+    waiting = false;
+    notifyListeners();
+    throw StateError('PRIVATE_SERVER_ERROR_MUST_NOT_RENDER');
+  }
+}
+
+void main() {
+  Future<void> show(WidgetTester tester, UiAuth auth) async {
+    tester.view.physicalSize = const Size(1024, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: StaffAccessPage(controller: auth)),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('Cold restore and all four languages fit compact landscape', (
+    tester,
+  ) async {
+    final auth = UiAuth();
+    await show(tester, auth);
+    expect(auth.restores, 1);
+    expect(find.text('T01'), findsNothing);
+    for (final label in ['English', '繁體中文', 'ไทย', '简体中文']) {
+      await tester.tap(find.byKey(const ValueKey('staff-language')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'Validation blocks unsafe endpoint, password clears and errors are redacted',
+    (tester) async {
+      final auth = UiAuth();
+      await show(tester, auth);
+      Future<void> enter(String field, String value) =>
+          tester.enterText(find.byKey(ValueKey('staff-$field')), value);
+      await enter('endpoint', 'http://service.invalid');
+      await enter('store', 'test-store');
+      await enter('account', 'cashier');
+      await enter('password', 'test-only-password');
+      await tester.ensureVisible(find.byKey(const ValueKey('staff-login')));
+      await tester.tap(find.byKey(const ValueKey('staff-login')));
+      await tester.pumpAndSettle();
+      expect(auth.logins, 0);
+      await enter('endpoint', 'https://service.invalid');
+      auth.gate = Completer<void>();
+      await tester.ensureVisible(find.byKey(const ValueKey('staff-login')));
+      await tester.tap(find.byKey(const ValueKey('staff-login')));
+      await tester.pump();
+      expect(auth.logins, 1);
+      expect(auth.submittedPassword, 'test-only-password');
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const ValueKey('staff-password')))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('staff-login')))
+            .onPressed,
+        isNull,
+      );
+      auth.gate!.complete();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('无法确认员工会话'), findsOneWidget);
+      expect(find.textContaining('PRIVATE_SERVER_ERROR'), findsNothing);
+      expect(find.byKey(const ValueKey('staff-logout')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+}

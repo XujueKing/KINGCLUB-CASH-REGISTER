@@ -1,0 +1,24 @@
+# Local credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.p8
+*.jks
+*.keystore
+local.properties
+.local/
+
+# Build outputs and editor state
+.idea/
+.vscode/
+.gradle/
+.dart_tool/
+build/
+node_modules/
+*.log
+*.iml
+artifacts/
+.flutter-plugins-dependencies

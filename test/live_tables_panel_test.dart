@@ -1,0 +1,198 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kingclub_cash_register/src/auth/staff_auth_controller.dart';
+import 'package:kingclub_cash_register/src/auth/staff_session.dart';
+import 'package:kingclub_cash_register/src/live/live_tables_panel.dart';
+import 'package:kingclub_cash_register/src/strings.dart';
+import 'package:kingclub_cash_register/src/network/cashier_realtime_client.dart';
+
+import 'support/table_fixture.dart';
+
+class PanelRealtime extends CashierRealtimeClient {
+  PanelRealtime(super.session);
+  int value = 0;
+  bool running = false;
+  @override
+  int get revision => value;
+  @override
+  CashierRealtimeState get state =>
+      running ? CashierRealtimeState.connected : CashierRealtimeState.offline;
+  @override
+  void start() {
+    running = true;
+    notifyListeners();
+  }
+
+  @override
+  void stop() {
+    running = false;
+    notifyListeners();
+  }
+
+  void changed() {
+    value++;
+    notifyListeners();
+  }
+}
+
+class TableAuth extends StaffAuthController {
+  Object? reply = tableFixture();
+  final requested = <String?>[];
+  Completer<Object?>? gate;
+  bool fail = false;
+  @override
+  final StaffSession session = StaffSession.fromServer(
+    {
+      'employee': {
+        'employeeRef': 'E00000000001',
+        'displayName': 'Test employee',
+      },
+      'storeRef': 'test-store',
+      'sessionId': '00000000-0000-4000-8000-000000000002',
+      'apiKeyId': '00000000-0000-4000-8000-000000000003',
+      'apiKey': 'a' * 43,
+      'refreshToken': 'b' * 43,
+      'permissions': ['workbench.read'],
+      'expiresAtMs': DateTime.now()
+          .add(const Duration(minutes: 15))
+          .millisecondsSinceEpoch,
+      'refreshExpiresAtMs': DateTime.now()
+          .add(const Duration(hours: 12))
+          .millisecondsSinceEpoch,
+    },
+    base: 'https://service.invalid',
+    deviceId: '00000000-0000-4000-8000-000000000001',
+    expectedStore: 'test-store',
+  );
+  @override
+  Future<Object?> readWorkbench({String? afterTable}) async {
+    requested.add(afterTable);
+    if (gate != null) return gate!.future;
+    if (fail) throw StateError('PRIVATE_ERROR');
+    return reply;
+  }
+}
+
+void main() {
+  Future<void> show(
+    WidgetTester tester,
+    TableAuth auth, {
+    UiLanguage language = UiLanguage.zh,
+    PanelRealtime? realtime,
+  }) async {
+    tester.view.physicalSize = const Size(1024, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveTablesPanel(
+            auth: auth,
+            language: language,
+            enableRealtime: realtime != null,
+            realtimeFactory: realtime == null ? null : (_) => realtime,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'Realtime hints coalesce, query again after an in-flight read, and stop in background',
+    (tester) async {
+      final auth = TableAuth();
+      final realtime = PanelRealtime(auth.session);
+      await show(tester, auth, realtime: realtime);
+      expect(realtime.running, isTrue);
+      expect(auth.requested.length, 1);
+      auth.gate = Completer<Object?>();
+      for (var i = 0; i < 5; i++) {
+        realtime.changed();
+      }
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(auth.requested.length, 2);
+      for (var i = 0; i < 5; i++) {
+        realtime.changed();
+      }
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(auth.requested.length, 2);
+      auth.gate!.complete(tableFixture());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(auth.requested.length, 3);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(realtime.running, isFalse);
+      final count = auth.requested.length;
+      realtime.changed();
+      await tester.pump(const Duration(seconds: 1));
+      expect(auth.requested.length, count);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(realtime.running, isTrue);
+      expect(auth.requested.length, count + 1);
+      await tester.pumpWidget(const SizedBox());
+      expect(realtime.running, isFalse);
+      auth.dispose();
+    },
+  );
+
+  testWidgets(
+    'Displays server money, no pay actions, failure removes old records',
+    (tester) async {
+      final auth = TableAuth();
+      await show(tester, auth);
+      expect(find.text('Test table 0'), findsOneWidget);
+      expect(find.textContaining('CNY 12.01'), findsOneWidget);
+      expect(find.textContaining('CNY 78.00'), findsOneWidget);
+      expect(find.byKey(const ValueKey('real-payment')), findsNothing);
+      auth.fail = true;
+      await tester.tap(find.byKey(const ValueKey('live-refresh')));
+      await tester.pumpAndSettle();
+      expect(find.text('Test table 0'), findsNothing);
+      expect(find.textContaining('桌台读取失败'), findsOneWidget);
+      expect(find.textContaining('PRIVATE_ERROR'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
+    'Next page requests server cursor and replaces rather than sums snapshots',
+    (tester) async {
+      final auth = TableAuth()
+        ..reply = tableFixture(count: 100, next: 'test-099');
+      await show(tester, auth);
+      auth.reply = tableFixture(count: 0);
+      await tester.tap(find.byKey(const ValueKey('live-next')));
+      await tester.pumpAndSettle();
+      expect(auth.requested, [null, 'test-099']);
+      expect(find.text('Test table 0'), findsNothing);
+      expect(find.text('服务器返回本页无桌台'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
+    'Four languages fit; a response after disposal cannot update UI',
+    (tester) async {
+      final auth = TableAuth();
+      for (final language in UiLanguage.values) {
+        await show(tester, auth, language: language);
+        expect(tester.takeException(), isNull);
+      }
+      auth.gate = Completer<Object?>();
+      await tester.tap(find.byKey(const ValueKey('live-refresh')));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox());
+      auth.gate!.complete(tableFixture());
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      auth.dispose();
+    },
+  );
+}

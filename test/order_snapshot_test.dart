@@ -1,0 +1,62 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kingclub_cash_register/src/live/order_snapshot.dart';
+import 'package:kingclub_cash_register/src/strings.dart';
+
+import 'support/order_fixture.dart';
+
+OrderSnapshot parse(Object? raw, {String? after}) => OrderSnapshot.parse(
+  raw,
+  storeRef: 'test-store',
+  tableRef: 'test-000',
+  sessionRef: 'session-0',
+  afterOrder: after,
+);
+void main() {
+  test('parses scoped cents and all four languages without inferring expired payment', () {
+    final data = parse(orderFixture());
+    expect(data.orders.single.status, 'pending');
+    expect(data.orders.single.items.single.subtotalCents, 1200);
+    expect(data.orders.single.items.single.name(UiLanguage.en), 'Test product');
+    expect(data.orders.single.items.single.name(UiLanguage.tw), '測試商品');
+    expect(data.orders.single.items.single.specification(UiLanguage.th), 'ขวด');
+    expect(() => data.orders.clear(), throwsUnsupportedError);
+  });
+  for (final reason in [
+    'store',
+    'session',
+    'money',
+    'quantity',
+    'duplicate',
+    'status',
+    'cursor',
+    'date',
+  ]) {
+    test('rejects invalid $reason', () {
+      final raw = orderFixture(), data = raw['result'] as Map<String, dynamic>;
+      final order = (data['orders'] as List).first as Map<String, dynamic>;
+      if (reason == 'store') data['storeRef'] = 'other-store';
+      if (reason == 'session') {
+        (data['session'] as Map)['sessionRef'] = 'other-session';
+      }
+      if (reason == 'money') order['totalCents'] = 1201;
+      if (reason == 'quantity') {
+        ((order['items'] as List).first as Map)['quantity'] = true;
+      }
+      if (reason == 'duplicate') (data['orders'] as List).add(order);
+      if (reason == 'status') order['status'] = 'success';
+      if (reason == 'cursor') data['nextAfterOrder'] = order['orderRef'];
+      if (reason == 'date') order['createdAt'] = '2026-02-31T08:00:00Z';
+      expect(() => parse(raw), throwsA(anything));
+    });
+  }
+  test('rejects repeated/reversed cursor and allows empty closed historical session', () {
+    expect(
+      () => parse(orderFixture(), after: 'D00000000001'),
+      throwsA(anything),
+    );
+    final raw = orderFixture();
+    (raw['result'] as Map)['orders'] = [];
+    ((raw['result'] as Map)['session'] as Map)['status'] = 'closed';
+    expect(parse(raw).orders, isEmpty);
+  });
+}
