@@ -10,6 +10,7 @@ import 'table_snapshot.dart';
 import 'live_orders_panel.dart';
 import 'live_opening_panel.dart';
 import 'live_catalog_panel.dart';
+import 'live_order_members_panel.dart';
 
 class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
@@ -31,6 +32,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     with WidgetsBindingObserver {
   TableSnapshot? snapshot;
   LiveTable? selected;
+  LiveTable? orderingTable;
   bool opening = false;
   bool catalog = false;
   String? openingTable, openingCurrency;
@@ -174,6 +176,21 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (orderingTable != null) {
+      return LiveOrderMembersPanel(
+        auth: widget.auth,
+        language: widget.language,
+        tableRef: orderingTable!.reference,
+        sessionRef: orderingTable!.session!.reference,
+        revision: realtimeRevision,
+        onBack: () {
+          setState(() {
+            orderingTable = null;
+          });
+          unawaited(load(reset: true));
+        },
+      );
+    }
     if (catalog) {
       return LiveCatalogPanel(
         auth: widget.auth,
@@ -355,6 +372,20 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
               ],
             ),
             if (session != null) ...[
+              if (table.status == 'active' &&
+                  session.status == 'open' &&
+                  widget.auth.session?.permissions.contains('orders.create') ==
+                      true)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton(
+                    key: ValueKey('order-members-open-${table.reference}'),
+                    onPressed: () => setState(() {
+                      orderingTable = table;
+                    }),
+                    child: Text(t('orderMembersTitle')),
+                  ),
+                ),
               if (widget.auth.session?.permissions.contains('orders.read') ==
                   true)
                 Align(

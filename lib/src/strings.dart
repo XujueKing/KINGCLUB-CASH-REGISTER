@@ -6,6 +6,13 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'orderMembersTitle': '入座会员|Seated members|入座會員|สมาชิกที่นั่งอยู่',
+  'orderMembersNotice': '仅核对本场次会员。选择不代表付款授权；员工下单尚未开放。|Check members in this session. Selection is not payment consent; staff ordering is not enabled.|僅核對本場次會員。選擇不代表付款授權；員工下單尚未開放。|ตรวจสอบสมาชิกในรอบนี้ การเลือกไม่ใช่การอนุมัติชำระเงิน ยังไม่เปิดให้พนักงานสั่งซื้อ',
+  'orderMembersEmpty': '本页暂无入座会员；人数不等于会员入座记录。|No seated members on this page. Guest count is not a membership record.|本頁暫無入座會員；人數不等於會員入座記錄。|ไม่มีสมาชิกที่นั่งในหน้านี้ จำนวนคนไม่ใช่บันทึกสมาชิก',
+  'orderMembersFailed': '无法确认当前场次或会员，请刷新或返回桌台。|Unable to confirm this session or its members. Refresh or return to tables.|無法確認目前場次或會員，請重新整理或返回桌檯。|ยืนยันรอบหรือสมาชิกไม่ได้ โปรดรีเฟรชหรือกลับไปหน้าโต๊ะ',
+  'orderMemberUnnamed': '未设置昵称|Nickname not set|未設定暱稱|ยังไม่ได้ตั้งชื่อเล่น',
+  'orderMemberIneligible': '当前不可选择|Currently unavailable|目前不可選擇|ยังเลือกไม่ได้',
+  'orderMemberSelected': '当前选择（未下单）|Selected (no order placed)|目前選擇（未下單）|เลือกแล้ว (ยังไม่ได้สั่งซื้อ)',
   'catalogTitle': '商品目录|Product catalog|商品目錄|รายการสินค้า',
   'catalogNotice': '仅浏览实时目录，不锁价、不占用库存。员工下单尚未开放。|Catalog observation only; no price lock or stock reservation. Staff ordering is not enabled.|僅瀏覽即時目錄，不鎖價、不佔用庫存。員工下單尚未開放。|ดูรายการเท่านั้น ไม่ล็อกราคาหรือจองสต็อก ยังไม่เปิดให้พนักงานสั่งซื้อ',
   'catalogEmpty': '本页暂无商品|No products on this page|本頁暫無商品|ไม่มีสินค้าในหน้านี้',

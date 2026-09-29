@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../live/catalog_snapshot.dart';
+import '../live/order_context_snapshot.dart';
 
 import '../live/opening_snapshot.dart';
 import '../live/opening_journal.dart';
@@ -250,6 +251,40 @@ class StaffAuthController extends ChangeNotifier {
       storeRef: session.storeRef,
       categoryRef: categoryRef,
       afterProduct: afterProduct,
+    );
+  }
+
+  Future<OrderContextSnapshot> readOrderContext({
+    required String tableRef,
+    required String sessionRef,
+    String? afterMember,
+  }) async {
+    final session = _session, api = _api, epoch = _epoch;
+    if (session == null ||
+        api == null ||
+        _busy ||
+        !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!session.permissions.contains('orders.create')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    final raw = await api.call('K260929001911', {
+      'storeRef': session.storeRef,
+      'tableRef': tableRef,
+      'sessionRef': sessionRef,
+      'afterMember': ?afterMember,
+    });
+    _check(epoch);
+    if (!session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    return OrderContextSnapshot.parse(
+      raw,
+      storeRef: session.storeRef,
+      tableRef: tableRef,
+      sessionRef: sessionRef,
+      afterMember: afterMember,
     );
   }
 
