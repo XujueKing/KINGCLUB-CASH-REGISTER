@@ -1,5 +1,20 @@
 # 购物车草稿恢复：数据层进度
 
+## 组合测试与设备升级补验
+
+`cart_draft_composition_test.dart` 使用实际页面、StaffAuthController、解析器、CartDraftStore及OrderJournal，只有网络与存储适配器是明确测试替身。两个场景均走点击添加/保存→重建控制器和页面→重新查询恢复→确认下单，断言发包瞬间草稿已移除且原订单日志存在；确认成功清原日志，响应丢失保留同UUID及关联草稿元数据。没有仅靠假控制器返回成功。静态串行存储Future需处于同一Flutter fake-async zone，两个场景在同一widget test内分别使用新存储和新控制器；之前分两个测试时第二个等待，单独运行第二个可通过，未因此修改生产实现。
+
+全量360项通过/4项可选跳过，analyze无问题。该组合仍不是HTTPS或真实进程/磁盘恢复，不能替代下面的设备业务验收。
+
+生产代码基线 `dca7428` 已构建 ARM32 release，关闭preview、开启realtime；独立包仍为 `cn.kingclub.cashregister.preview`、0.1.1+2，仍是开发签名，不是正式签名发布。指定 SUNMI D2_2nd-SQB（DAB6264H90115）执行保留数据的 install -r 成功，未覆盖收钱吧、未清数据或操作其他设备。
+
+- 本次APK SHA256：`B8343AE3F9A92AABE933BCCBE8241D2257B2383CDEB69A91CAF3359E552CF3B2`，安装后设备文件哈希一致。
+- 原APK SHA256：`91D34593811A5F4411BFB86007062FF9250848D29A0FF29CF73D5628504B1E54`，pull后与设备原文件核对一致；备份在本机私有 `D:\DeviceBackups\KINGCLUB-CASH-REGISTER\20260929-cart-draft-ui-upgrade\previous-preview.apk`。这是APK备份，不包含应用业务数据、Keystore或系统镜像。
+- lastUpdateTime=2026-09-29 20:35:10；冷启动TotalTime=846ms，WaitTime=878ms；PID4812限定300条日志中所查崩溃/ANR/E-flutter模式匹配0，只是短窗口检查。
+- 实际启动截图已查看，停留空白独立员工登录表单，未输入生产服务地址/账号，未访问经营页面或执行交易。截图保留同私有目录start.png，不提交现场图片。
+
+本次只能证明该包安装启动正常；真实员工登录、草稿Keystore保存/重启、完整HTTPS联调、收款/核销及营业流程仍待完成。
+
 ## 四语言购物车页面增量
 
 `LiveCartPanel` 现已读取本员工/设备当前桌台、场次及会员的已保存草稿。发现草稿先阻止新选择，员工明确恢复或删除后继续；不自动下单。保存、重新查询恢复和删除分别调用前述控制器，删除有二次确认。已恢复内容再次编辑后必须重新保存，提交时携带保存版本，由原订单交接流程处理。首次未保存购物车仍可原样确认下单。
