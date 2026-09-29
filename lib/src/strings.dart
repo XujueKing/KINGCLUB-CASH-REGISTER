@@ -6,6 +6,12 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'orderPreviewTitle': '单笔订单预览（未打印）|Single-order preview (not printed)|單筆訂單預覽（未列印）|ดูคำสั่งซื้อเดียว (ยังไม่พิมพ์)',
+  'orderPreviewNotice': '仅为订单快照，不是整桌结账单、收款凭证或发票。未发送打印数据。|Order snapshot only, not a whole-table bill, payment receipt or invoice. Nothing sent to a printer.|僅為訂單快照，不是整桌結帳單、收款憑證或發票。未傳送列印資料。|ข้อมูลคำสั่งซื้อเท่านั้น ไม่ใช่บิลรวมโต๊ะ หลักฐานรับเงิน หรือใบกำกับภาษี ยังไม่ส่งข้อมูลไปพิมพ์',
+  'orderPreviewStatus':
+      '服务端订单状态|Server order status|伺服器訂單狀態|สถานะคำสั่งซื้อจากเซิร์ฟเวอร์',
+  'orderPreviewTotal': '本订单金额|This order amount|本訂單金額|ยอดคำสั่งซื้อนี้',
+  'orderPreviewExpired': '预览已失效，请关闭并重新查询。|Preview is no longer current. Close and reload.|預覽已失效，請關閉並重新查詢。|ข้อมูลตัวอย่างไม่เป็นปัจจุบันแล้ว ปิดแล้วโหลดใหม่',
   'printerInspectTitle': '打印设备检查|Printer check|列印設備檢查|ตรวจสอบเครื่องพิมพ์',
   'printerInspectNotice': '打开此页仅发现本机服务及USB打印类候选设备，不自动连接打印服务。不打印、不走纸、不切纸、不开钱箱，无需员工登录。|Opening this page only discovers local services and USB printer-class candidates; it does not connect automatically. No printing, feeding, cutting or drawer opening. No staff login required.|開啟此頁僅發現本機服務及USB列印類候選設備，不自動連接列印服務。不列印、不走紙、不切紙、不開錢箱，無需員工登入。|เมื่อเปิดหน้านี้จะค้นหาบริการและอุปกรณ์ USB ประเภทเครื่องพิมพ์เท่านั้น ไม่เชื่อมต่ออัตโนมัติ ไม่พิมพ์ เลื่อนหรือตัดกระดาษ หรือเปิดลิ้นชัก ไม่ต้องเข้าสู่ระบบพนักงาน',
   'printerInspectFailed': '无法完成检查；不代表没有打印机。请稍后手动重试。|Check unavailable; this does not mean no printer exists. Retry manually later.|無法完成檢查；不代表沒有印表機。請稍後手動重試。|ตรวจสอบไม่ได้ ไม่ได้หมายความว่าไม่มีเครื่องพิมพ์ โปรดลองใหม่ภายหลัง',

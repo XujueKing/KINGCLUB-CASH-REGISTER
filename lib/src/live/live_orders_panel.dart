@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'order_snapshot.dart';
+import 'order_preview_dialog.dart';
 import 'live_cash_recovery_panel.dart';
 import 'live_serving_recovery_panel.dart';
 import 'table_snapshot.dart';
@@ -38,7 +39,51 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   bool servingRecovery = false;
   bool servingConfirming = false;
   BuildContext? cashDialog;
+  BuildContext? previewDialog;
+  bool previewOpening = false;
+  Future<void> previewOrder(LiveOrder order) async {
+    final snapshot = data, identity = widget.auth.session;
+    if (!foreground ||
+        loading ||
+        cashBusy ||
+        previewOpening ||
+        snapshot == null ||
+        !snapshot.orders.contains(order) ||
+        identity == null ||
+        !identity.expiresAt.isAfter(DateTime.now())) {
+      return;
+    }
+    final generation = epoch;
+    previewOpening = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) {
+          previewDialog = ctx;
+          return OrderPreviewDialog(
+            auth: widget.auth,
+            order: order,
+            language: widget.language,
+            observedAt: snapshot.observedAt,
+            expiresAt: mounted && foreground && epoch == generation
+                ? identity.expiresAt
+                : DateTime.fromMillisecondsSinceEpoch(0),
+          );
+        },
+      );
+    } finally {
+      previewDialog = null;
+      previewOpening = false;
+    }
+  }
+
   void closeCashDialog() {
+    final preview = previewDialog;
+    if (preview != null &&
+        preview.mounted &&
+        ModalRoute.of(preview)?.isCurrent == true) {
+      Navigator.of(preview).pop();
+    }
     final ctx = cashDialog;
     if (ctx != null && ctx.mounted && ModalRoute.of(ctx)?.isCurrent == true) {
       Navigator.of(ctx).pop();
@@ -490,6 +535,19 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                   '${order.reference} · ${t('order_${order.status}')} · ${order.currency} ${formatCents(order.totalCents)}',
                                 ),
                                 Text('${order.createdAt.toLocal()}'),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: OutlinedButton(
+                                    key: ValueKey(
+                                      'order-preview-${order.reference}',
+                                    ),
+                                    onPressed:
+                                        cashBusy || loading || !foreground
+                                        ? null
+                                        : () => unawaited(previewOrder(order)),
+                                    child: Text(t('orderPreviewTitle')),
+                                  ),
+                                ),
                                 if (cashEligible(order))
                                   Align(
                                     alignment: Alignment.centerRight,

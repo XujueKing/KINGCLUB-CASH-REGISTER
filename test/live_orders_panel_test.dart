@@ -100,7 +100,55 @@ void main() {
     await tester.pump();
   }
 
+  testWidgets(
+    'identity invalidation before preview first frame cannot reveal order',
+    (tester) async {
+      final auth = OrdersAuth();
+      await show(tester, auth);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('order-preview-D00000000001')),
+      );
+      auth.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('order-preview-content')), findsNothing);
+      expect(
+        find.text(tr(UiLanguage.en, 'orderPreviewExpired')),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+
   for (final language in UiLanguage.values) {
+    testWidgets(
+      'order preview opens without writes and closes on revision ${language.name}',
+      (tester) async {
+        final auth = OrdersAuth();
+        await show(tester, auth, language: language);
+        await tester.pumpAndSettle();
+        final readsBefore = auth.reads;
+        await tester.tap(
+          find.byKey(const ValueKey('order-preview-D00000000001')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('order-preview-content')),
+          findsOneWidget,
+        );
+        expect(auth.reads, readsBefore);
+        await show(tester, auth, language: language, revision: 1);
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('order-preview-content')),
+          findsNothing,
+        );
+        await tester.pumpWidget(const SizedBox());
+        auth.dispose();
+      },
+    );
+
     testWidgets(
       'shows partial serving record in $language without paid inference',
       (tester) async {
