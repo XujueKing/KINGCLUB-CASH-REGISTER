@@ -5,7 +5,7 @@
 | 类别 | 入口 | 当前用途 |
 | --- | --- | --- |
 | 产品范围、参考功能、缺口与验收 | [FEATURE_MATRIX](FEATURE_MATRIX.md) | 每个开发节点同时维护状态、证据和剩余任务 |
-| UI 参考与本轮问题 | [首页与参考审查](2026-10-01-home-review.md) | 8 张参考截图对应关系、首页整改和验证边界 |
+| UI 参考与本轮问题 | [首页与参考审查](2026-10-01-home-review.md)、[全屏](2026-10-01-fullscreen.md)、[商品目录](2026-10-01-catalog-read-and-layout.md) | 8 张参考截图对应关系、紧凑布局、全屏和验证边界 |
 | 生产目标与开发日志 | [PRODUCTION_GOAL](PRODUCTION_GOAL.md)、[单一产品](2026-10-01-single-product.md) | 历史增量不能当成当前功能总表 |
 | 身份与接口 | [STAFF_SESSION](STAFF_SESSION.md)、[登录](2026-10-01-account-only-login.md)、[交接](CODEX_HANDOFF_BACKEND_INTEGRATION.md) | 员工会话、门店授权、接口契约 |
 | 桌台与订单 | [LIVE_TABLES](LIVE_TABLES.md)、[OPENING_CLIENT](OPENING_CLIENT.md)、[LIVE_ORDERS](LIVE_ORDERS.md)、[点单](ORDER_CART_UI_2026-09-29.md) | 快照、每日规则、下单及恢复 |

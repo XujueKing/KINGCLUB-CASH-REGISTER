@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -135,38 +136,50 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
   Widget build(BuildContext context) => Column(
     children: [
       Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 16,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Row(
           children: [
-            OutlinedButton(
+            IconButton(
+              tooltip: t('ordersBack'),
               onPressed: widget.onBack,
-              child: Text(t('ordersBack')),
+              icon: const Icon(Icons.arrow_back, size: 20),
             ),
-            Text(
-              t('catalogTitle'),
-              style: Theme.of(context).textTheme.titleLarge,
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                t('catalogTitle'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-            OutlinedButton(
+            Tooltip(
+              message: t(
+                widget.onSelect == null ? 'catalogNotice' : 'cartNotice',
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.info_outline, size: 20),
+              ),
+            ),
+            IconButton(
               key: const ValueKey('catalog-refresh'),
+              tooltip: t('liveRefresh'),
               onPressed: loading ? null : () => unawaited(load(reset: true)),
-              child: Text(t('liveRefresh')),
+              icon: const Icon(Icons.refresh),
             ),
           ],
         ),
       ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text(
-          t(widget.onSelect == null ? 'catalogNotice' : 'cartNotice'),
-        ),
-      ),
       SizedBox(
-        height: 60,
+        height:
+            52 * math.max(1, MediaQuery.textScalerOf(context).scale(14) / 14),
         child: ListView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -189,8 +202,6 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
           ],
         ),
       ),
-      if (data != null)
-        Text('${t('liveObserved')}: ${data!.observedAt.toLocal()}'),
       if (loading) const LinearProgressIndicator(),
       Expanded(
         child: failed
@@ -199,72 +210,58 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
             ? const SizedBox()
             : data!.products.isEmpty
             ? Center(child: Text(t('catalogEmpty')))
-            : ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: data!.products.length,
-                itemBuilder: (context, i) {
-                  final p = data!.products[i];
-                  return Card(
-                    key: ValueKey('catalog-product-${p.reference}'),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            p.name(widget.language),
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          Text(p.specification(widget.language)),
-                          if (widget.onSelect != null)
-                            OutlinedButton(
-                              key: ValueKey('catalog-add-${p.reference}'),
-                              onPressed:
-                                  foreground &&
-                                      p.inventoryKnown &&
-                                      p.available > 0
-                                  ? () => widget.onSelect!(p)
-                                  : null,
-                              child: Text(t('cartAdd')),
-                            ),
-                          Wrap(
-                            spacing: 24,
-                            runSpacing: 8,
-                            children: [
-                              Text(
-                                '${data!.currency} ${formatCents(p.priceCents)}',
-                              ),
-                              Text(
-                                !p.inventoryKnown
-                                    ? t('catalogUnknown')
-                                    : p.available == 0
-                                    ? t('catalogSoldOut')
-                                    : '${t('catalogAvailable')}: ${p.available}',
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final scale = math.max(
+                    1.0,
+                    MediaQuery.textScalerOf(context).scale(16) / 16,
+                  );
+                  final columns = ((constraints.maxWidth - 14) / (250 * scale))
+                      .floor()
+                      .clamp(1, 6);
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(12),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      mainAxisExtent: 168 * scale,
                     ),
+                    itemCount: data!.products.length,
+                    itemBuilder: (context, i) => productCard(data!.products[i]),
                   );
                 },
               ),
       ),
       Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 20,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Row(
           children: [
-            OutlinedButton(
+            Expanded(
+              child: data == null
+                  ? const SizedBox()
+                  : Tooltip(
+                      message:
+                          '${t('liveObserved')}: ${data!.observedAt.toLocal()}',
+                      child: Text(
+                        '${t('liveObserved')}: ${TimeOfDay.fromDateTime(data!.observedAt.toLocal()).format(context)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+            ),
+            IconButton(
+              tooltip: t('livePrevious'),
               onPressed: loading || page == 0
                   ? null
                   : () => unawaited(load(target: page - 1)),
-              child: Text(t('livePrevious')),
+              icon: const Icon(Icons.chevron_left),
             ),
             Text('${t('livePage')} ${page + 1}'),
-            OutlinedButton(
+            IconButton(
               key: const ValueKey('catalog-next'),
+              tooltip: t('liveNext'),
               onPressed: loading || data?.nextAfterProduct == null
                   ? null
                   : () {
@@ -272,11 +269,101 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                       cursors.add(data!.nextAfterProduct);
                       unawaited(load(target: page + 1));
                     },
-              child: Text(t('liveNext')),
+              icon: const Icon(Icons.chevron_right),
             ),
           ],
         ),
       ),
     ],
   );
+
+  Widget productCard(CatalogProduct p) {
+    final available = p.inventoryKnown && p.available > 0;
+    final stockColor = !p.inventoryKnown
+        ? const Color(0xff986500)
+        : available
+        ? const Color(0xff16733e)
+        : const Color(0xffb53636);
+    return Material(
+      key: ValueKey('catalog-product-${p.reference}'),
+      color: available ? Colors.white : const Color(0xfff2f2ef),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: available ? const Color(0xffb2c6ba) : const Color(0xffd2d2cd),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Tooltip(
+              message: p.name(widget.language),
+              child: Text(
+                p.name(widget.language),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Tooltip(
+              message: p.specification(widget.language),
+              child: Text(
+                p.specification(widget.language),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, color: Color(0xff616c65)),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              !p.inventoryKnown
+                  ? t('catalogUnknown')
+                  : !available
+                  ? t('catalogSoldOut')
+                  : '${t('catalogAvailable')}: ${p.available}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: stockColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${data!.currency} ${formatCents(p.priceCents)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (widget.onSelect != null)
+                  IconButton.filledTonal(
+                    key: ValueKey('catalog-add-${p.reference}'),
+                    tooltip: t('cartAdd'),
+                    onPressed: foreground && available
+                        ? () => widget.onSelect!(p)
+                        : null,
+                    icon: const Icon(Icons.add),
+                  )
+                else
+                  const SizedBox(height: 42),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

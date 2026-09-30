@@ -73,6 +73,7 @@ a.TestAuth loginChannel() => a.TestAuth()
 class ViewAuth extends StaffAuthController {
   String? filter, cursor;
   bool fail = false;
+  Map<String, dynamic>? reply;
   @override
   Future<CatalogSnapshot> readCatalog({
     String? categoryRef,
@@ -82,7 +83,7 @@ class ViewAuth extends StaffAuthController {
     cursor = afterProduct;
     if (fail) throw const CcsopFailure('TEST_FAILURE');
     return parse(
-      catalog(),
+      reply ?? catalog(),
       categoryRef: categoryRef,
       afterProduct: afterProduct,
     );
@@ -90,6 +91,96 @@ class ViewAuth extends StaffAuthController {
 }
 
 void main() {
+  testWidgets(
+    'compact catalog fits fifteen products and respects stock in four languages',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = ViewAuth()
+        ..reply = {
+          ...catalog(),
+          'products': List.generate(
+            15,
+            (i) => {
+              ...product('p${i.toString().padLeft(3, '0')}'),
+              'names': words(
+                'Long product name for the available catalog item',
+              ),
+              'inventoryKnown': i != 0,
+              'available': i > 1 ? 3 : 0,
+              'soldOut': i <= 1,
+            },
+          ),
+        };
+      String? selected;
+      for (final language in UiLanguage.values) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: LiveCatalogPanel(
+                auth: auth,
+                language: language,
+                onBack: () {},
+                onSelect: (p) => selected = p.reference,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final last = tester.getRect(
+          find.byKey(const ValueKey('catalog-product-p014')),
+        );
+        expect(last.bottom, lessThan(670));
+        expect(
+          tester
+              .getRect(find.byKey(const ValueKey('catalog-product-p000')))
+              .top,
+          lessThanOrEqualTo(120),
+        );
+        expect(
+          tester
+              .widget<IconButton>(
+                find.byKey(const ValueKey('catalog-add-p000')),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<IconButton>(
+                find.byKey(const ValueKey('catalog-add-p001')),
+              )
+              .onPressed,
+          isNull,
+        );
+        await tester.tap(find.byKey(const ValueKey('catalog-add-p002')));
+        expect(selected, 'p002');
+        expect(tester.takeException(), isNull);
+      }
+      tester.view.physicalSize = const Size(560, 600);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.4)),
+            child: Scaffold(
+              body: LiveCatalogPanel(
+                auth: auth,
+                language: UiLanguage.th,
+                onBack: () {},
+                onSelect: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   test('four languages, unknown inventory and immutable observations', () {
     final value = parse(catalog());
     expect(value.products.single.inventoryKnown, false);

@@ -282,7 +282,7 @@ void main() {
     await show(tester, auth);
     expect(
       tester
-          .widget<OutlinedButton>(
+          .widget<IconButton>(
             find.byKey(const ValueKey('catalog-add-p001')),
           )
           .onPressed,
