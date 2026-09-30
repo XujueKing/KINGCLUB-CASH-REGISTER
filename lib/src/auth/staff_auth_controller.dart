@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../live/catalog_snapshot.dart';
 import '../live/member_identity.dart';
+import '../live/seating_command.dart';
+import '../live/seating_journal.dart';
 import '../live/voucher_lookup.dart';
 import '../live/order_context_snapshot.dart';
 import '../live/order_command.dart';
@@ -52,6 +54,7 @@ class StaffAuthController extends ChangeNotifier {
     ProviderPaymentJournal? providerJournal,
     RechargeJournal? rechargeJournal,
     ServingJournal? servingJournal,
+    SeatingJournal? seatingJournal,
     TableClearJournal? tableClearJournal,
     TableCheckoutJournal? tableCheckoutJournal,
     BalanceRefundJournal? balanceRefundJournal,
@@ -69,11 +72,14 @@ class StaffAuthController extends ChangeNotifier {
        _providerJournal = providerJournal ?? ProviderPaymentJournal(),
        _rechargeJournal = rechargeJournal ?? RechargeJournal(),
        _servingJournal = servingJournal ?? ServingJournal(),
+       _seatingJournal = seatingJournal ?? SeatingJournal(),
        _tableClearJournal = tableClearJournal ?? TableClearJournal(),
        _tableCheckoutJournal = tableCheckoutJournal ?? TableCheckoutJournal(),
        _balanceRefundJournal = balanceRefundJournal ?? BalanceRefundJournal(),
        _cartDraftStore = cartDraftStore ?? CartDraftStore();
   final CartDraftStore _cartDraftStore;
+  final SeatingJournal _seatingJournal;
+  bool _seatingBusy = false;
   final RechargeJournal _rechargeJournal;
   final TableCheckoutJournal _tableCheckoutJournal;
   bool _tablePreparationBusy = false;
@@ -1101,6 +1107,75 @@ class StaffAuthController extends ChangeNotifier {
       elapsed: elapsed.elapsed,
     );
   }
+
+  StaffSession _seatingIdentity() {
+    final session = _session;
+    if (_disposed || _busy || session == null || _api == null || !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!session.permissions.contains('table.open') || !session.permissions.contains('orders.create')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    return session;
+  }
+
+  Future<T> _seatingOperation<T>(Future<T> Function() work) async {
+    if (_seatingBusy) throw const CcsopFailure('SEATING_IN_PROGRESS');
+    _seatingBusy = true;
+    try { return await work(); } finally { _seatingBusy = false; }
+  }
+
+  Future<List<PendingSeating>> pendingSeating() async {
+    final session = _seatingIdentity(), epoch = _epoch;
+    final rows = await _seatingJournal.load(session);
+    _check(epoch); _seatingIdentity();
+    return rows;
+  }
+
+  Future<SeatingResult> _seatingCall(PendingSeating command, StaffSession session, int epoch,
+      String interfaceId, Map<String,dynamic> params) async {
+    _check(epoch); _seatingIdentity();
+    if (!command.belongsTo(session)) throw const CcsopFailure('SEATING_SCOPE_CHANGED');
+    final raw = await _api!.call(interfaceId, params);
+    _check(epoch); _seatingIdentity();
+    final result = SeatingResult.parse(raw, command);
+    if (interfaceId != 'K261001001953' && !result.terminal) throw const CcsopFailure('SEATING_RESPONSE_INVALID');
+    if (result.terminal) await _seatingJournal.acknowledge(session, result);
+    _check(epoch); _seatingIdentity();
+    return result;
+  }
+
+  Future<SeatingResult> confirmSeating(PendingSeating command, String identityCode,
+      {required bool confirmed, required bool Function() stillCurrent}) => _seatingOperation(() async {
+    final session = _seatingIdentity(), epoch = _epoch;
+    void check() {
+      _check(epoch); _seatingIdentity();
+      if (!confirmed || !stillCurrent() || !command.belongsTo(session) || !MemberIdentity.codePattern.hasMatch(identityCode)) {
+        throw const CcsopFailure('SEATING_CONFIRMATION_REQUIRED');
+      }
+    }
+    check();
+    // Save and verify the recovery scope before admission. Never save the QR.
+    await _seatingJournal.save(command, session);
+    check();
+    return _seatingCall(command, session, epoch, 'K261001001952', {
+      ...command.params, 'identityCode': identityCode, 'arrivalConfirmed': true, 'reservationChecked': true,
+    });
+  });
+
+  Future<SeatingResult> recoverSeating(String requestId, {bool cancelUnsent = false,
+      bool Function()? stillCurrent}) => _seatingOperation(() async {
+    final session = _seatingIdentity(), epoch = _epoch;
+    final rows = await _seatingJournal.load(session);
+    _check(epoch); _seatingIdentity();
+    final matches = rows.where((row) => row.requestId == requestId).toList();
+    if (matches.length != 1) throw const CcsopFailure('SEATING_PENDING_NOT_FOUND');
+    final command = matches.single;
+    final observed = await _seatingCall(command, session, epoch, 'K261001001953', command.lookup);
+    if (observed.terminal || !cancelUnsent) return observed;
+    if (stillCurrent == null || !stillCurrent()) throw const CcsopFailure('SEATING_SCOPE_CHANGED');
+    return _seatingCall(command, session, epoch, 'K261001001954', {...command.params, 'cancellationConfirmed': true});
+  });
 
   Future<CatalogSnapshot> readCatalog({
     String? categoryRef,

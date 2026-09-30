@@ -6,6 +6,7 @@ import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'order_context_snapshot.dart';
 import 'live_cart_panel.dart';
+import 'member_seating_panel.dart';
 
 class LiveOrderMembersPanel extends StatefulWidget {
   const LiveOrderMembersPanel({
@@ -31,6 +32,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
   OrderContextSnapshot? data;
   SeatedOrderMember? selected;
   bool cart = false;
+  bool seating = false;
   final cursors = <String?>[null];
   int page = 0, epoch = 0;
   bool loading = false, failed = false, foreground = true;
@@ -50,6 +52,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
       data = null;
       selected = null;
       cart = false;
+      seating = false;
       loading = false;
       failed = false;
     });
@@ -142,6 +145,21 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (seating && data != null) {
+      return MemberSeatingPanel(
+        auth: widget.auth,
+        language: widget.language,
+        orderContext: data,
+        onBack: () {
+          setState(() => seating = false);
+          unawaited(load(reset: true));
+        },
+        onSeated: () {
+          setState(() => seating = false);
+          unawaited(load(reset: true));
+        },
+      );
+    }
     if (cart && data != null && selected != null) {
       return LiveCartPanel(
         auth: widget.auth,
@@ -182,6 +200,16 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
                   child: Icon(Icons.info_outline, size: 20),
                 ),
               ),
+              if (widget.auth.session?.permissions.contains('table.open') ==
+                  true)
+                TextButton.icon(
+                  key: const ValueKey('order-members-seat'),
+                  onPressed: data == null || loading
+                      ? null
+                      : () => setState(() => seating = true),
+                  icon: const Icon(Icons.qr_code_scanner, size: 18),
+                  label: Text(t('seatingTitle')),
+                ),
               IconButton(
                 key: const ValueKey('order-members-refresh'),
                 tooltip: t('liveRefresh'),

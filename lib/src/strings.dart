@@ -6,6 +6,20 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'seatingTitle': '扫码入座|Scan to seat|掃碼入座|สแกนเพื่อเข้าที่นั่ง',
+  'seatingArrived': '已确认该会员本人到店|This member is present|已確認該會員本人到店|ยืนยันว่าสมาชิกมาถึงแล้ว',
+  'seatingReservation': '已核对本桌预约与会员归属|Table reservation and member checked|已核對本桌預約與會員歸屬|ตรวจสอบการจองโต๊ะและสมาชิกแล้ว',
+  'seatingConfirm': '确认入座|Confirm seating|確認入座|ยืนยันเข้าที่นั่ง',
+  'seatingPending': '原入座请求待确认|Seating request pending|原入座請求待確認|คำขอเข้าที่นั่งรอยืนยัน',
+  'seatingLookup': '查原结果|Check result|查原結果|ตรวจผลเดิม',
+  'seatingCancel': '取消未执行请求|Cancel unsent request|取消未執行請求|ยกเลิกคำขอที่ยังไม่สำเร็จ',
+  'seatingKeep': '保留请求|Keep request|保留請求|เก็บคำขอไว้',
+  'seatingCancelNotice': '只取消尚未完成的原入座请求；如果服务器已经确认，将恢复原成功结果，不会让会员离座。|Cancel only if the original seating has not completed. If already confirmed, recover that result without removing the member.|只取消尚未完成的原入座請求；若伺服器已確認，將恢復原成功結果，不會讓會員離座。|ยกเลิกได้เฉพาะคำขอเดิมที่ยังไม่สำเร็จ หากยืนยันแล้วจะแสดงผลเดิมโดยไม่ให้สมาชิกออกจากที่นั่ง',
+  'seatingUnknown': '入座结果暂未确认，请查询原请求。|Seating result uncertain. Check the original request.|入座結果暫未確認，請查詢原請求。|ยังยืนยันผลไม่ได้ โปรดตรวจคำขอเดิม',
+  'seatingNotObserved': '服务器暂未记录原请求。请继续查询，或明确取消后重新扫码。|No result recorded yet. Check again, or cancel before scanning again.|伺服器暫未記錄原請求。請繼續查詢，或明確取消後重新掃碼。|ยังไม่พบผลบนเซิร์ฟเวอร์ ตรวจอีกครั้งหรือยกเลิกก่อนสแกนใหม่',
+  'seatingConfirmed': '服务器已确认原入座结果，正在刷新会员名单。|Seating confirmed. Refreshing the member list.|伺服器已確認原入座結果，正在重新整理會員名單。|ยืนยันผลเข้าที่นั่งแล้ว กำลังโหลดรายชื่อใหม่',
+  'seatingCancelled': '原请求已取消，可以重新扫码。|Original request cancelled. You can scan again.|原請求已取消，可以重新掃碼。|ยกเลิกคำขอเดิมแล้ว สแกนใหม่ได้',
+  'seatingRecoveryFailed': '无法读取原入座请求，请刷新后再操作。|Could not load pending seating requests. Refresh before proceeding.|無法讀取原入座請求，請重新整理後再操作。|โหลดคำขอเดิมไม่ได้ โปรดรีเฟรชก่อนดำเนินการ',
   'memberIdentityTitle': '扫码识别会员|Scan member identity|掃碼識別會員|สแกนรหัสสมาชิก',
   'memberIdentityHelp': '请顾客打开 KING APP「我的二维码」，将扫码枪对准会员码。|Ask the guest to open My QR code in KING and scan the member code.|請顧客開啟 KING APP「我的二維碼」，將掃碼槍對準會員碼。|ให้ลูกค้าเปิดรหัส QR ของฉันใน KING แล้วสแกนรหัสสมาชิก',
   'memberIdentityInput': '扫描会员身份码|Scan member code|掃描會員身分碼|สแกนรหัสสมาชิก',

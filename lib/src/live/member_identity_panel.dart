@@ -11,9 +11,16 @@ class MemberIdentityPanel extends StatefulWidget {
     super.key,
     required this.auth,
     required this.language,
+    this.actionsBuilder,
   });
   final StaffAuthController auth;
   final UiLanguage language;
+  final Widget Function(
+    MemberIdentity member,
+    String code,
+    bool Function() stillCurrent,
+  )?
+  actionsBuilder;
   @override
   State<MemberIdentityPanel> createState() => _MemberIdentityPanelState();
 }
@@ -23,6 +30,8 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
   final code = TextEditingController();
   Timer? expiry;
   MemberIdentity? identity;
+  String? identityCode;
+  Stopwatch? validity;
   int epoch = 0;
   bool busy = false, failed = false, foreground = true;
   String t(String key) => tr(widget.language, key);
@@ -40,6 +49,8 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
     epoch++;
     expiry?.cancel();
     code.clear();
+    identityCode = null;
+    validity = null;
     if (mounted) {
       setState(() {
         identity = null;
@@ -73,6 +84,8 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
     code.clear();
     setState(() {
       identity = null;
+      identityCode = null;
+      validity = null;
       failed = false;
     });
     if (!MemberIdentity.codePattern.hasMatch(raw)) {
@@ -90,6 +103,8 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
       if (!valid()) return;
       setState(() {
         identity = result;
+        identityCode = widget.actionsBuilder == null ? null : raw;
+        validity = Stopwatch()..start();
         busy = false;
       });
       expiry = Timer(result.validFor, invalidate);
@@ -108,6 +123,8 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
     epoch++;
     expiry?.cancel();
     code.dispose();
+    identityCode = null;
+    validity = null;
     widget.auth.removeListener(invalidate);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -157,6 +174,8 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
                         expiry?.cancel();
                         setState(() {
                           identity = null;
+                          identityCode = null;
+                          validity = null;
                           failed = false;
                         });
                       },
@@ -198,6 +217,19 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
                         Text(t('memberIdentityRecognized')),
                         const SizedBox(height: 8),
                         Text(t('memberIdentityNotice')),
+                        if (widget.actionsBuilder != null &&
+                            identityCode != null)
+                          widget.actionsBuilder!(
+                            identity!,
+                            identityCode!,
+                            () =>
+                                mounted &&
+                                foreground &&
+                                identity != null &&
+                                identityCode != null &&
+                                validity != null &&
+                                validity!.elapsed < identity!.validFor,
+                          ),
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
