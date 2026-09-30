@@ -36,6 +36,27 @@ class IdentityAuth extends TableAuth {
 }
 
 void main() {
+  testWidgets('keyboard scanning stays ready after a delayed lookup', (
+    tester,
+  ) async {
+    final auth = IdentityAuth()..pending = Completer<MemberIdentity>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MemberIdentityPanel(auth: auth, language: UiLanguage.zh),
+        ),
+      ),
+    );
+    final field = find.byKey(const ValueKey('member-identity-code'));
+    await tester.enterText(field, 'KC:M:${'A' * 32}');
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pump();
+    auth.pending!.complete(identity());
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
   testWidgets(
     'scanner broadcasts identify without input focus and stop after leaving',
     (tester) async {

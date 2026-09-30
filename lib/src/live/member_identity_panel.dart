@@ -73,7 +73,20 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
         busy = false;
         failed = false;
       });
+      restoreScanFocus();
     }
+  }
+
+  void restoreScanFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          foreground &&
+          !busy &&
+          ModalRoute.of(context)?.isCurrent != false &&
+          widget.auth.session?.permissions.contains('orders.create') == true) {
+        scanFocus.requestFocus();
+      }
+    });
   }
 
   @override
@@ -108,6 +121,7 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
     });
     if (!MemberIdentity.codePattern.hasMatch(raw)) {
       setState(() => failed = true);
+      restoreScanFocus();
       return;
     }
     setState(() => busy = true);
@@ -133,6 +147,8 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
           busy = false;
         });
       }
+    } finally {
+      if (valid()) restoreScanFocus();
     }
   }
 
@@ -194,6 +210,7 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
                         prefixIcon: const Icon(Icons.qr_code_scanner),
                       ),
                       onSubmitted: (_) => unawaited(scan()),
+                      onEditingComplete: () {},
                       onChanged: (value) {
                         scanDebounce?.cancel();
                         expiry?.cancel();
