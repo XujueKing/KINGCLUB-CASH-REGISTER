@@ -369,7 +369,7 @@ const copy = <String, String>{
   'cartDelete': '移除商品|Remove item|移除商品|นำสินค้าออก',
   'cartDraftEmpty': '尚未选择商品|No items selected|尚未選擇商品|ยังไม่ได้เลือกสินค้า',
   'cartSubmit': '核对并下单|Review and place order|核對並下單|ตรวจสอบและสั่งซื้อ',
-  'cartConfirmNotice': '确认后提交真实订单：先付模式预留库存，后付模式扣减库存。此操作不是收款，选择消费会员不代表余额扣款授权。|Confirmation submits a real order: prepay reserves stock; postpay issues stock. This is not payment, and selecting a consumer does not authorize wallet debit.|確認後提交真實訂單：先付模式預留庫存，後付模式扣減庫存。此操作不是收款，選擇消費會員不代表餘額扣款授權。|การยืนยันจะส่งคำสั่งซื้อจริง จ่ายก่อนจะจองสต็อก จ่ายทีหลังจะตัดสต็อก นี่ไม่ใช่การชำระเงิน การเลือกสมาชิกไม่อนุญาตให้หักยอดเงิน',
+  'cartConfirmNotice': '先付款订单付款时确认库存，售罄不收款；后付款按实际出酒扣库存。选择会员不会扣余额。|Prepay stock is confirmed at payment; sold-out items are not charged. Postpay stock is deducted when issued. Selecting a member does not debit their balance.|先付款訂單付款時確認庫存，售罄不收款；後付款按實際出酒扣庫存。選擇會員不會扣餘額。|คำสั่งซื้อแบบจ่ายก่อนตรวจสต็อกเมื่อชำระเงิน สินค้าหมดจะไม่เรียกเก็บเงิน แบบจ่ายทีหลังตัดสต็อกเมื่อส่งสินค้า การเลือกสมาชิกไม่หักยอดเงิน',
   'cartRefreshing': '正在核对商品，已选内容已保留。|Checking items; your selection is retained.|正在核對商品，已選內容已保留。|กำลังตรวจสอบสินค้า โดยเก็บรายการที่เลือกไว้',
   'cartRefreshFailed': '暂不能下单，已保留所选商品。请重试核对；如商品或入座信息已变更，请返回调整。|Cannot submit yet. Selection retained. Retry checking, or go back if items or seating changed.|暫不能下單，已保留所選商品。請重試核對；如商品或入座資訊已變更，請返回調整。|ยังส่งรายการไม่ได้ เก็บสินค้าที่เลือกไว้แล้ว ลองตรวจสอบอีกครั้ง หรือกลับไปแก้ไขหากสินค้าหรือที่นั่งเปลี่ยน',
   'cartRefreshRetry': '重新核对|Check again|重新核對|ตรวจสอบอีกครั้ง',
@@ -382,7 +382,7 @@ const copy = <String, String>{
   'orderRecoveryRetry': '查回并重试原订单|Look up and retry original order|查回並重試原訂單|ตรวจสอบและลองคำสั่งซื้อเดิมอีกครั้ง',
   'orderRecoveryCancel':
       '终止原下单请求|Terminate original request|終止原下單請求|ยุติคำขอสั่งซื้อเดิม',
-  'orderRecoveryConfirm': '重试可能实际成单并预留或扣减库存，沿用原商品、数量与价格。终止仅阻止尚未成单的原请求，不退单、不退款。|Retry may create the order and reserve or issue stock using the original items, quantities and prices. Termination only blocks an unsubmitted request; it does not void or refund an order.|重試可能實際成單並預留或扣減庫存，沿用原商品、數量與價格。終止僅阻止尚未成單的原請求，不退單、不退款。|การลองใหม่อาจสร้างคำสั่งซื้อและจองหรือตัดสต็อกโดยใช้สินค้า จำนวน และราคาเดิม การยุติจะปิดกั้นเฉพาะคำขอที่ยังไม่เป็นคำสั่งซื้อ ไม่ยกเลิกคำสั่งซื้อหรือคืนเงิน',
+  'orderRecoveryConfirm': '按原商品、数量和价格重试。先付款下单不占库存，后付款出酒扣库存。终止仅停止尚未成单的请求，不退单、不退款。|Retry with the original items, quantities and prices. Prepay orders do not reserve stock; postpay issues deduct stock. Termination only stops an unsubmitted request, without cancelling or refunding an existing order.|按原商品、數量和價格重試。先付款下單不占庫存，後付款出酒扣庫存。終止僅停止尚未成單的請求，不退單、不退款。|ลองใหม่ด้วยสินค้า จำนวน และราคาเดิม แบบจ่ายก่อนไม่จองสต็อกตอนสั่ง แบบจ่ายทีหลังตัดสต็อกเมื่อส่งสินค้า การยุติหยุดเฉพาะคำขอที่ยังไม่เป็นคำสั่งซื้อ ไม่ยกเลิกหรือคืนเงินคำสั่งซื้อเดิม',
   'orderRecoveryConfirmed': '原请求已成单，不代表已付款。请返回桌台查看订单。|Original order confirmed, not payment. Return to the table to view orders.|原請求已成單，不代表已付款。請返回桌檯查看訂單。|ยืนยันคำสั่งซื้อเดิมแล้ว ไม่ใช่การยืนยันชำระเงิน กลับไปดูคำสั่งซื้อที่โต๊ะ',
   'orderRecoveryCancelled': '原下单请求已终止，不代表退单或退款。|Original request terminated, not an order cancellation or refund.|原下單請求已終止，不代表退單或退款。|ยุติคำขอเดิมแล้ว ไม่ใช่การยกเลิกคำสั่งซื้อหรือคืนเงิน',
   'orderRecoveryUnknown': '仍未确认原请求结果，不要另建重复订单。|Original result is not confirmed. Do not create a duplicate order.|仍未確認原請求結果，不要另建重複訂單。|ยังไม่ยืนยันผลคำขอเดิม อย่าสร้างคำสั่งซื้อซ้ำ',

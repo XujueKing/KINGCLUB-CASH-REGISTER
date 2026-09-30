@@ -269,8 +269,9 @@ class OrderRequestResult {
           receipt['paymentTiming'] != pending.paymentTiming ||
           receipt['currency'] != 'CNY' ||
           receipt['submissionStatus'] != 'confirmed' ||
-          receipt['inventoryState'] !=
-              (pending.paymentTiming == 'prepay' ? 'reserved' : 'issued') ||
+          (pending.paymentTiming == 'prepay'
+              ? !['unallocated', 'reserved'].contains(receipt['inventoryState'])
+              : receipt['inventoryState'] != 'issued') ||
           receipt['totalCents'] is! int ||
           receipt['totalCents'] != pending.totalCents ||
           receipt['orderRef'] is! String ||

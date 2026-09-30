@@ -135,6 +135,34 @@ Future<OrderRequestResult> submit(
 );
 
 void main() {
+  test('prepay receipt accepts payment-time allocation and historical reservations only', () {
+    final context = m.contextData();
+    (context['session'] as Map)['paymentTiming'] = 'prepay';
+    final pending = PendingOrder.prepare(
+      identity: identity,
+      context: m.parse(context),
+      memberRef: 'member-000',
+      items: selection(),
+      now: a.now,
+    );
+    for (final state in ['unallocated', 'reserved']) {
+      expect(
+        OrderRequestResult.parse({
+          'result': {...receipt(pending.params), 'inventoryState': state},
+        }, pending, submission: true).state,
+        OrderRequestState.confirmed,
+      );
+    }
+    for (final state in ['issued', 'released']) {
+      expect(() => OrderRequestResult.parse({
+        'result': {...receipt(pending.params), 'inventoryState': state},
+      }, pending, submission: true), fails('ORDER_RECEIPT_MISMATCH'));
+    }
+    final postpay = command();
+    expect(() => OrderRequestResult.parse({
+      'result': {...receipt(postpay.params), 'inventoryState': 'unallocated'},
+    }, postpay, submission: true), fails('ORDER_RECEIPT_MISMATCH'));
+  });
   test('command has immutable nested items, stable UUID, exact prices and no authentication material', () {
     final p = command();
     expect(p.totalCents, 2468);
