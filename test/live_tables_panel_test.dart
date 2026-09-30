@@ -147,13 +147,20 @@ void main() {
   testWidgets(
     'Displays server money, no pay actions, failure removes old records',
     (tester) async {
-      final auth = TableAuth();
+      final auth = TableAuth()..reply = tableFixture(count: 2);
       await show(tester, auth);
       expect(find.text('Test table 0'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
       await tester.pumpAndSettle();
       expect(find.textContaining('CNY 12.01'), findsOneWidget);
-      expect(find.textContaining('CNY 78.00'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('table-detail-test-000')),
+          matching: find.textContaining('CNY 78.00'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('live-table-test-001')), findsOneWidget);
       expect(find.byKey(const ValueKey('real-payment')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('table-detail-back')));
       await tester.pumpAndSettle();

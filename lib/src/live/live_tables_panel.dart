@@ -402,35 +402,6 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     final focused = data?.tables
         .where((table) => table.reference == focusedTableRef)
         .firstOrNull;
-    if (focused != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const ValueKey('table-detail-back'),
-              onPressed: () => setState(() => focusedTableRef = null),
-              icon: const Icon(Icons.arrow_back),
-              label: Text(t('ordersBack')),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Center(
-                child: SizedBox(
-                  width: 620,
-                  height:
-                      440 *
-                      MediaQuery.textScalerOf(context).scale(1).clamp(1, 2),
-                  child: tableDetails(focused, data!.currency),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -503,10 +474,14 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                     final scale = MediaQuery.textScalerOf(context)
                         .scale(1)
                         .clamp(1.0, 2.0);
-                    final columns = ((box.maxWidth - 24) / (190 * scale))
-                        .floor()
-                        .clamp(1, 8);
-                    return GridView.count(
+                    final detailWidth = focused == null
+                        ? 0.0
+                        : 300.0 * scale.clamp(1.0, 1.2);
+                    final columns =
+                        ((box.maxWidth - detailWidth - 24) / (190 * scale))
+                            .floor()
+                            .clamp(1, 8);
+                    final grid = GridView.count(
                       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                       crossAxisCount: columns,
                       mainAxisSpacing: 10,
@@ -515,6 +490,39 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                       children: [
                         for (final table in data.tables)
                           tableCard(table, data.currency),
+                      ],
+                    );
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: grid),
+                        if (focused != null)
+                          SizedBox(
+                            width: detailWidth,
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(0, 4, 12, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: IconButton(
+                                      key: const ValueKey('table-detail-back'),
+                                      tooltip: t('ordersBack'),
+                                      onPressed: () => setState(
+                                        () => focusedTableRef = null,
+                                      ),
+                                      icon: const Icon(Icons.close),
+                                    ),
+                                  ),
+                                  IgnorePointer(
+                                    ignoring: loading,
+                                    child: tableDetails(focused, data.currency),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     );
                   },
@@ -889,6 +897,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
@@ -937,7 +946,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 style: const TextStyle(fontSize: 12),
               ),
           ],
-          const Spacer(),
+          const SizedBox(height: 16),
           if (actions.isNotEmpty)
             Wrap(spacing: 8, runSpacing: 0, children: actions),
         ],

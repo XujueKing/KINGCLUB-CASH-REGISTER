@@ -36,6 +36,63 @@ class IdentityAuth extends TableAuth {
 }
 
 void main() {
+  testWidgets(
+    'scanner broadcasts identify without input focus and stop after leaving',
+    (tester) async {
+      final auth = IdentityAuth(),
+          events = StreamController<String>.broadcast();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MemberIdentityPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              scannerEvents: events.stream,
+            ),
+          ),
+        ),
+      );
+      events.add('KC:M:${'A' * 32}');
+      await tester.pumpAndSettle();
+      expect(auth.scans, hasLength(1));
+      expect(find.text('TEST guest'), findsOneWidget);
+      await tester.testTextInput.receiveAction(TextInputAction.go);
+      await tester.pump();
+      expect(find.text('TEST guest'), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      events.add('KC:M:${'B' * 32}');
+      await tester.pump();
+      expect(auth.scans, hasLength(1));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(const SizedBox());
+      expect(events.hasListener, isFalse);
+      await events.close();
+      auth.dispose();
+    },
+  );
+  testWidgets('complete keyboard scan identifies without an enter suffix', (
+    tester,
+  ) async {
+    final auth = IdentityAuth();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MemberIdentityPanel(auth: auth, language: UiLanguage.zh),
+        ),
+      ),
+    );
+    await tester.pump();
+    final field = find.byKey(const ValueKey('member-identity-code'));
+    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+    await tester.enterText(field, 'KC:M:${'A' * 32}');
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pumpAndSettle();
+    expect(auth.scans, hasLength(1));
+    expect(find.text('TEST guest'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
+
   test(
     'controller binds the employee store and discards a reply after logout',
     () async {

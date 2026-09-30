@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
+import '../hardware/scanner_input.dart';
 import 'member_identity.dart';
 
 class MemberIdentityPanel extends StatefulWidget {
@@ -12,7 +13,9 @@ class MemberIdentityPanel extends StatefulWidget {
     required this.auth,
     required this.language,
     this.actionsBuilder,
+    this.scannerEvents,
   });
+  final Stream<String>? scannerEvents;
   final StaffAuthController auth;
   final UiLanguage language;
   final Widget Function(
@@ -27,8 +30,10 @@ class MemberIdentityPanel extends StatefulWidget {
 
 class _MemberIdentityPanelState extends State<MemberIdentityPanel>
     with WidgetsBindingObserver {
+  StreamSubscription<String>? scanner;
   final code = TextEditingController();
-  Timer? expiry;
+  final scanFocus = FocusNode();
+  Timer? expiry, scanDebounce;
   MemberIdentity? identity;
   String? identityCode;
   Stopwatch? validity;
@@ -43,11 +48,22 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     widget.auth.addListener(invalidate);
     WidgetsBinding.instance.addObserver(this);
+    scanner = (widget.scannerEvents ?? ScannerInput.codes).listen(
+      (value) {
+        if (!mounted || !foreground || busy) return;
+        code.text = value;
+        unawaited(scan());
+      },
+      onError: (Object _) {
+        if (mounted && foreground) setState(() => failed = true);
+      },
+    );
   }
 
   void invalidate() {
     epoch++;
     expiry?.cancel();
+    scanDebounce?.cancel();
     code.clear();
     identityCode = null;
     validity = null;
@@ -78,7 +94,9 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
 
   Future<void> scan() async {
     if (busy || !foreground) return;
+    scanDebounce?.cancel();
     final raw = code.text.trim();
+    if (raw.isEmpty) return;
     final current = ++epoch, session = widget.auth.session;
     expiry?.cancel();
     code.clear();
@@ -122,6 +140,9 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
   void dispose() {
     epoch++;
     expiry?.cancel();
+    scanDebounce?.cancel();
+    unawaited(scanner?.cancel());
+    scanFocus.dispose();
     code.dispose();
     identityCode = null;
     validity = null;
@@ -160,6 +181,9 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
                     child: TextField(
                       key: const ValueKey('member-identity-code'),
                       controller: code,
+                      focusNode: scanFocus,
+                      autofocus: true,
+                      keyboardType: TextInputType.none,
                       enabled: foreground && !busy,
                       obscureText: true,
                       enableSuggestions: false,
@@ -170,7 +194,8 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
                         prefixIcon: const Icon(Icons.qr_code_scanner),
                       ),
                       onSubmitted: (_) => unawaited(scan()),
-                      onChanged: (_) {
+                      onChanged: (value) {
+                        scanDebounce?.cancel();
                         expiry?.cancel();
                         setState(() {
                           identity = null;
@@ -178,6 +203,12 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
                           validity = null;
                           failed = false;
                         });
+                        if (MemberIdentity.codePattern.hasMatch(value.trim())) {
+                          scanDebounce = Timer(
+                            const Duration(milliseconds: 150),
+                            () => unawaited(scan()),
+                          );
+                        }
                       },
                     ),
                   ),

@@ -8,6 +8,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterActivity() {
+    private var scanner: ScannerBridge? = null
     private var printerDiscovery: PrinterDiscoveryBridge? = null
     private var printerStatus: PrinterStatusBridge? = null
     private var usbPrinterPermission: UsbPrinterPermissionBridge? = null
@@ -15,12 +16,14 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        scanner?.setForeground(true)
         usbRasterOutput?.setForeground(true)
         window.decorView.post { if (hasWindowFocus()) hideSystemBars() }
     }
-    override fun onPause() { usbRasterOutput?.setForeground(false); super.onPause() }
+    override fun onPause() { scanner?.setForeground(false); usbRasterOutput?.setForeground(false); super.onPause() }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        scanner?.setForeground(hasFocus)
         usbRasterOutput?.setForeground(hasFocus)
         if (hasFocus) hideSystemBars()
     }
@@ -43,6 +46,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        scanner?.dispose()
+        scanner = ScannerBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         printerDiscovery?.dispose()
         printerDiscovery = PrinterDiscoveryBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         printerStatus?.dispose()
@@ -54,6 +59,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        scanner?.dispose()
+        scanner = null
         printerDiscovery?.dispose()
         printerDiscovery = null
         printerStatus?.dispose()
