@@ -156,6 +156,8 @@ void main() {
   ) async {
     final auth = RecoveryAuth();
     await show(tester, auth, tables: true);
+    await tester.tap(find.byKey(const ValueKey('table-tools')));
+    await tester.pumpAndSettle();
     await tap(tester, 'order-recovery-open');
     expect(auth.queries + auth.retries + auth.cancels, 0);
     await tap(tester, 'order-recovery-query-${auth.command.requestId}');

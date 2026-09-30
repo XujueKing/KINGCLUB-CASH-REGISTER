@@ -73,6 +73,8 @@ void main() {
       size(tester);
       final auth = DraftAuth()..drafts = [oldDraft()];
       await show(tester, auth, workbench: true);
+      await tester.tap(find.byKey(const ValueKey('table-tools')));
+      await tester.pumpAndSettle();
       await ui.tap(tester, 'cart-drafts-open');
       expect(find.textContaining('H00000000099'), findsOneWidget);
       expect(find.text('left-member'), findsOneWidget);

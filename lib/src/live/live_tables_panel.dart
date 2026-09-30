@@ -208,12 +208,24 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   @override
   Widget build(BuildContext context) {
     if (voucherLookup) {
-      return VoucherLookupPanel(auth: widget.auth,language:widget.language,
-        onBack:(){setState(()=>voucherLookup=false);unawaited(load(reset:true));});
+      return VoucherLookupPanel(
+        auth: widget.auth,
+        language: widget.language,
+        onBack: () {
+          setState(() => voucherLookup = false);
+          unawaited(load(reset: true));
+        },
+      );
     }
     if (voucherReport) {
-      return VoucherReportPanel(auth: widget.auth, language: widget.language,
-        onBack: () {setState(() => voucherReport = false); unawaited(load(reset: true));});
+      return VoucherReportPanel(
+        auth: widget.auth,
+        language: widget.language,
+        onBack: () {
+          setState(() => voucherReport = false);
+          unawaited(load(reset: true));
+        },
+      );
     }
     if (tableCheckoutRecovery) {
       return TableCheckoutRecoveryPanel(
@@ -389,189 +401,65 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-          child: Wrap(
-            spacing: 20,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+          child: Row(
             children: [
-              Text(
-                data?.storeName ?? widget.auth.session?.storeName ?? t('tables'),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              Text(widget.auth.session?.displayName ?? ''),
-              if (const bool.fromEnvironment('CASHIER_VOUCHER_LOOKUP') &&
-                  ['voucher.douyin','voucher.meituan'].any((p)=>widget.auth.session?.permissions.contains(p)==true))
-                OutlinedButton(key:const ValueKey('voucher-lookup-open'),onPressed:foreground?()=>setState(()=>voucherLookup=true):null,
-                  child:Text(t('voucherLookupTitle'))),
-              if (const bool.fromEnvironment('CASHIER_VOUCHER_REPORT') &&
-                  widget.auth.session?.permissions.contains('report.read') == true)
-                OutlinedButton(key: const ValueKey('voucher-report-open'),
-                  onPressed: foreground ? () => setState(() => voucherReport = true) : null,
-                  child: Text(t('voucherReportTitle'))),
-              if (const bool.fromEnvironment('CASHIER_TABLE_CHECKOUT') &&
-                  [
-                    'payment.wechat',
-                    'payment.alipay',
-                    'payment.cash',
-                    'payment.balance',
-                  ].any(
-                    (permission) =>
-                        widget.auth.session?.permissions.contains(permission) ==
-                        true,
-                  ))
-                OutlinedButton(
-                  key: const ValueKey('table-checkout-recovery-open'),
-                  onPressed: foreground
-                      ? () => setState(() => tableCheckoutRecovery = true)
-                      : null,
-                  child: Text(t('tableCheckoutRecoveryTitle')),
-                ),
-              if (widget.auth.session?.permissions.contains('table.clear') ==
-                  true)
-                OutlinedButton(
-                  key: const ValueKey('tableClear-recovery-open'),
-                  onPressed: () => setState(() {
-                    tableClear = true;
-                    clearingTable = null;
-                  }),
-                  child: Text(t('tableClearRecoveryTitle')),
-                ),
-              if (widget.auth.session?.permissions.contains('orders.serve') ==
-                  true)
-                OutlinedButton(
-                  key: const ValueKey('serving-recovery-open'),
-                  onPressed: () => setState(() => servingRecovery = true),
-                  child: Text(t('servingRecoveryTitle')),
-                ),
-              if (widget.auth.session?.permissions.contains('orders.create') ==
-                  true)
-                OutlinedButton(
-                  key: const ValueKey('order-recovery-open'),
-                  onPressed: () => setState(() {
-                    orderRecovery = true;
-                  }),
-                  child: Text(t('orderRecoveryTitle')),
-                ),
-              if (widget.auth.session?.permissions.contains('orders.create') ==
-                  true)
-                OutlinedButton(
-                  key: const ValueKey('cart-drafts-open'),
-                  onPressed: () => setState(() => cartDrafts = true),
-                  child: Text(t('cartDraftsTitle')),
-                ),
-              if (const bool.fromEnvironment(
-                    'CASHIER_BALANCE_REFUND',
-                    defaultValue: false,
-                  ) &&
-                  widget.auth.session?.permissions.contains('payment.refund') ==
-                      true)
-                OutlinedButton(
-                  key: const ValueKey('balance-refund-recovery-open'),
-                  onPressed: () => setState(() => refundRecovery = true),
-                  child: Text(t('refundRecoveryTitle')),
-                ),
-              if (const bool.fromEnvironment(
-                    'CASHIER_STORE_RECHARGE',
-                    defaultValue: false,
-                  ) &&
-                  ['payment.wechat', 'payment.alipay'].any(
-                    (p) => widget.auth.session?.permissions.contains(p) == true,
-                  ))
-                OutlinedButton(
-                  key: const ValueKey('recharge-recovery-open'),
-                  onPressed: () => setState(() => rechargeRecovery = true),
-                  child: Text(t('rechargeRecoveryTitle')),
-                ),
-              if (const bool.fromEnvironment(
-                    'CASHIER_STORE_RECHARGE',
-                    defaultValue: false,
-                  ) &&
-                  ['payment.wechat', 'payment.alipay'].any(
-                    (p) => widget.auth.session?.permissions.contains(p) == true,
-                  ))
-                OutlinedButton(
-                  key: const ValueKey('recharge-collect-open'),
-                  onPressed: () => setState(() => rechargeCollect = true),
-                  child: Text(t('rechargeCollectTitle')),
-                ),
-              if (widget.auth.session?.permissions.contains('payment.cash') ==
-                  true)
-                OutlinedButton(
-                  key: const ValueKey('cash-recovery-open'),
-                  onPressed: () => setState(() {
-                    cashRecovery = true;
-                  }),
-                  child: Text(t('cashRecoveryTitle')),
-                ),
-              if (const bool.fromEnvironment(
-                    'CASHIER_PROVIDER',
-                    defaultValue: false,
-                  ) ||
-                  const bool.fromEnvironment(
-                    'CASHIER_BALANCE',
-                    defaultValue: false,
-                  ))
-                if (['payment.wechat', 'payment.alipay', 'payment.balance'].any(
-                  (p) => widget.auth.session?.permissions.contains(p) == true,
-                ))
-                  OutlinedButton(
-                    key: const ValueKey('provider-recovery-open'),
-                    onPressed: () => setState(() => providerRecovery = true),
-                    child: Text(t('provider_recovery')),
+              Expanded(
+                child: Text(
+                  data?.storeName ??
+                      widget.auth.session?.storeName ??
+                      t('tables'),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
                   ),
-              if (widget.auth.session?.permissions.contains('orders.create') ==
-                  true)
-                OutlinedButton(
-                  key: const ValueKey('catalog-open'),
-                  onPressed: () => setState(() {
-                    catalog = true;
-                  }),
-                  child: Text(t('catalogTitle')),
                 ),
-              if (widget.auth.session?.permissions.contains('table.open') ==
-                  true)
-                OutlinedButton(
-                  key: const ValueKey('opening-pending'),
-                  onPressed: () => setState(() {
-                    opening = true;
-                    openingTable = null;
-                    openingCurrency = null;
-                  }),
-                  child: Text(t('openingPending')),
-                ),
-              OutlinedButton(
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('table-tools'),
+                onPressed: foreground ? showTools : null,
+                icon: const Icon(Icons.apps_rounded, size: 20),
+                label: Text(t('tableTools')),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
                 key: const ValueKey('live-refresh'),
                 onPressed: loading ? null : () => unawaited(load(reset: true)),
-                child: Text(t('liveRefresh')),
+                icon: const Icon(Icons.refresh, size: 20),
+                label: Text(t('liveRefresh')),
               ),
             ],
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            t(realtime == null ? 'liveReadOnly' : 'liveRealtimeReadOnly'),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+          child: Wrap(
+            spacing: 20,
+            runSpacing: 4,
+            children: [
+              if (data != null)
+                Text('${t('liveBusinessDate')}: ${data.businessDate}'),
+              if (realtime != null)
+                Text(
+                  t(switch (realtime!.state) {
+                    CashierRealtimeState.offline => 'realtimeOffline',
+                    CashierRealtimeState.connecting => 'realtimeConnecting',
+                    CashierRealtimeState.connected => 'realtimeConnected',
+                  }),
+                ),
+              if (data != null)
+                Tooltip(
+                  message: t(
+                    realtime == null ? 'liveReadOnly' : 'liveRealtimeReadOnly',
+                  ),
+                  child: Text(
+                    '${t('liveObserved')}: ${data.observedAt.toLocal().toString().substring(11, 19)}',
+                    style: const TextStyle(color: Color(0xFF63746C)),
+                  ),
+                ),
+            ],
           ),
         ),
-        if (realtime != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-            child: Text(
-              t(switch (realtime!.state) {
-                CashierRealtimeState.offline => 'realtimeOffline',
-                CashierRealtimeState.connecting => 'realtimeConnecting',
-                CashierRealtimeState.connected => 'realtimeConnected',
-              }),
-            ),
-          ),
-        if (data != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-            child: Text(
-              '${t('liveObserved')}: ${data.observedAt.toLocal()} · ${t('liveBusinessDate')}: ${data.businessDate}',
-            ),
-          ),
         if (loading) const LinearProgressIndicator(),
         Expanded(
           child: failed
@@ -585,17 +473,34 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
               ? const SizedBox()
               : data.tables.isEmpty
               ? Center(child: Text(t('liveNoTables')))
-              : LayoutBuilder(builder: (context, box) {
-                  final columns = (box.maxWidth / 340).floor().clamp(1, 4);
-                  final width = (box.maxWidth - 32 - (columns - 1) * 12) / columns;
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Wrap(spacing: 12, runSpacing: 12, children: [
-                      for (final table in data.tables)
-                        SizedBox(width: width, child: tableCard(table, data.currency)),
-                    ]),
-                  );
-                }),
+              : LayoutBuilder(
+                  builder: (context, box) {
+                    final minimumWidth =
+                        widget.language == UiLanguage.en ||
+                            widget.language == UiLanguage.th
+                        ? 400
+                        : 360;
+                    final columns = ((box.maxWidth - 40) / minimumWidth)
+                        .floor()
+                        .clamp(1, 5);
+                    return GridView.count(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                      crossAxisCount: columns,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      mainAxisExtent:
+                          (widget.language == UiLanguage.en ||
+                                  widget.language == UiLanguage.th
+                              ? 420
+                              : 256) *
+                          MediaQuery.textScalerOf(context).scale(1).clamp(1, 2),
+                      children: [
+                        for (final table in data.tables)
+                          tableCard(table, data.currency),
+                      ],
+                    );
+                  },
+                ),
         ),
         Padding(
           padding: const EdgeInsets.all(12),
@@ -625,110 +530,311 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     );
   }
 
+  void showTools() {
+    final toolsSession = widget.auth.session;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('tableTools')),
+        content: SizedBox(
+          width: 640,
+          child: SingleChildScrollView(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: toolButtons()
+                  .map(
+                    (button) => OutlinedButton(
+                      key: button.key,
+                      onPressed: button.onPressed == null
+                          ? null
+                          : () {
+                              Navigator.of(dialogContext).pop();
+                              if (mounted &&
+                                  foreground &&
+                                  identical(
+                                    widget.auth.session,
+                                    toolsSession,
+                                  )) {
+                                button.onPressed!();
+                              }
+                            },
+                      child: button.child!,
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(t('staffCancelSelection')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<OutlinedButton> toolButtons() => [
+    if (const bool.fromEnvironment('CASHIER_VOUCHER_LOOKUP') &&
+        [
+          'voucher.douyin',
+          'voucher.meituan',
+        ].any((p) => widget.auth.session?.permissions.contains(p) == true))
+      OutlinedButton(
+        key: const ValueKey('voucher-lookup-open'),
+        onPressed: foreground
+            ? () => setState(() => voucherLookup = true)
+            : null,
+        child: Text(t('voucherLookupTitle')),
+      ),
+    if (const bool.fromEnvironment('CASHIER_VOUCHER_REPORT') &&
+        widget.auth.session?.permissions.contains('report.read') == true)
+      OutlinedButton(
+        key: const ValueKey('voucher-report-open'),
+        onPressed: foreground
+            ? () => setState(() => voucherReport = true)
+            : null,
+        child: Text(t('voucherReportTitle')),
+      ),
+    if (const bool.fromEnvironment('CASHIER_TABLE_CHECKOUT') &&
+        [
+          'payment.wechat',
+          'payment.alipay',
+          'payment.cash',
+          'payment.balance',
+        ].any(
+          (permission) =>
+              widget.auth.session?.permissions.contains(permission) == true,
+        ))
+      OutlinedButton(
+        key: const ValueKey('table-checkout-recovery-open'),
+        onPressed: foreground
+            ? () => setState(() => tableCheckoutRecovery = true)
+            : null,
+        child: Text(t('tableCheckoutRecoveryTitle')),
+      ),
+    if (widget.auth.session?.permissions.contains('table.clear') == true)
+      OutlinedButton(
+        key: const ValueKey('tableClear-recovery-open'),
+        onPressed: () => setState(() {
+          tableClear = true;
+          clearingTable = null;
+        }),
+        child: Text(t('tableClearRecoveryTitle')),
+      ),
+    if (widget.auth.session?.permissions.contains('orders.serve') == true)
+      OutlinedButton(
+        key: const ValueKey('serving-recovery-open'),
+        onPressed: () => setState(() => servingRecovery = true),
+        child: Text(t('servingRecoveryTitle')),
+      ),
+    if (widget.auth.session?.permissions.contains('orders.create') == true)
+      OutlinedButton(
+        key: const ValueKey('order-recovery-open'),
+        onPressed: () => setState(() {
+          orderRecovery = true;
+        }),
+        child: Text(t('orderRecoveryTitle')),
+      ),
+    if (widget.auth.session?.permissions.contains('orders.create') == true)
+      OutlinedButton(
+        key: const ValueKey('cart-drafts-open'),
+        onPressed: () => setState(() => cartDrafts = true),
+        child: Text(t('cartDraftsTitle')),
+      ),
+    if (const bool.fromEnvironment(
+          'CASHIER_BALANCE_REFUND',
+          defaultValue: false,
+        ) &&
+        widget.auth.session?.permissions.contains('payment.refund') == true)
+      OutlinedButton(
+        key: const ValueKey('balance-refund-recovery-open'),
+        onPressed: () => setState(() => refundRecovery = true),
+        child: Text(t('refundRecoveryTitle')),
+      ),
+    if (const bool.fromEnvironment(
+          'CASHIER_STORE_RECHARGE',
+          defaultValue: false,
+        ) &&
+        [
+          'payment.wechat',
+          'payment.alipay',
+        ].any((p) => widget.auth.session?.permissions.contains(p) == true))
+      OutlinedButton(
+        key: const ValueKey('recharge-recovery-open'),
+        onPressed: () => setState(() => rechargeRecovery = true),
+        child: Text(t('rechargeRecoveryTitle')),
+      ),
+    if (const bool.fromEnvironment(
+          'CASHIER_STORE_RECHARGE',
+          defaultValue: false,
+        ) &&
+        [
+          'payment.wechat',
+          'payment.alipay',
+        ].any((p) => widget.auth.session?.permissions.contains(p) == true))
+      OutlinedButton(
+        key: const ValueKey('recharge-collect-open'),
+        onPressed: () => setState(() => rechargeCollect = true),
+        child: Text(t('rechargeCollectTitle')),
+      ),
+    if (widget.auth.session?.permissions.contains('payment.cash') == true)
+      OutlinedButton(
+        key: const ValueKey('cash-recovery-open'),
+        onPressed: () => setState(() {
+          cashRecovery = true;
+        }),
+        child: Text(t('cashRecoveryTitle')),
+      ),
+    if (const bool.fromEnvironment('CASHIER_PROVIDER', defaultValue: false) ||
+        const bool.fromEnvironment('CASHIER_BALANCE', defaultValue: false))
+      if ([
+        'payment.wechat',
+        'payment.alipay',
+        'payment.balance',
+      ].any((p) => widget.auth.session?.permissions.contains(p) == true))
+        OutlinedButton(
+          key: const ValueKey('provider-recovery-open'),
+          onPressed: () => setState(() => providerRecovery = true),
+          child: Text(t('provider_recovery')),
+        ),
+    if (widget.auth.session?.permissions.contains('orders.create') == true)
+      OutlinedButton(
+        key: const ValueKey('catalog-open'),
+        onPressed: () => setState(() {
+          catalog = true;
+        }),
+        child: Text(t('catalogTitle')),
+      ),
+    if (widget.auth.session?.permissions.contains('table.open') == true)
+      OutlinedButton(
+        key: const ValueKey('opening-pending'),
+        onPressed: () => setState(() {
+          opening = true;
+          openingTable = null;
+          openingCurrency = null;
+        }),
+        child: Text(t('openingPending')),
+      ),
+  ];
+
   Widget tableCard(LiveTable table, String currency) {
     final session = table.session;
-    return Card(
+    final active = table.status == 'active';
+    final accent = !active
+        ? const Color(0xFF737A77)
+        : session == null
+        ? const Color(0xFF68766F)
+        : session.status == 'clearing'
+        ? const Color(0xFFA45C20)
+        : const Color(0xFF1E6550);
+    final actions = <Widget>[
+      if (session != null) ...[
+        if (widget.auth.session?.permissions.contains('orders.read') == true)
+          FilledButton(
+            key: ValueKey('orders-open-${table.reference}'),
+            onPressed: () => setState(() => selected = table),
+            child: Text(t('ordersDetails')),
+          ),
+        if (active &&
+            session.status == 'open' &&
+            widget.auth.session?.permissions.contains('orders.create') == true)
+          OutlinedButton(
+            key: ValueKey('order-members-open-${table.reference}'),
+            onPressed: () => setState(() => orderingTable = table),
+            child: Text(t('orderMembersTitle')),
+          ),
+        if (active &&
+            widget.auth.session?.permissions.contains('table.clear') == true)
+          TextButton(
+            key: ValueKey('tableClear-table-${table.reference}'),
+            onPressed: () => setState(() {
+              tableClear = true;
+              clearingTable = table;
+            }),
+            child: Text(t('tableClearConfirm')),
+          ),
+      ],
+      if (session == null &&
+          active &&
+          widget.auth.session?.permissions.contains('table.open') == true)
+        OutlinedButton(
+          key: ValueKey('opening-table-${table.reference}'),
+          onPressed: () => setState(() {
+            opening = true;
+            openingTable = table.reference;
+            openingCurrency = currency;
+          }),
+          child: Text(t('openingSubmit')),
+        ),
+    ];
+    return Container(
       key: ValueKey('live-table-${table.reference}'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Wrap(
-              spacing: 24,
-              runSpacing: 8,
-              children: [
-                Text(table.name, style: Theme.of(context).textTheme.titleLarge),
-                Text(t(table.stateLabel)),
-                Text(
-                  '${t('guests')}: ${session?.partySize ?? '—'} / ${table.maximumSeats}',
-                ),
-              ],
-            ),
-            if (session != null) ...[
-              if (table.status == 'active' &&
-                  widget.auth.session?.permissions.contains('table.clear') ==
-                      true)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton(
-                    key: ValueKey('tableClear-table-${table.reference}'),
-                    onPressed: () => setState(() {
-                      tableClear = true;
-                      clearingTable = table;
-                    }),
-                    child: Text(t('tableClearConfirm')),
+      decoration: BoxDecoration(
+        color: session == null ? Colors.white : const Color(0xFFF0F7F3),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: session == null
+              ? const Color(0xFFDBE3DE)
+              : const Color(0xFFBCD4C7),
+        ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  table.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              if (table.status == 'active' &&
-                  session.status == 'open' &&
-                  widget.auth.session?.permissions.contains('orders.create') ==
-                      true)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton(
-                    key: ValueKey('order-members-open-${table.reference}'),
-                    onPressed: () => setState(() {
-                      orderingTable = table;
-                    }),
-                    child: Text(t('orderMembersTitle')),
-                  ),
-                ),
-              if (widget.auth.session?.permissions.contains('orders.read') ==
-                  true)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton(
-                    key: ValueKey('orders-open-${table.reference}'),
-                    onPressed: () => setState(() {
-                      selected = table;
-                    }),
-                    child: Text(t('ordersDetails')),
-                  ),
-                ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 24,
-                runSpacing: 8,
-                children: [
-                  Text(
-                    t(
-                      session.paymentTiming == 'prepay'
-                          ? 'livePrepay'
-                          : 'livePostpay',
-                    ),
-                  ),
-                  Text('${t('elapsed')}: ${session.elapsedMinutes}'),
-                  Text(
-                    '${t('livePaid')}: $currency ${formatCents(session.paidCents)}',
-                  ),
-                  Text(
-                    '${t('livePending')}: $currency ${formatCents(session.pendingCents)}',
-                  ),
-                  if (session.refundedOrders > 0)
-                    Text(
-                      '${t('liveRefunded')}: $currency ${formatCents(session.refundedCents)} (${session.refundedOrders})',
-                    ),
-                ],
+              ),
+              const SizedBox(width: 8),
+              Text(
+                t(table.stateLabel),
+                style: TextStyle(color: accent, fontWeight: FontWeight.w600),
               ),
             ],
-            if (session == null &&
-                table.status == 'active' &&
-                widget.auth.session?.permissions.contains('table.open') == true)
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton(
-                  key: ValueKey('opening-table-${table.reference}'),
-                  onPressed: () => setState(() {
-                    opening = true;
-                    openingTable = table.reference;
-                    openingCurrency = currency;
-                  }),
-                  child: Text(t('openingSubmit')),
-                ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${t('guests')}: ${session?.partySize ?? '—'} / ${table.maximumSeats}',
+            style: const TextStyle(color: Color(0xFF586B60)),
+          ),
+          const SizedBox(height: 6),
+          if (session != null) ...[
+            Text(
+              '${t(session.paymentTiming == 'prepay' ? 'livePrepay' : 'livePostpay')} · ${t('elapsed')}: ${session.elapsedMinutes}',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF586B60)),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${t('livePaid')}: $currency ${formatCents(session.paidCents)}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            Text(
+              '${t('livePending')}: $currency ${formatCents(session.pendingCents)}',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            if (session.refundedOrders > 0)
+              Text(
+                '${t('liveRefunded')}: $currency ${formatCents(session.refundedCents)} (${session.refundedOrders})',
+                style: const TextStyle(fontSize: 12),
               ),
           ],
-        ),
+          const Spacer(),
+          if (actions.isNotEmpty)
+            Wrap(spacing: 8, runSpacing: 0, children: actions),
+        ],
       ),
     );
   }

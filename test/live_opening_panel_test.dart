@@ -170,6 +170,8 @@ void main() {
       expect(find.byKey(const ValueKey('opening-party-size')), findsOneWidget);
       await tester.tap(find.text(tr(UiLanguage.zh, 'ordersBack')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('table-tools')));
+      await tester.pumpAndSettle();
       await tap(tester, const ValueKey('opening-pending'));
       expect(find.byKey(const ValueKey('opening-party-size')), findsNothing);
       expect(find.text(tr(UiLanguage.zh, 'openingNoPending')), findsOneWidget);

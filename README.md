@@ -2,9 +2,9 @@
 
 配合 KINGCLUB APP 扫码点单和 CCSOP KINGCLUB 商务服务的门店前台安卓收银机项目。
 
-最新工作安排：另一台机器接续后端、数据库及 APP 联调，本机后续负责收银端精修。请先读[给另一台 Codex 的交接说明](docs/CODEX_HANDOFF_BACKEND_INTEGRATION.md)，其中列明源码交付边界、接口契约、线上库差异和验收清单。下文为早期项目入口，最新实现/验证状态以交接说明及其引用记录为准。
+当前统一入口：[功能与验收总表](docs/FEATURE_MATRIX.md)、[开发文档索引](docs/INDEX.md)。只维护一套最终产品，在真实 UI 和统一业务上迭代；历史记录不作为当前完成状态。跨机器背景见[交接说明](docs/CODEX_HANDOFF_BACKEND_INTEGRATION.md)。
 
-当前状态：横屏预览与本地草稿、独立员工加密登录/续期/退出、门店桌台快照、消费明细和实时通知后重新查询均已实现代码及本地测试。尚未部署配套后端、配置真实员工授权或完成线上/真机营业验收；经营写接口仍在开发。
+当前已验证独立员工登录、自动门店归属、真实桌台读取和保留数据升级。业务模块有大量实现和测试，但写接口启用、渠道配置、跨端及真实营业验收仍有缺口，不能按页面存在推断已可营业。
 
 已开启[生产目标](docs/PRODUCTION_GOAL.md)：独立员工账号，微信／支付宝／现金／会员余额，美团／抖音来客团购核销。渠道资质、支付/核销、员工开台下单、清台、交班和打印均未完成生产验收；不是已可营业版本。
 
@@ -40,17 +40,17 @@
 & ..\tools\flutter-3.47.1\bin\flutter.bat pub get --enforce-lockfile
 & ..\tools\flutter-3.47.1\bin\flutter.bat analyze
 & ..\tools\flutter-3.47.1\bin\flutter.bat test
-.\scripts\build-preview.ps1
+.\scripts\build-cashier.ps1 -FlutterSdk <Flutter目录> -ServiceUrl <私有发布配置中的HTTPS服务地址>
 ```
 
-构建脚本默认产出 32 位 ARM Release 优化预览包（`app-armeabi-v7a-release.apk`），独立包名 `cn.kingclub.cashregister.preview`，显示名称“KINGCLUB 收银预览”。可用 `-Mode profile` 进行性能分析，或 `-Mode debug` 调试；不要用 Debug 包评估最终流畅度。默认不安装；提供 `-Install -DeviceSerial <已核对的收银机序列号>` 才会验证目标型号并安装，不清数据、不覆盖收钱吧。
+构建脚本产出 32 位 ARM Release 包（`app-armeabi-v7a-release.apk`），只构建不安装。包名暂保留 `cn.kingclub.cashregister.preview` 以保留原应用数据，不代表有预览模式。安装前核对目标设备和原应用签名，使用同签名保留数据升级。
 
-预览包使用 `CASHIER_PREVIEW=true` 启动样例界面；普通 `flutter run` 默认为独立员工登录入口，已保存会话须先向服务端续期验证。演示数据不会传到服务器，退出演示会清空内存草稿。预览服务设置仅检查 HTTPS `/ready`，与独立员工登录分开。
+应用始终进入独立员工登录/已授权工作台，已移除 CASHIER_PREVIEW 分流。服务地址由发布配置提供，用户无需填写。保留的 build-preview 脚本名称仅转调同一产品构建。
 
-只读接入验证包（不等于正式发行，也不自动开启服务端能力）：
+需要实时通知的构建额外指定相应开关（不自动开启服务端能力）：
 
 ```powershell
-& ..\tools\flutter-3.47.1\bin\flutter.bat build apk --release --target-platform android-arm --dart-define=CASHIER_PREVIEW=false --dart-define=CASHIER_REALTIME=true --no-pub
+flutter build apk --release --target-platform android-arm --split-per-abi --dart-define=CASHIER_REALTIME=true --dart-define=CASHIER_SERVICE_URL=<私有发布配置> --no-pub
 ```
 
-支付、开台、清台、打印及真实员工授权尚未接入。不能用此包实际营业；Release 仅指性能优化构建，不代表经营功能正式上线。本独立预览包仍使用原开发签名以便覆盖升级，不用于正式发行。
+支付、开台、清台及打印的代码、线上启用和实机验收状态分别见功能总表。Release 仅指优化构建，不代表所有经营功能已上线；目前仍使用原开发签名保留数据升级，正式发行签名尚待安排。

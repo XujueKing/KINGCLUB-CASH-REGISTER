@@ -42,30 +42,32 @@ class TableAuth extends StaffAuthController {
   final requested = <String?>[];
   Completer<Object?>? gate;
   bool fail = false;
+  TableAuth({List<String> permissions = const ['workbench.read']})
+    : session = StaffSession.fromServer(
+        {
+          'employee': {
+            'employeeRef': 'E00000000001',
+            'displayName': 'Test employee',
+          },
+          'storeRef': 'test-store',
+          'sessionId': '00000000-0000-4000-8000-000000000002',
+          'apiKeyId': '00000000-0000-4000-8000-000000000003',
+          'apiKey': 'a' * 43,
+          'refreshToken': 'b' * 43,
+          'permissions': permissions,
+          'expiresAtMs': DateTime.now()
+              .add(const Duration(minutes: 15))
+              .millisecondsSinceEpoch,
+          'refreshExpiresAtMs': DateTime.now()
+              .add(const Duration(hours: 12))
+              .millisecondsSinceEpoch,
+        },
+        base: 'https://service.invalid',
+        deviceId: '00000000-0000-4000-8000-000000000001',
+        expectedStore: 'test-store',
+      );
   @override
-  final StaffSession session = StaffSession.fromServer(
-    {
-      'employee': {
-        'employeeRef': 'E00000000001',
-        'displayName': 'Test employee',
-      },
-      'storeRef': 'test-store',
-      'sessionId': '00000000-0000-4000-8000-000000000002',
-      'apiKeyId': '00000000-0000-4000-8000-000000000003',
-      'apiKey': 'a' * 43,
-      'refreshToken': 'b' * 43,
-      'permissions': ['workbench.read'],
-      'expiresAtMs': DateTime.now()
-          .add(const Duration(minutes: 15))
-          .millisecondsSinceEpoch,
-      'refreshExpiresAtMs': DateTime.now()
-          .add(const Duration(hours: 12))
-          .millisecondsSinceEpoch,
-    },
-    base: 'https://service.invalid',
-    deviceId: '00000000-0000-4000-8000-000000000001',
-    expectedStore: 'test-store',
-  );
+  final StaffSession session;
   @override
   Future<Object?> readWorkbench({String? afterTable}) async {
     requested.add(afterTable);

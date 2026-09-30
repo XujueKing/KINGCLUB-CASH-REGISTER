@@ -285,6 +285,8 @@ void main() {
     (tester) async {
       final auth = CashAuth();
       await show(tester, auth, tables: true);
+      await tester.tap(find.byKey(const ValueKey('table-tools')));
+      await tester.pumpAndSettle();
       await tap(tester, 'cash-recovery-open');
       expect(find.byType(LiveCashRecoveryPanel), findsOneWidget);
       expect(auth.queries + auth.confirms + auth.closes, 0);

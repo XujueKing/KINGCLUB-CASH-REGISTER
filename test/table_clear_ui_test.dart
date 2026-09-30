@@ -365,6 +365,8 @@ void main() {
       cleanup(tester, auth);
       await show(tester, auth, workbench: true);
       final before = auth.requested.length;
+      await tester.tap(find.byKey(const ValueKey('table-tools')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('tableClear-recovery-open')));
       await tester.pumpAndSettle();
       expect(find.byType(LiveTableClearPanel), findsOneWidget);
