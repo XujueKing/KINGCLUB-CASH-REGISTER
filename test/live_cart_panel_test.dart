@@ -23,6 +23,30 @@ class CartAuth extends m.MemberAuth {
   int available = 3;
   List<PendingOrder> pending = [];
   Completer<OrderRequestResult>? submitGate;
+  Completer<RestoredCart>? refreshGate;
+  RestoredCart? refreshResult;
+  int refreshes = 0;
+  bool failRefresh = false;
+  @override
+  Future<RestoredCart> refreshCartSelection({
+    required OrderContextSnapshot context,
+    required String memberRef,
+    required List<OrderSelection> items,
+  }) async {
+    refreshes++;
+    if (failRefresh) throw StateError('refresh failed');
+    final draft = CartDraft.capture(
+      identity: session,
+      context: context,
+      memberRef: memberRef,
+      items: items,
+      now: a.now,
+    );
+    refreshResult = RestoredCart(draft, context, items);
+    if (refreshGate != null) return refreshGate!.future;
+    return refreshResult!;
+  }
+
   List<OrderSelection>? sent;
   @override
   Future<List<PendingOrder>> pendingOrders() async {
@@ -130,6 +154,92 @@ bool enabled(WidgetTester tester) =>
     null;
 
 void main() {
+  testWidgets(
+    'realtime refresh retains selection; failed refresh blocks submit and retries',
+    (tester) async {
+      final auth = CartAuth();
+      final revision = ValueNotifier(0);
+      m.size(tester);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<int>(
+              valueListenable: revision,
+              builder: (_, value, _) => LiveOrderMembersPanel(
+                auth: auth,
+                language: UiLanguage.zh,
+                tableRef: m.tableRef,
+                sessionRef: m.sessionRef,
+                revision: value,
+                onBack: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tap(tester, 'order-member-member-000');
+      await tap(tester, 'catalog-add-p001');
+      final total = tester
+          .widget<Text>(find.byKey(const ValueKey('cart-total')))
+          .data;
+      revision.value++;
+      await tester.pumpAndSettle();
+      expect(enabled(tester), true);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('cart-total'))).data,
+        total,
+      );
+      auth.failRefresh = true;
+      revision.value++;
+      await tester.pumpAndSettle();
+      expect(enabled(tester), false);
+      expect(find.byKey(const ValueKey('cart-delete-p001')), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('cart-total'))).data,
+        total,
+      );
+      auth.failRefresh = false;
+      await tap(tester, 'cart-refresh');
+      expect(enabled(tester), true);
+      expect(auth.submits, 0);
+      await tap(tester, 'cart-submit');
+      expect(find.byKey(const ValueKey('cart-confirm')), findsOneWidget);
+      revision.value++;
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('cart-confirm')), findsNothing);
+      expect(enabled(tester), true);
+      expect(auth.submits, 0);
+      auth.refreshGate = Completer<RestoredCart>();
+      revision.value++;
+      await tester.pump();
+      final reads = auth.refreshes;
+      revision.value++;
+      await tester.pump();
+      expect(auth.refreshes, reads);
+      final gate = auth.refreshGate!;
+      auth.refreshGate = null;
+      gate.complete(auth.refreshResult!);
+      await tester.pumpAndSettle();
+      expect(auth.refreshes, reads + 1);
+      expect(enabled(tester), true);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('cart-total'))).data,
+        total,
+      );
+      auth.refreshGate = Completer<RestoredCart>();
+      revision.value++;
+      await tester.pump();
+      expect(enabled(tester), false);
+      auth.invalidate();
+      auth.refreshGate!.completeError(StateError('late read'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LiveCartPanel), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      revision.dispose();
+      auth.dispose();
+    },
+  );
   testWidgets(
     'realtime notification cannot replace an in-flight order or its receipt',
     (tester) async {

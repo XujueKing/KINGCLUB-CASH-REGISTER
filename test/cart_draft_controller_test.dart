@@ -110,6 +110,44 @@ Future<OrderRequestResult> submit(StaffAuthController auth, CartDraft? draft) =>
     );
 
 void main() {
+  test(
+    'in-memory refresh rereads truth without saving or submitting a draft',
+    () async {
+      final storage = Storage(), api = Api();
+      final auth = await o.controller(storage, api);
+      final result = await auth.refreshCartSelection(
+        context: m.parse(m.contextData()),
+        memberRef: 'member-000',
+        items: o.selection(),
+      );
+      expect(result.items.single.quantity, o.selection().single.quantity);
+      expect(api.reads, ['K260929001911', 'K260929001910']);
+      expect(api.calls, isEmpty);
+      expect(await auth.cartDrafts(), isEmpty);
+      expect(await auth.pendingOrders(), isEmpty);
+      api.changedPrice = true;
+      await expectLater(
+        auth.refreshCartSelection(
+          context: m.parse(m.contextData()),
+          memberRef: 'member-000',
+          items: o.selection(),
+        ),
+        throwsA(anything),
+      );
+      api.changedPrice = false;
+      api.memberLeft = true;
+      await expectLater(
+        auth.refreshCartSelection(
+          context: m.parse(m.contextData()),
+          memberRef: 'member-000',
+          items: o.selection(),
+        ),
+        throwsA(anything),
+      );
+      expect(api.calls, isEmpty);
+      auth.dispose();
+    },
+  );
   test('explicitly discards an old-session departed-member draft without server mutation', () async {
     final storage = Storage(), api = Api();
     final auth = await o.controller(storage, api);

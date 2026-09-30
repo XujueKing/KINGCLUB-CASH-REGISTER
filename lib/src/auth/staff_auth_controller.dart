@@ -1828,17 +1828,41 @@ class StaffAuthController extends ChangeNotifier {
       });
 
   /// Refreshes actual membership and catalogue; never reuses persisted prices as truth.
-  Future<RestoredCart> restoreCartDraft(
-    CartDraft draft,
-  ) => _orderOperation(() async {
+  Future<RestoredCart> restoreCartDraft(CartDraft draft) =>
+      _orderOperation(() async {
+        final identity = _orderIdentity(), epoch = _epoch;
+        if (!draft.belongsTo(identity)) {
+          throw const CcsopFailure('CART_DRAFT_CONTEXT_CHANGED');
+        }
+        final saved = await cartDrafts();
+        if (!saved.any((d) => d.signature == draft.signature)) {
+          throw const CcsopFailure('CART_DRAFT_EDIT_CONFLICT');
+        }
+        return _refreshCartSelection(draft, identity, epoch);
+      });
+
+  /// Revalidate an in-memory selection without persisting or submitting it.
+  Future<RestoredCart> refreshCartSelection({
+    required OrderContextSnapshot context,
+    required String memberRef,
+    required List<OrderSelection> items,
+  }) => _orderOperation(() async {
     final identity = _orderIdentity(), epoch = _epoch;
-    if (!draft.belongsTo(identity)) {
-      throw const CcsopFailure('CART_DRAFT_CONTEXT_CHANGED');
-    }
-    final saved = await cartDrafts();
-    if (!saved.any((d) => d.signature == draft.signature)) {
-      throw const CcsopFailure('CART_DRAFT_EDIT_CONFLICT');
-    }
+    final draft = CartDraft.capture(
+      identity: identity,
+      context: context,
+      memberRef: memberRef,
+      items: items,
+      now: _now(),
+    );
+    return _refreshCartSelection(draft, identity, epoch);
+  });
+
+  Future<RestoredCart> _refreshCartSelection(
+    CartDraft draft,
+    StaffSession identity,
+    int epoch,
+  ) async {
     await _requireNoPendingCart(draft.tableRef);
     OrderContextSnapshot? context;
     String? cursor;
@@ -1885,7 +1909,7 @@ class StaffAuthController extends ChangeNotifier {
       now: _now(),
     );
     return RestoredCart(draft, context, items);
-  });
+  }
 
   Future<OrderRequestResult> submitOrder({
     required OrderContextSnapshot context,

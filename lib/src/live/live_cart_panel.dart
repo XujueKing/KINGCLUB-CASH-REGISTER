@@ -49,6 +49,8 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       recovery = false;
   int epoch = 0;
   bool confirming = false;
+  bool refreshingSelection = false;
+  bool refreshAgain = false;
   String? message;
   String t(String key) => tr(widget.language, key);
   String get memberName {
@@ -240,7 +242,67 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     } else if (oldWidget.revision != widget.revision && !attempted) {
       // Once sent, wait for the original response/recovery even if its own
       // notification arrives first. Auth/scope/lifecycle changes still invalidate.
-      invalidate();
+      if (refreshingSelection) {
+        refreshAgain = true;
+      } else if (items.isNotEmpty && (!busy || confirming)) {
+        unawaited(refreshSelection());
+      } else {
+        invalidate();
+      }
+    }
+  }
+
+  Future<void> refreshSelection() async {
+    refreshAgain = false;
+    final generation = ++epoch, identity = widget.auth.session;
+    final original = List<OrderSelection>.unmodifiable(items.values);
+    final dialog = activeDialog;
+    if (dialog != null &&
+        dialog.mounted &&
+        ModalRoute.of(dialog)?.isCurrent == true) {
+      Navigator.of(dialog).pop();
+    }
+    setState(() {
+      stale = true;
+      busy = true;
+      refreshingSelection = true;
+      message = 'cartRefreshing';
+    });
+    try {
+      final result = await widget.auth.refreshCartSelection(
+        context: currentContext,
+        memberRef: widget.memberRef,
+        items: original,
+      );
+      if (!mounted ||
+          generation != epoch ||
+          !identical(identity, widget.auth.session) ||
+          refreshAgain) {
+        return;
+      }
+      setState(() {
+        restoredContext = result.context;
+        items
+          ..clear()
+          ..addEntries(
+            result.items.map((i) => MapEntry(i.product.reference, i)),
+          );
+        stale = false;
+        ready = true;
+        message = null;
+      });
+    } catch (_) {
+      if (mounted && generation == epoch) {
+        setState(() => message = 'cartRefreshFailed');
+      }
+    } finally {
+      if (mounted && generation == epoch) {
+        setState(() {
+          busy = false;
+          refreshingSelection = false;
+        });
+        if (refreshAgain) unawaited(refreshSelection());
+      }
     }
   }
 
@@ -449,6 +511,12 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           ),
                         if (busy && !confirming)
                           const LinearProgressIndicator(),
+                        if (stale && !busy && items.isNotEmpty && !attempted)
+                          TextButton(
+                            key: const ValueKey('cart-refresh'),
+                            onPressed: () => unawaited(refreshSelection()),
+                            child: Text(t('cartRefreshRetry')),
+                          ),
                         Text(t('cartDraftNotice')),
                         Wrap(
                           spacing: 8,
