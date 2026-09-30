@@ -51,6 +51,15 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   bool confirming = false;
   String? message;
   String t(String key) => tr(widget.language, key);
+  String get memberName {
+    for (final member in currentContext.members) {
+      if (member.reference == widget.memberRef) {
+        return member.nickname ?? t('orderMemberUnnamed');
+      }
+    }
+    return t('orderMemberUnnamed');
+  }
+
   bool get draftAction => ready && !busy && !stale && !attempted;
   bool get editable => draftAction && (savedDraft == null || draftLoaded);
   bool get canSubmit =>
@@ -296,9 +305,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${orderContext.tableName}\n${orderContext.sessionRef}\n$memberRef',
-                  ),
+                  Text('${orderContext.tableName}\n$memberName'),
                   Text(
                     t(
                       orderContext.paymentTiming == 'prepay'
@@ -424,7 +431,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           '${widget.orderContext.tableName} · ${t('cartTitle')}',
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        Text(widget.memberRef),
+                        Text(memberName),
                         Text(
                           t(
                             currentContext.paymentTiming == 'prepay'

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:kingclub_cash_register/src/live/live_cart_panel.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/auth/session_vault.dart';
@@ -281,27 +283,19 @@ void main() {
         await tester.pumpWidget(panel(auth, language: lang));
         await tester.pumpAndSettle();
         expect(find.text(tr(lang, 'orderMemberUnnamed')), findsOneWidget);
+        expect(find.textContaining('member-000'), findsNothing);
         expect(tester.takeException(), isNull);
       }
       await tester.tap(find.byKey(const ValueKey('order-member-member-001')));
       await tester.pump();
-      expect(
-        find.byKey(const ValueKey('order-member-selection')),
-        findsNothing,
-      );
+      expect(find.byType(LiveCartPanel), findsNothing);
       await tester.tap(find.byKey(const ValueKey('order-member-member-000')));
       await tester.pump();
-      expect(
-        find.byKey(const ValueKey('order-member-selection')),
-        findsOneWidget,
-      );
+      expect(find.byType(LiveCartPanel), findsOneWidget);
       auth.fail = true;
-      await tester.tap(find.byKey(const ValueKey('order-members-refresh')));
+      tester.widget<LiveCartPanel>(find.byType(LiveCartPanel)).onBack();
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('order-member-selection')),
-        findsNothing,
-      );
+      expect(find.byType(LiveCartPanel), findsNothing);
       expect(find.textContaining('PRIVATE_FAILURE'), findsNothing);
       expect(
         find.text(tr(UiLanguage.th, 'orderMembersFailed')),
@@ -318,13 +312,11 @@ void main() {
     final auth = MemberAuth()..paginated = true;
     await tester.pumpWidget(panel(auth));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('order-member-member-000')));
-    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('order-members-next')));
     await tester.pumpAndSettle();
     expect(auth.cursor, 'member-049');
     expect(find.text('TEST member 50'), findsOneWidget);
-    expect(find.byKey(const ValueKey('order-member-selection')), findsNothing);
+    expect(find.byType(LiveCartPanel), findsNothing);
     await tester.tap(find.byKey(const ValueKey('order-members-previous')));
     await tester.pumpAndSettle();
     expect(auth.cursor, isNull);
@@ -343,10 +335,7 @@ void main() {
       auth.gate = Completer<OrderContextSnapshot>();
       await tester.pumpWidget(panel(auth, revision: 1));
       await tester.pump();
-      expect(
-        find.byKey(const ValueKey('order-member-selection')),
-        findsNothing,
-      );
+      expect(find.byType(LiveCartPanel), findsNothing);
       auth.invalidate();
       await tester.pump();
       auth.gate!.complete(parse(contextData()));

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/auth/session_vault.dart';
 import 'package:kingclub_cash_register/src/auth/staff_auth_controller.dart';
 import 'package:kingclub_cash_register/src/live/member_identity.dart';
+import 'package:kingclub_cash_register/src/live/live_cart_panel.dart';
 import 'package:kingclub_cash_register/src/live/member_seating_panel.dart';
 import 'package:kingclub_cash_register/src/live/live_order_members_panel.dart';
 import 'package:kingclub_cash_register/src/live/order_context_snapshot.dart';
@@ -154,7 +155,7 @@ void main() {
               auth: auth,
               language: UiLanguage.zh,
               orderContext: contextSnapshot(),
-              onSeated: () => completions++,
+              onSeated: (_) => completions++,
             ),
           ),
         ),
@@ -347,7 +348,7 @@ void main() {
     },
   );
   testWidgets(
-    'table scan uses one confirmation and rereads current members after seating',
+    'table scan uses one confirmation and opens ordering only after rereading the seated member',
     (tester) async {
       tester.view.physicalSize = const Size(1366, 768);
       tester.view.devicePixelRatio = 1;
@@ -384,9 +385,10 @@ void main() {
       expect(auth.confirms, 1);
       expect(auth.reads, greaterThanOrEqualTo(2));
       expect(
-        find.byKey(const ValueKey('order-member-test-member')),
-        findsOneWidget,
+        tester.widget<LiveCartPanel>(find.byType(LiveCartPanel)).memberRef,
+        'test-member',
       );
+      expect(find.byType(LiveCartPanel), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();

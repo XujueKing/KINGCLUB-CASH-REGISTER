@@ -188,7 +188,6 @@ void main() {
       await show(tester, auth, memberPage: true);
       expect(find.byKey(const ValueKey('order-member-cart')), findsNothing);
       await tap(tester, 'order-member-member-000');
-      await tap(tester, 'order-member-cart');
       expect(enabled(tester), false);
       await tap(tester, 'catalog-add-p001');
       await tap(tester, 'cart-plus-p001');
@@ -282,9 +281,7 @@ void main() {
     await show(tester, auth);
     expect(
       tester
-          .widget<IconButton>(
-            find.byKey(const ValueKey('catalog-add-p001')),
-          )
+          .widget<IconButton>(find.byKey(const ValueKey('catalog-add-p001')))
           .onPressed,
       isNull,
     );

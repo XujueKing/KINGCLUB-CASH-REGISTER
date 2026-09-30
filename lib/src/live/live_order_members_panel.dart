@@ -87,7 +87,11 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     }
   }
 
-  Future<void> load({bool reset = false, int? target}) async {
+  Future<void> load({
+    bool reset = false,
+    int? target,
+    String? seatedMember,
+  }) async {
     final generation = ++epoch, identity = widget.auth.session;
     if (reset) {
       cursors
@@ -122,6 +126,15 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         data = value;
         page = requestedPage;
         loading = false;
+        if (seatedMember != null) {
+          final matches = value.members.where(
+            (m) => m.reference == seatedMember && m.eligible,
+          );
+          if (matches.length == 1) {
+            selected = matches.single;
+            cart = true;
+          }
+        }
       });
     } catch (_) {
       if (mounted && generation == epoch) {
@@ -154,9 +167,9 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
           setState(() => seating = false);
           unawaited(load(reset: true));
         },
-        onSeated: () {
+        onSeated: (memberRef) {
           setState(() => seating = false);
-          unawaited(load(reset: true));
+          unawaited(load(reset: true, seatedMember: memberRef));
         },
       );
     }
@@ -260,20 +273,16 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
                         enabled: member.eligible,
                         selected: selected?.reference == member.reference,
                         title: Text(member.nickname ?? t('orderMemberUnnamed')),
-                        subtitle: Text(
-                          '${member.reference}${member.eligible ? '' : ' · ${t('orderMemberIneligible')}'}',
-                        ),
-                        trailing: Icon(
-                          selected?.reference == member.reference
-                              ? Icons.check_circle
-                              : Icons.circle_outlined,
-                        ),
+                        subtitle: member.eligible
+                            ? null
+                            : Text(t('orderMemberIneligible')),
+                        trailing: member.eligible
+                            ? const Icon(Icons.chevron_right)
+                            : null,
                         onTap: member.eligible
                             ? () => setState(() {
-                                selected =
-                                    selected?.reference == member.reference
-                                    ? null
-                                    : member;
+                                selected = member;
+                                cart = true;
                               })
                             : null,
                       ),
@@ -281,32 +290,6 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
                   },
                 ),
         ),
-        if (selected != null)
-          Container(
-            color: const Color(0xFFE8F1EC),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${t('orderMemberSelected')}: ${selected!.nickname ?? t('orderMemberUnnamed')} (${selected!.reference})',
-                    key: const ValueKey('order-member-selection'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                FilledButton.icon(
-                  key: const ValueKey('order-member-cart'),
-                  onPressed: loading || !foreground
-                      ? null
-                      : () => setState(() => cart = true),
-                  icon: const Icon(Icons.shopping_cart_outlined, size: 20),
-                  label: Text(t('cartTitle')),
-                ),
-              ],
-            ),
-          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Wrap(

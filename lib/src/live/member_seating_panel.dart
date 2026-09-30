@@ -22,7 +22,8 @@ class MemberSeatingPanel extends StatefulWidget {
   final StaffAuthController auth;
   final UiLanguage language;
   final OrderContextSnapshot? orderContext;
-  final VoidCallback? onBack, onSeated;
+  final VoidCallback? onBack;
+  final ValueChanged<String>? onSeated;
   @override
   State<MemberSeatingPanel> createState() => _MemberSeatingPanelState();
 }
@@ -108,7 +109,7 @@ class _MemberSeatingPanelState extends State<MemberSeatingPanel>
     }
   }
 
-  Future<void> completed(SeatingResult? result) async {
+  Future<void> completed(SeatingResult? result, String memberRef) async {
     if (!mounted || !foreground) return;
     setState(() {
       scanGeneration++;
@@ -120,7 +121,7 @@ class _MemberSeatingPanelState extends State<MemberSeatingPanel>
     });
     await load();
     if (mounted && foreground && result?.confirmed == true) {
-      widget.onSeated?.call();
+      widget.onSeated?.call(memberRef);
     }
   }
 
@@ -174,7 +175,7 @@ class _MemberSeatingPanelState extends State<MemberSeatingPanel>
       );
       if (!current()) return;
       if (result.terminal) {
-        await completed(result);
+        await completed(result, command.memberRef);
       } else {
         setState(() {
           busy = false;
@@ -218,7 +219,7 @@ class _MemberSeatingPanelState extends State<MemberSeatingPanel>
         if (mounted &&
             identical(owner, widget.auth.session) &&
             identical(target, widget.orderContext)) {
-          await completed(result);
+          await completed(result, member.memberRef);
         }
       },
     );
