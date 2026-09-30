@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/provider_payment.dart';
 import 'package:kingclub_cash_register/src/live/provider_payment_panel.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
+import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 
 import 'table_checkout_dialog_test.dart' show CheckoutDialogAuth;
 
@@ -17,6 +18,13 @@ class OriginalAuth extends CheckoutDialogAuth {
     reads++;
     if (fail) throw StateError('TEST_PRIVATE_ERROR');
     return wait == null ? [] : await wait!.future;
+  }
+}
+
+class SoldOutAuth extends OriginalAuth {
+  @override
+  Future<ProviderPaymentResult> queryProvider(ProviderPayment command) async {
+    throw const CcsopFailure('ORDERING_OUT_OF_STOCK', deliveryUncertain: true);
   }
 }
 
@@ -35,6 +43,21 @@ void main() {
           ),
         ),
       );
+
+  testWidgets('stock rejection is visible without discarding the original recovery entry', (tester) async {
+    final auth=SoldOutAuth();
+    final original=ProviderPayment.create(auth.session,'D00000000001','member_balance',100,accountType:'platform_cash');
+    auth.wait=Completer<List<ProviderPayment>>()..complete([original]);
+    await mount(tester,auth);
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining(original.requestId));
+    await tester.pumpAndSettle();
+    expect(find.text(tr(UiLanguage.en,'paymentStockUnavailable')),findsOneWidget);
+    expect(find.textContaining(original.requestId),findsOneWidget);
+    expect(auth.collections,0);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
 
   testWidgets(
     'failed original read provides explicit local retry without collecting',

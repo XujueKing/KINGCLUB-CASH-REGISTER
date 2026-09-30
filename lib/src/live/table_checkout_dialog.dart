@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
+import '../network/ccsop_client.dart';
 import 'table_checkout_command.dart';
 import 'table_checkout_result.dart';
 import 'table_snapshot.dart';
@@ -404,8 +405,13 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
           message = t('tableCheckout_${next.state}');
         });
       }
-    } catch (_) {
-      if (current(e)) setState(() => message = t('tableCheckoutReview'));
+    } catch (error) {
+      final soldOut=error is CcsopFailure&&error.code=='ORDERING_OUT_OF_STOCK';
+      if (current(e)) {
+        setState(() => message = t(soldOut
+          ? (original.channel=='cash'?'cashStockUnavailable':'paymentStockUnavailable')
+          : 'tableCheckoutReview'));
+      }
     } finally {
       if (current(e)) setState(() => busy = false);
     }

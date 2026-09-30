@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'payment_code_field.dart';
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
+import '../network/ccsop_client.dart';
 import 'provider_payment.dart';
 import 'payment_admission.dart';
 
@@ -74,7 +75,12 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
       }
       if(current(e)&&result.resolved)widget.onResolved?.call();
       unresolved=['pending','unknown'].contains(result.state);
-    } catch(_){unresolved=true;if(current(e))setState(()=>status=t('provider_review'));}
+    } catch(error){
+      final soldOut=error is CcsopFailure&&error.code=='ORDERING_OUT_OF_STOCK';
+      // Show the server's business rejection, but retain journal/recovery on an uncertain response.
+      unresolved=!soldOut || error.deliveryUncertain;
+      if(current(e))setState(()=>status=t(soldOut?'paymentStockUnavailable':'provider_review'));
+    }
     finally {
       if(mounted)setState(()=>busy=false);if(mounted&&foreground)await load();
       if(current(e)&&ready&&unresolved&&pending.length==1&&queryAttempts<6) {
