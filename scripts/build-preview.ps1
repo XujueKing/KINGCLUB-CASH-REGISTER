@@ -22,9 +22,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Dependency resolution failed.' }
     # Release optimizes runtime performance; CASHIER_PREVIEW still disables real business actions.
     # This preview package retains its existing development signing identity for in-place upgrades.
-    & $flutterExe build apk "--$Mode" --target-platform android-arm --dart-define=CASHIER_PREVIEW=true --no-pub
+    # Split filters dependency JNI libraries as well as the Flutter engine.
+    # Without this, an ARM32 engine can be packaged alongside incomplete ARM64 JNI libraries.
+    & $flutterExe build apk "--$Mode" --target-platform android-arm --split-per-abi --dart-define=CASHIER_PREVIEW=true --no-pub
     if ($LASTEXITCODE -ne 0) { throw 'APK build failed.' }
-    $apk = Join-Path $projectRoot "build\app\outputs\flutter-apk\app-$Mode.apk"
+    $apk = Join-Path $projectRoot "build\app\outputs\flutter-apk\app-armeabi-v7a-$Mode.apk"
     Get-FileHash -Algorithm SHA256 -LiteralPath $apk
     if ($Install) {
         $model = (& $adbExe -s $DeviceSerial shell getprop ro.product.model).Trim()

@@ -162,6 +162,49 @@ void main() {
     },
   );
   testWidgets(
+    'background mount neither reads tables nor starts realtime until resumed',
+    (tester) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      final auth = TableAuth();
+      final realtime = PanelRealtime(auth.session);
+      await show(tester, auth, realtime: realtime);
+      expect(auth.requested, isEmpty);
+      expect(realtime.running, isFalse);
+      expect(find.text('Test table 0'), findsNothing);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(auth.requested, [null]);
+      expect(realtime.running, isTrue);
+      expect(find.text('Test table 0'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
+    'background invalidates an in-flight table read and resume fetches again',
+    (tester) async {
+      final auth = TableAuth();
+      await show(tester, auth);
+      final pending = Completer<Object?>();
+      auth.gate = pending;
+      await tester.tap(find.byKey(const ValueKey('live-refresh')));
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      pending.complete(tableFixture());
+      await tester.pump();
+      expect(find.text('Test table 0'), findsNothing);
+      final reads = auth.requested.length;
+      auth.gate = null;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(auth.requested.length, reads + 1);
+      expect(find.text('Test table 0'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
     'Next page requests server cursor and replaces rather than sums snapshots',
     (tester) async {
       final auth = TableAuth()

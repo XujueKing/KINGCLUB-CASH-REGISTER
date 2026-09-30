@@ -142,20 +142,28 @@ class TableClearResult {
       if (value['state'] != 'confirmed' ||
           value.length != 3 ||
           receipt is! Map<String, dynamic> ||
-          receipt.length != 11 ||
+          receipt.length !=
+              (receipt.containsKey('refundedOrderCount') ? 12 : 11) ||
+          (receipt.containsKey('refundedOrderCount') &&
+              (!_count(receipt['refundedOrderCount'], 1000) ||
+                  receipt['refundedOrderCount'] == 0)) ||
           command.lookup.entries.any((e) => receipt[e.key] != e.value) ||
           receipt['clearedBy'] != command.employeeRef ||
           receipt['closureStatus'] != 'closed' ||
-          !_count(receipt['paidOrderCount'], 500) ||
-          !_count(receipt['expiredOrderCount'], 500) ||
-          !_count(receipt['settledCents'], 50000000000) ||
+          !_count(receipt['paidOrderCount'], 1000) ||
+          !_count(receipt['expiredOrderCount'], 1000) ||
+          !_count(receipt['settledCents'], 100000000000) ||
           !_count(receipt['departedSeatCount'], 10000)) {
         throw const FormatException();
       }
       final paid = receipt['paidOrderCount'] as int,
           expired = receipt['expiredOrderCount'] as int,
           settled = receipt['settledCents'] as int;
-      if (paid + expired > 500 || (paid == 0 ? settled != 0 : settled < paid)) {
+      final refunded = receipt['refundedOrderCount'] as int? ?? 0;
+      if (paid + expired + refunded > 1000 ||
+          (paid == 0
+              ? settled != 0
+              : settled < paid || settled > paid * 100000000)) {
         throw const FormatException();
       }
       final stamp = receipt['closedAt'];

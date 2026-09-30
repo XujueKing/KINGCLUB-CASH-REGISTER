@@ -59,8 +59,19 @@ class TableSessionSnapshot {
       paidCents = _number(value['paidCents']),
       pendingCents = _number(value['pendingCents']),
       paidOrders = _number(value['paidOrders']),
+      refundedCents = value.containsKey('refundedCents')
+          ? _number(value['refundedCents'])
+          : 0,
+      refundedOrders = value.containsKey('refundedOrders')
+          ? _number(value['refundedOrders'])
+          : 0,
       pendingOrders = _number(value['pendingOrders']) {
-    if (!value.containsKey('partySize') ||
+    if (value.containsKey('refundedCents') !=
+            value.containsKey('refundedOrders') ||
+        (refundedOrders == 0
+            ? refundedCents != 0
+            : refundedCents < refundedOrders) ||
+        !value.containsKey('partySize') ||
         !{'open', 'clearing'}.contains(status) ||
         !{'prepay', 'postpay'}.contains(paymentTiming)) {
       throw const FormatException();
@@ -73,6 +84,8 @@ class TableSessionSnapshot {
       paidCents,
       pendingCents,
       paidOrders,
+      refundedCents,
+      refundedOrders,
       pendingOrders;
 }
 

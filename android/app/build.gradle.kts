@@ -5,6 +5,7 @@ plugins {
 }
 
 android {
+    buildFeatures { buildConfig = true }
     namespace = "cn.kingclub.kingclub_cash_register"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "28.2.13676358"
@@ -15,6 +16,9 @@ android {
     }
 
     defaultConfig {
+        val rasterOutput = providers.gradleProperty("kingclubUsbRasterOutput").orElse("false").get()
+        require(rasterOutput in setOf("true", "false"))
+        buildConfigField("boolean", "USB_RASTER_OUTPUT_ENABLED", rasterOutput)
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "cn.kingclub.cashregister.preview"
         // You can update the following values to match your application needs.
@@ -49,5 +53,6 @@ flutter {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("com.sunmi:printerlibrary:1.0.24")
 }

@@ -100,6 +100,25 @@ void main() {
     await tester.pump();
   }
 
+  testWidgets('mounting while backgrounded does not read orders until resume', (
+    tester,
+  ) async {
+    final auth = OrdersAuth();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await show(tester, auth);
+    await tester.pump(const Duration(seconds: 1));
+    expect(auth.reads, 0);
+    expect(
+      find.byKey(const ValueKey('order-preview-D00000000001')),
+      findsNothing,
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(auth.reads, 1);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
+
   testWidgets(
     'identity invalidation before preview first frame cannot reveal order',
     (tester) async {

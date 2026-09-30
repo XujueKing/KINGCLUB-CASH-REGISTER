@@ -1,0 +1,111 @@
+import 'dart:convert';
+
+import '../auth/session_vault.dart';
+import '../auth/staff_session.dart';
+import '../network/ccsop_client.dart';
+import 'balance_refund_command.dart';
+import 'balance_refund_result.dart';
+
+/// Persist and verify before any refund packet. No logout/timeout deletion.
+/// Removal requires a parsed server receipt matching the saved original command.
+class BalanceRefundJournal {
+  BalanceRefundJournal({SecretStorage? storage})
+    : _storage = storage ?? PlatformSecretStorage();
+  final SecretStorage _storage;
+  Future<void> acknowledge(StaffSession identity, BalanceRefundResult result) =>
+      _serial(() async {
+        if (!result.confirmed) {
+          throw const CcsopFailure('BALANCE_REFUND_RESULT_UNCONFIRMED');
+        }
+        final entries = await _read();
+        final matching = entries
+            .where((e) => e.signature == result.commandSignature)
+            .toList();
+        if (matching.isEmpty) return;
+        if (matching.length != 1 || !matching.single.belongsTo(identity)) {
+          throw const CcsopFailure('BALANCE_REFUND_SCOPE_CHANGED');
+        }
+        final raw = jsonEncode({
+          'version': 1,
+          'entries': entries
+              .where((e) => e.signature != result.commandSignature)
+              .map((e) => e.encode())
+              .toList(),
+        });
+        await _storage.write(storageKey, raw);
+        if (await _storage.read(storageKey) != raw) {
+          throw const CcsopFailure('BALANCE_REFUND_JOURNAL_UNAVAILABLE');
+        }
+      });
+  static const storageKey = 'pending_staff_balance_refund_v1';
+  static Future<void> _tail = Future.value();
+  Future<T> _serial<T>(Future<T> Function() work) {
+    final next = _tail.then((_) async {
+      try {
+        return await work();
+      } on CcsopFailure {
+        rethrow;
+      } catch (_) {
+        throw const CcsopFailure('BALANCE_REFUND_JOURNAL_UNAVAILABLE');
+      }
+    });
+    _tail = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return next;
+  }
+
+  Future<List<PendingBalanceRefund>> _read() async {
+    final raw = await _storage.read(storageKey);
+    if (raw == null) return [];
+    if (raw.length > 1000000) throw const FormatException();
+    final value = jsonDecode(raw);
+    if (value is! Map ||
+        value.length != 2 ||
+        value['version'] != 1 ||
+        value['entries'] is! List ||
+        (value['entries'] as List).length > 100) {
+      throw const FormatException();
+    }
+    final entries = (value['entries'] as List)
+        .map(PendingBalanceRefund.decode)
+        .toList();
+    if (entries.map((e) => e.requestKey).toSet().length != entries.length ||
+        entries.map((e) => e.orderKey).toSet().length != entries.length) {
+      throw const FormatException();
+    }
+    return entries;
+  }
+
+  Future<List<PendingBalanceRefund>> load(StaffSession identity) => _serial(
+    () async =>
+        List.unmodifiable((await _read()).where((e) => e.belongsTo(identity))),
+  );
+  Future<void> save(PendingBalanceRefund command, StaffSession identity) =>
+      _serial(() async {
+        if (!command.belongsTo(identity)) {
+          throw const CcsopFailure('BALANCE_REFUND_SCOPE_CHANGED');
+        }
+        final entries = await _read();
+        if (entries.any((e) => e.signature == command.signature)) return;
+        if (entries.any(
+          (e) =>
+              e.orderKey == command.orderKey ||
+              e.requestKey == command.requestKey,
+        )) {
+          throw const CcsopFailure('BALANCE_REFUND_ALREADY_PENDING');
+        }
+        if (entries.length >= 100) {
+          throw const CcsopFailure('BALANCE_REFUND_JOURNAL_FULL');
+        }
+        final raw = jsonEncode({
+          'version': 1,
+          'entries': [...entries, command].map((e) => e.encode()).toList(),
+        });
+        if (raw.length > 1000000) {
+          throw const CcsopFailure('BALANCE_REFUND_JOURNAL_FULL');
+        }
+        await _storage.write(storageKey, raw);
+        if (await _storage.read(storageKey) != raw) {
+          throw const CcsopFailure('BALANCE_REFUND_JOURNAL_UNAVAILABLE');
+        }
+      });
+}

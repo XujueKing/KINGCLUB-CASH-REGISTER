@@ -45,6 +45,40 @@ Matcher fails(String code) =>
     throwsA(isA<CcsopFailure>().having((e) => e.code, 'code', code));
 
 void main() {
+  test('accepts the same 1000-order receipt boundary as the server', () {
+    final c = command(), payload = result(c);
+    final r = payload['result']['receipt'] as Map<String, dynamic>;
+    r['paidOrderCount'] = 1000;
+    r['settledCents'] = 100000000000;
+    expect(TableClearResult.parse(payload, c).confirmed, isTrue);
+    r['expiredOrderCount'] = 1;
+    expect(
+      () => TableClearResult.parse(payload, c),
+      fails('TABLE_CLEAR_RESPONSE_INVALID'),
+    );
+  });
+  test('refunded orders are counted separately from net paid settlement', () {
+    final c = command();
+    final payload = result(c);
+    final r = payload['result']['receipt'] as Map<String, dynamic>;
+    r['paidOrderCount'] = 0;
+    r['settledCents'] = 0;
+    r['refundedOrderCount'] = 1;
+    expect(TableClearResult.parse(payload, c).confirmed, isTrue);
+    for (final invalid in [0, -1, 1001, '1', 1.5]) {
+      r['refundedOrderCount'] = invalid;
+      expect(
+        () => TableClearResult.parse(payload, c),
+        fails('TABLE_CLEAR_RESPONSE_INVALID'),
+      );
+    }
+    r['refundedOrderCount'] = 1000;
+    r['expiredOrderCount'] = 1;
+    expect(
+      () => TableClearResult.parse(payload, c),
+      fails('TABLE_CLEAR_RESPONSE_INVALID'),
+    );
+  });
   test('canonical immutable command requires explicit confirmation and current permission', () {
     final c = command();
     expect(
@@ -114,9 +148,10 @@ void main() {
       {'closureStatus': 'open'},
       {'paidOrderCount': 1.0},
       {'paidOrderCount': 0},
-      {'paidOrderCount': 500, 'expiredOrderCount': 1},
+      {'paidOrderCount': 1000, 'expiredOrderCount': 1},
       {'settledCents': 0},
-      {'settledCents': 50000000001},
+      {'settledCents': 100000000001},
+      {'paidOrderCount': 1, 'settledCents': 100000001},
       {'departedSeatCount': -1},
       {'departedSeatCount': true},
       {'closedAt': '2026-02-30T00:00:00.000Z'},

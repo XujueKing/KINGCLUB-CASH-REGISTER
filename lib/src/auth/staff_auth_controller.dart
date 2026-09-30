@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../live/catalog_snapshot.dart';
+import '../live/voucher_lookup.dart';
 import '../live/order_context_snapshot.dart';
 import '../live/order_command.dart';
 import '../live/order_journal.dart';
@@ -10,7 +13,20 @@ import '../live/serving_command.dart';
 import '../live/serving_journal.dart';
 import '../live/table_clear_command.dart';
 import '../live/table_clear_journal.dart';
+import '../live/table_checkout_command.dart';
+import '../live/table_checkout_journal.dart';
+import '../live/table_checkout_result.dart';
+import '../live/table_checkout_cancellation.dart';
+import '../live/balance_refund_context.dart';
+import '../live/balance_refund_command.dart';
+import '../live/balance_refund_journal.dart';
+import '../live/balance_refund_result.dart';
 import '../live/payment_admission.dart';
+import '../live/provider_payment.dart';
+import '../live/receipt_document.dart';
+import '../live/recharge_result.dart';
+import '../live/recharge_journal.dart';
+import '../live/recharge_context.dart';
 import '../live/cart_draft.dart';
 import '../live/cart_draft_store.dart';
 
@@ -32,8 +48,12 @@ class StaffAuthController extends ChangeNotifier {
     OpeningJournal? openingJournal,
     OrderJournal? orderJournal,
     CashJournal? cashJournal,
+    ProviderPaymentJournal? providerJournal,
+    RechargeJournal? rechargeJournal,
     ServingJournal? servingJournal,
     TableClearJournal? tableClearJournal,
+    TableCheckoutJournal? tableCheckoutJournal,
+    BalanceRefundJournal? balanceRefundJournal,
     CartDraftStore? cartDraftStore,
   }) : _vault = vault ?? SessionVault(),
        _authFactory = authFactory ?? ((base) => CcsopHandshakeClient(base)),
@@ -45,16 +65,727 @@ class StaffAuthController extends ChangeNotifier {
        _openingJournal = openingJournal ?? OpeningJournal(),
        _orderJournal = orderJournal ?? OrderJournal(),
        _cashJournal = cashJournal ?? CashJournal(),
+       _providerJournal = providerJournal ?? ProviderPaymentJournal(),
+       _rechargeJournal = rechargeJournal ?? RechargeJournal(),
        _servingJournal = servingJournal ?? ServingJournal(),
        _tableClearJournal = tableClearJournal ?? TableClearJournal(),
+       _tableCheckoutJournal = tableCheckoutJournal ?? TableCheckoutJournal(),
+       _balanceRefundJournal = balanceRefundJournal ?? BalanceRefundJournal(),
        _cartDraftStore = cartDraftStore ?? CartDraftStore();
   final CartDraftStore _cartDraftStore;
+  final RechargeJournal _rechargeJournal;
+  final TableCheckoutJournal _tableCheckoutJournal;
+  bool _tablePreparationBusy = false;
+  bool _tableCollectionBusy = false;
+
+  StaffSession _tableCheckoutIdentity(String channel) {
+    if (!['wechat','alipay','cash','member_balance'].contains(channel)) {
+      throw const CcsopFailure('TABLE_CHECKOUT_CHANNEL_INVALID');
+    }
+    final identity = _session;
+    if (_disposed || _busy || identity == null || _api == null || !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    final permission = channel == 'member_balance' ? 'payment.balance' : 'payment.$channel';
+    if (!identity.permissions.contains(permission)) throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    return identity;
+  }
+
+  Future<TableCheckoutQuote> quoteTableCheckout({required String tableRef,required String sessionRef,
+    required String channel,required String? accountType}) async {
+    final identity = _tableCheckoutIdentity(channel),epoch = _epoch;
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(tableRef) ||
+        !RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(sessionRef) ||
+        (channel == 'member_balance' ? !['platform_cash','store_balance'].contains(accountType) : accountType != null)) {
+      throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_INVALID');
+    }
+    final raw = await _api!.call('K260930001937',{'storeRef':identity.storeRef,'tableRef':tableRef,
+      'sessionRef':sessionRef,'channel':channel,'accountType':accountType,'currency':'CNY'});
+    _check(epoch);_tableCheckoutIdentity(channel);
+    return TableCheckoutQuote.parse(raw,storeRef:identity.storeRef,tableRef:tableRef,
+      sessionRef:sessionRef,channel:channel,accountType:accountType);
+  }
+
+  Future<List<TableCheckoutCommand>> pendingTableCheckouts(String channel) async {
+    final identity = _tableCheckoutIdentity(channel),epoch = _epoch;
+    final rows = await _tableCheckoutJournal.load(identity);
+    _check(epoch);_tableCheckoutIdentity(channel);
+    return List.unmodifiable(rows.where((row)=>row.channel==channel));
+  }
+
+  /// Persist and verify the original request before admission; no collection.
+  Future<TableCheckoutAdmission> prepareTableCheckout(TableCheckoutCommand command,
+      {required bool confirmed, bool Function()? stillCurrent}) async {
+    if (!confirmed) throw const CcsopFailure('TABLE_CHECKOUT_CONFIRMATION_REQUIRED');
+    if (_tablePreparationBusy || _tableCollectionBusy) throw const CcsopFailure('TABLE_CHECKOUT_BUSY');
+    _tablePreparationBusy = true;
+    try {
+      final identity = _tableCheckoutIdentity(command.channel),epoch = _epoch;
+      void validate() {
+        _check(epoch);
+        if (stillCurrent != null && !stillCurrent()) throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_CHANGED');
+        if (!command.belongsTo(_tableCheckoutIdentity(command.channel))) {
+          throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_CHANGED');
+        }
+      }
+      validate();
+      await _tableCheckoutJournal.save(identity,command);
+      validate();
+      final raw = await _api!.call('K260930001938',command.params);
+      validate();
+      return TableCheckoutAdmission.parse(raw,command);
+    } finally { _tablePreparationBusy = false; }
+  }
+
+  /// Query only: never recreate a missing original request or collect money.
+  Future<TableCheckoutAdmission> lookupTableCheckout(TableCheckoutCommand command) async {
+    final identity = _tableCheckoutIdentity(command.channel),epoch = _epoch;
+    void validate() {
+      _check(epoch);
+      if (!command.belongsTo(_tableCheckoutIdentity(command.channel))) {
+        throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_CHANGED');
+      }
+    }
+    validate();
+    final saved = await _tableCheckoutJournal.load(identity);
+    validate();
+    if (!saved.any((row)=>jsonEncode(row.encoded)==jsonEncode(command.encoded))) {
+      throw const CcsopFailure('TABLE_CHECKOUT_ORIGINAL_REQUEST_REQUIRED');
+    }
+    final raw = await _api!.call('K260930001939',command.params);
+    validate();
+    return TableCheckoutAdmission.parse(raw,command);
+  }
+
+  Future<TableCheckoutResult> collectTableCheckout(TableCheckoutCommand command, {
+    required bool confirmed, required bool Function() stillCurrent,
+    String? payerCode, int? cashReceivedCents,
+  }) {
+    if (!confirmed) throw const CcsopFailure('TABLE_CHECKOUT_CONFIRMATION_REQUIRED');
+    if (command.channel == 'cash') {
+      if (payerCode != null || cashReceivedCents == null || cashReceivedCents < command.totalCents || cashReceivedCents > 100000000) {
+        throw const CcsopFailure('TABLE_CHECKOUT_CASH_INVALID');
+      }
+    } else if (cashReceivedCents != null || payerCode == null || !validProviderCode(command.channel,payerCode)) {
+      throw const CcsopFailure('PAYMENT_CODE_INVALID');
+    }
+    return _resolveTableCollection(command,collect:true,stillCurrent:stillCurrent,
+      payerCode:payerCode,cashReceivedCents:cashReceivedCents);
+  }
+
+  /// May finish original settlement; never sends a payer code or accepts new cash.
+  Future<TableCheckoutResult> recoverTableCheckout(TableCheckoutCommand command, {
+    required bool Function() stillCurrent,
+  }) => _resolveTableCollection(command,collect:false,stillCurrent:stillCurrent);
+
+  Future<TableCheckoutResult> _resolveTableCollection(TableCheckoutCommand command, {
+    required bool collect,required bool Function() stillCurrent,
+    String? payerCode,int? cashReceivedCents,
+  }) async {
+    if (_tablePreparationBusy || _tableCollectionBusy) throw const CcsopFailure('TABLE_CHECKOUT_BUSY');
+    _tableCollectionBusy = true;
+    try {
+      final identity = _tableCheckoutIdentity(command.channel),epoch = _epoch;
+      void validate() {
+        _check(epoch);
+        if (!command.belongsTo(_tableCheckoutIdentity(command.channel)) || !stillCurrent()) {
+          throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_CHANGED');
+        }
+      }
+      validate();
+      // Lookup requires the identical durable request and validates the original
+      // parent scope. Admission alone is never a settled result.
+      final admission = await lookupTableCheckout(command);
+      validate();
+      final checkout = admission.checkoutRef;
+      if (checkout == null) throw const CcsopFailure('TABLE_CHECKOUT_ORIGINAL_REQUEST_REQUIRED');
+      final firstSend = collect && admission.paymentStatus == 'prepared';
+      final params = <String,dynamic>{'storeRef':command.storeRef,'checkoutRef':checkout,
+        'expectedTotalCents':command.totalCents};
+      String interfaceId;
+      if (command.channel == 'cash') {
+        interfaceId = firstSend ? 'K260930001942' : 'K260930001943';
+        if (firstSend) params.addAll({'receivedCents':cashReceivedCents,'cashReceivedConfirmed':true});
+      } else if (command.channel == 'member_balance') {
+        interfaceId = firstSend ? 'K260930001944' : 'K260930001945';
+        params['accountType'] = command.accountType;
+        if (firstSend) params['paymentCode'] = payerCode;
+      } else {
+        interfaceId = firstSend ? 'K260930001940' : 'K260930001941';
+        params['channel'] = command.channel;
+        if (firstSend) params['authCode'] = payerCode;
+      }
+      Object? raw;
+      try {
+        validate();
+        raw = await _api!.call(interfaceId,params);
+      } finally {
+        params.remove('authCode');params.remove('paymentCode');payerCode = null;
+      }
+      validate();
+      final result = TableCheckoutResult.parse(raw,command,checkoutRef:checkout);
+      if (result.settled) {
+        await _tableCheckoutJournal.acknowledge(identity,command,result);
+        validate();
+      }
+      return result;
+    } finally { _tableCollectionBusy = false; }
+  }
+
+  Future<TableCheckoutCancellation> cancelTableCheckout(TableCheckoutCommand command, {
+    required bool confirmed, required bool Function() stillCurrent,
+  }) {
+    if (!confirmed) throw const CcsopFailure('TABLE_CHECKOUT_CONFIRMATION_REQUIRED');
+    return _resolveTableCancellation(command, cancel: true, stillCurrent: stillCurrent);
+  }
+  Future<TableCheckoutCancellation> lookupTableCancellation(TableCheckoutCommand command, {
+    required bool Function() stillCurrent,
+  }) => _resolveTableCancellation(command, cancel: false, stillCurrent: stillCurrent);
+
+  Future<TableCheckoutCancellation> _resolveTableCancellation(TableCheckoutCommand command, {
+    required bool cancel, required bool Function() stillCurrent,
+  }) async {
+    if (_tablePreparationBusy || _tableCollectionBusy) throw const CcsopFailure('TABLE_CHECKOUT_BUSY');
+    _tableCollectionBusy = true;
+    try {
+      final identity = _tableCheckoutIdentity(command.channel), epoch = _epoch;
+      void validate() {
+        _check(epoch);
+        if (!command.belongsTo(_tableCheckoutIdentity(command.channel)) || !stillCurrent()) {
+          throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_CHANGED');
+        }
+      }
+      validate();
+      final admission = await lookupTableCheckout(command);
+      validate();
+      final checkout = admission.checkoutRef;
+      if (checkout == null) throw const CcsopFailure('TABLE_CHECKOUT_ORIGINAL_REQUEST_REQUIRED');
+      final write = cancel && admission.paymentStatus == 'prepared';
+      final params = <String,dynamic>{...command.params,'checkoutRef':checkout}..remove('currency');
+      if (write) params['cancellationConfirmed'] = true;
+      final raw = await _api!.call(write ? 'K260930001946' : 'K260930001947', params);
+      validate();
+      final result = TableCheckoutCancellation.parse(raw, command, checkoutRef: checkout);
+      if (result.cancelled) {
+        await _tableCheckoutJournal.acknowledgeCancellation(identity, command, result);
+        validate();
+      }
+      return result;
+    } finally { _tableCollectionBusy = false; }
+  }
+
+  Future<List<RechargeCommand>> pendingRecharges(String channel) async {
+    final identity = _providerIdentity(channel), epoch = _epoch;
+    final entries = await _rechargeJournal.load(identity);
+    _check(epoch); _providerIdentity(channel);
+    return entries.where((e) => e.channel == channel).toList();
+  }
+
+  Future<RechargeContext> readRechargeContext(String rechargeRef) async {
+    final epoch=_epoch,store=_session?.storeRef;
+    void validate() {
+      _check(epoch);
+      final identity=_session;
+      if(_busy||identity==null||_api==null||!identity.expiresAt.isAfter(_now()))throw const CcsopFailure('SESSION_REQUIRED');
+      if(identity.storeRef!=store||!['payment.wechat','payment.alipay'].any(identity.permissions.contains)) {
+        throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+      }
+    }
+    validate();
+    if(!validRechargeRef(rechargeRef))throw const CcsopFailure('RECHARGE_QUERY_INVALID');
+    final raw=await _api!.call('K260930001935',{'storeRef':store,'rechargeRef':rechargeRef});
+    validate();
+    final result=RechargeContext.parse(raw,storeRef:store!,rechargeRef:rechargeRef);
+    if(!_session!.permissions.contains('payment.${result.channel}'))throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    return result;
+  }
+
+  Future<RechargeResult> collectRecharge({required String rechargeRef,
+    required String channel, required int principalCents, required String authCode,
+    required bool Function() stillCurrent}) async {
+    if (_providerBusy) throw const CcsopFailure('PAYMENT_IN_PROGRESS');
+    _providerBusy = true;
+    try {
+      final identity = _providerIdentity(channel), epoch = _epoch;
+      if (!['wechat','alipay'].contains(channel) || !validProviderCode(channel,authCode)) {
+        throw const CcsopFailure('PAYMENT_CODE_INVALID');
+      }
+      final command = RechargeCommand.forSession(identity,rechargeRef:rechargeRef,channel:channel,principalCents:principalCents);
+      await _rechargeJournal.save(identity,command);
+      _check(epoch); _providerIdentity(channel);
+      if (!stillCurrent()) throw const CcsopFailure('PAYMENT_CONTEXT_CHANGED');
+      final raw = await _api!.call('K260930001933',{...command.params,'authCode':authCode});
+      _check(epoch); _providerIdentity(channel);
+      final result = RechargeResult.parse(raw,storeRef:identity.storeRef,rechargeRef:rechargeRef,expectedPrincipalCents:principalCents);
+      if (result.credited) await _rechargeJournal.acknowledge(identity,command,result);
+      _check(epoch);
+      if (!stillCurrent()) throw const CcsopFailure('PAYMENT_CONTEXT_CHANGED');
+      return result;
+    } finally { _providerBusy = false; }
+  }
+
+  Future<RechargeResult> recoverRecharge(RechargeCommand command) async {
+    if (_providerBusy) throw const CcsopFailure('PAYMENT_IN_PROGRESS');
+    _providerBusy = true;
+    try {
+      final identity = _providerIdentity(command.channel), epoch = _epoch;
+      if (!command.belongsTo(identity)) throw const CcsopFailure('RECHARGE_SCOPE_CHANGED');
+      final entries = await _rechargeJournal.load(identity);
+      _check(epoch); _providerIdentity(command.channel);
+      if (!entries.any((e) => jsonEncode(e.encoded) == jsonEncode(command.encoded))) {
+        throw const CcsopFailure('RECHARGE_ORIGINAL_REQUEST_REQUIRED');
+      }
+      final result = await queryRecharge(command.rechargeRef,channel:command.channel,expectedPrincipalCents:command.principalCents);
+      _check(epoch); _providerIdentity(command.channel);
+      if (result.credited) await _rechargeJournal.acknowledge(identity,command,result);
+      _check(epoch); return result;
+    } finally { _providerBusy = false; }
+  }
+
+  /// Explicit resumed send, never an automatic retry. A fresh original lookup
+  /// must prove not_sent; the server's durable fence handles concurrent admission.
+  Future<RechargeResult> sendUnsentRecharge(RechargeCommand command, {
+    required String authCode, required bool Function() stillCurrent,
+  }) async {
+    if (_providerBusy) throw const CcsopFailure('PAYMENT_IN_PROGRESS');
+    _providerBusy = true;
+    try {
+      final identity = _providerIdentity(command.channel), epoch = _epoch;
+      if (!command.belongsTo(identity) || !validProviderCode(command.channel, authCode)) {
+        throw const CcsopFailure('RECHARGE_SCOPE_CHANGED');
+      }
+      final entries = await _rechargeJournal.load(identity);
+      _check(epoch); _providerIdentity(command.channel);
+      if (!entries.any((e) => jsonEncode(e.encoded) == jsonEncode(command.encoded))) {
+        throw const CcsopFailure('RECHARGE_ORIGINAL_REQUEST_REQUIRED');
+      }
+      if (!stillCurrent()) throw const CcsopFailure('PAYMENT_CONTEXT_CHANGED');
+      final observed = await queryRecharge(command.rechargeRef, channel: command.channel,
+        expectedPrincipalCents: command.principalCents);
+      _check(epoch); _providerIdentity(command.channel);
+      if (!stillCurrent()) throw const CcsopFailure('PAYMENT_CONTEXT_CHANGED');
+      if (observed.state != 'not_sent') {
+        if (observed.credited) await _rechargeJournal.acknowledge(identity, command, observed);
+        _check(epoch); return observed;
+      }
+      final raw = await _api!.call('K260930001933', {...command.params, 'authCode': authCode});
+      _check(epoch); _providerIdentity(command.channel);
+      final result = RechargeResult.parse(raw, storeRef: identity.storeRef,
+        rechargeRef: command.rechargeRef, expectedPrincipalCents: command.principalCents);
+      if (result.credited) await _rechargeJournal.acknowledge(identity, command, result);
+      _check(epoch);
+      if (!stillCurrent()) throw const CcsopFailure('PAYMENT_CONTEXT_CHANGED');
+      return result;
+    } finally { _providerBusy = false; }
+  }
+  final BalanceRefundJournal _balanceRefundJournal;
+  static bool _balanceRefundBusy = false;
+  StaffSession _refundIdentity() {
+    final identity = _session;
+    if (_disposed ||
+        _busy ||
+        identity == null ||
+        _api == null ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('payment.refund')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    return identity;
+  }
+
+  Future<T> _refundOperation<T>(Future<T> Function() work) async {
+    if (_balanceRefundBusy) {
+      throw const CcsopFailure('BALANCE_REFUND_IN_PROGRESS');
+    }
+    _balanceRefundBusy = true;
+    try {
+      return await work();
+    } finally {
+      _balanceRefundBusy = false;
+    }
+  }
+
+  Future<BalanceRefundContext> balanceRefundContext(String orderRef) async {
+    final identity = _refundIdentity(), epoch = _epoch;
+    final raw = await _api!.call('K260930001931', {
+      'storeRef': identity.storeRef,
+      'orderRef': orderRef,
+    });
+    _check(epoch);
+    _refundIdentity();
+    if (raw is! Map<String, dynamic>) {
+      throw const CcsopFailure('BALANCE_REFUND_RESPONSE_INVALID');
+    }
+    try {
+      return BalanceRefundContext.parse(
+        raw['result'],
+        expectedStore: identity.storeRef,
+        expectedOrder: orderRef,
+      );
+    } catch (_) {
+      throw const CcsopFailure('BALANCE_REFUND_RESPONSE_INVALID');
+    }
+  }
+
+  Future<List<PendingBalanceRefund>> pendingBalanceRefunds() async {
+    final identity = _refundIdentity(), epoch = _epoch;
+    final entries = await _balanceRefundJournal.load(identity);
+    _check(epoch);
+    _refundIdentity();
+    return entries;
+  }
+
+  Future<BalanceRefundResult> _refundCall(
+    PendingBalanceRefund command,
+    StaffSession identity,
+    int epoch, {
+    required bool lookup,
+  }) async {
+    _check(epoch);
+    _refundIdentity();
+    if (!command.belongsTo(identity)) {
+      throw const CcsopFailure('BALANCE_REFUND_SCOPE_CHANGED');
+    }
+    final raw = await _api!.call(
+      lookup ? 'K260930001930' : 'K260930001929',
+      command.params,
+    );
+    _check(epoch);
+    _refundIdentity();
+    final result = await BalanceRefundResult.parse(raw, command);
+    _check(epoch);
+    _refundIdentity();
+    if (!lookup && !result.confirmed) {
+      throw const CcsopFailure('BALANCE_REFUND_RESPONSE_INVALID');
+    }
+    if (result.confirmed) {
+      await _balanceRefundJournal.acknowledge(identity, result);
+    }
+    _check(epoch);
+    _refundIdentity();
+    return result;
+  }
+
+  Future<BalanceRefundResult> confirmBalanceRefund({
+    required BalanceRefundContext context,
+    required String reason,
+    required List<Map<String, dynamic>> dispositions,
+    required bool confirmed,
+    required bool Function() stillCurrent,
+  }) => _refundOperation(() async {
+    final identity = _refundIdentity(), epoch = _epoch;
+    if (!stillCurrent()) {
+      throw const CcsopFailure('BALANCE_REFUND_SCOPE_CHANGED');
+    }
+    final command = PendingBalanceRefund.prepare(
+      identity: identity,
+      context: context,
+      now: _now(),
+      confirmed: confirmed,
+      reason: reason,
+      dispositions: dispositions,
+    );
+    await _balanceRefundJournal.save(command, identity);
+    _check(epoch);
+    _refundIdentity();
+    if (!stillCurrent()) {
+      throw const CcsopFailure('BALANCE_REFUND_SCOPE_CHANGED');
+    }
+    return _refundCall(command, identity, epoch, lookup: false);
+  });
+  Future<BalanceRefundResult> recoverBalanceRefund(
+    String refundRef, {
+    bool retryOriginal = false,
+    required bool Function() stillCurrent,
+  }) => _refundOperation(() async {
+    final identity = _refundIdentity(), epoch = _epoch;
+    final entries = await _balanceRefundJournal.load(identity);
+    _check(epoch);
+    _refundIdentity();
+    final matching = entries.where((e) => e.refundRef == refundRef).toList();
+    if (matching.length != 1) {
+      throw const CcsopFailure('BALANCE_REFUND_PENDING_NOT_FOUND');
+    }
+    final command = matching.single;
+    final result = await _refundCall(command, identity, epoch, lookup: true);
+    if (!result.confirmed && retryOriginal) {
+      if (!stillCurrent()) {
+        throw const CcsopFailure('BALANCE_REFUND_SCOPE_CHANGED');
+      }
+      return _refundCall(command, identity, epoch, lookup: false);
+    }
+    return result;
+  });
   final TableClearJournal _tableClearJournal;
   bool _tableClearBusy = false;
   final ServingJournal _servingJournal;
   bool _servingBusy = false;
   final CashJournal _cashJournal;
+  final ProviderPaymentJournal _providerJournal;
+  static bool _providerBusy = false;
+
+  StaffSession _providerIdentity(String channel) {
+    final s = _session;
+    if (_disposed ||
+        _busy ||
+        s == null ||
+        _api == null ||
+        !s.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!['wechat', 'alipay', 'member_balance'].contains(channel) ||
+        !s.permissions.contains(paymentPermissions[channel])) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    return s;
+  }
+
+  Future<List<ProviderPayment>> pendingProviderPayments(String channel) async {
+    final s = _providerIdentity(channel), epoch = _epoch;
+    final entries = await _providerJournal.load(s);
+    _check(epoch);
+    _providerIdentity(channel);
+    return entries.where((e) => e.query.channel == channel).toList();
+  }
+
+  Future<ProviderPaymentResult> collectProvider({
+    required String orderRef,
+    required String channel,
+    required int totalCents,
+    required String authCode,
+    required bool Function() stillCurrent,
+    String? accountType,
+  }) async {
+    if (_providerBusy) throw const CcsopFailure('PAYMENT_IN_PROGRESS');
+    _providerBusy = true;
+    try {
+      final s = _providerIdentity(channel), epoch = _epoch;
+      if (!validProviderCode(channel, authCode)) {
+        throw const CcsopFailure('PAYMENT_CODE_INVALID');
+      }
+      final command = ProviderPayment.create(
+        s,
+        orderRef,
+        channel,
+        totalCents,
+        accountType: accountType,
+      );
+      await _providerJournal.save(s, command);
+      _check(epoch);
+      _providerIdentity(channel);
+      if (!stillCurrent()) throw const CcsopFailure('PAYMENT_CONTEXT_CHANGED');
+      final raw = await _paymentCall(
+        command,
+        epoch,
+        authCode: authCode,
+        stillCurrent: stillCurrent,
+      );
+      _check(epoch);
+      _providerIdentity(channel);
+      final result = ProviderPaymentResult.parse(raw, command);
+      if (result.resolved) await _providerJournal.acknowledge(s, command);
+      _check(epoch);
+      return result;
+    } finally {
+      _providerBusy = false;
+    }
+  }
+
+  Future<ProviderPaymentResult> queryProvider(ProviderPayment command) async {
+    if (_providerBusy) throw const CcsopFailure('PAYMENT_IN_PROGRESS');
+    _providerBusy = true;
+    try {
+      final s = _providerIdentity(command.query.channel), epoch = _epoch;
+      if (!command.query.belongsTo(s)) {
+        throw const CcsopFailure('PROVIDER_SCOPE_CHANGED');
+      }
+      final entries = await _providerJournal.load(s);
+      _check(epoch);
+      if (!entries.any(
+        (e) =>
+            e.requestId == command.requestId &&
+            jsonEncode(e.params) == jsonEncode(command.params),
+      )) {
+        throw const CcsopFailure('PROVIDER_ORIGINAL_REQUEST_REQUIRED');
+      }
+      _providerIdentity(command.query.channel);
+      final raw = await _paymentCall(command, epoch);
+      _check(epoch);
+      _providerIdentity(command.query.channel);
+      final result = ProviderPaymentResult.parse(raw, command);
+      if (result.resolved) await _providerJournal.acknowledge(s, command);
+      _check(epoch);
+      return result;
+    } finally {
+      _providerBusy = false;
+    }
+  }
+
+  Future<ProviderPaymentResult> retryOriginalProvider(
+    ProviderPayment command, {
+    required String authCode,
+    required bool Function() stillCurrent,
+  }) async {
+    if (_providerBusy) throw const CcsopFailure('PAYMENT_IN_PROGRESS');
+    _providerBusy = true;
+    try {
+      final s = _providerIdentity(command.query.channel), epoch = _epoch;
+      if (!command.query.belongsTo(s) ||
+          !validProviderCode(command.query.channel, authCode)) {
+        throw const CcsopFailure('PROVIDER_SCOPE_CHANGED');
+      }
+      final entries = await _providerJournal.load(s);
+      _check(epoch);
+      _providerIdentity(command.query.channel);
+      if (!entries.any(
+        (e) =>
+            e.requestId == command.requestId &&
+            jsonEncode(e.params) == jsonEncode(command.params),
+      )) {
+        throw const CcsopFailure('PROVIDER_ORIGINAL_REQUEST_REQUIRED');
+      }
+      final observed = ProviderPaymentResult.parse(
+        await _paymentCall(command, epoch),
+        command,
+      );
+      _check(epoch);
+      _providerIdentity(command.query.channel);
+      if (observed.resolved) {
+        await _providerJournal.acknowledge(s, command);
+        _check(epoch);
+        return observed;
+      }
+      if (!['not_sent', 'not_observed'].contains(observed.state)) {
+        return observed;
+      }
+      if (!stillCurrent()) throw const CcsopFailure('PAYMENT_CONTEXT_CHANGED');
+      final result = ProviderPaymentResult.parse(
+        await _paymentCall(
+          command,
+          epoch,
+          authCode: authCode,
+          stillCurrent: stillCurrent,
+        ),
+        command,
+      );
+      _check(epoch);
+      _providerIdentity(command.query.channel);
+      if (result.resolved) await _providerJournal.acknowledge(s, command);
+      _check(epoch);
+      return result;
+    } finally {
+      _providerBusy = false;
+    }
+  }
+
   bool _cashBusy = false;
+
+  /// Routes protocol differences behind the same durable request/UI workflow.
+  /// A balance intent is recovered by its original request before every debit.
+  Future<Object?> _paymentCall(
+    ProviderPayment command,
+    int epoch, {
+    String? authCode,
+    bool Function()? stillCurrent,
+  }) async {
+    void check() {
+      _check(epoch);
+      _providerIdentity(command.query.channel);
+    }
+
+    void checkSend() {
+      check();
+      if (stillCurrent?.call() != true) {
+        throw const CcsopFailure('PAYMENT_CONTEXT_CHANGED');
+      }
+    }
+
+    check();
+    if (command.query.channel != 'member_balance') {
+      if (authCode != null) checkSend();
+      return _api!.call(authCode == null ? 'K260930001949' : 'K260930001948', {
+        ...command.params,
+        'authCode': ?authCode,
+      });
+    }
+    var admission = PaymentAdmissionResult.parse(
+      await _api!.call('K260929001923', command.query.params),
+      command.query,
+    );
+    check();
+    if (!admission.observed) {
+      if (authCode == null) {
+        return {
+          'result': {'state': 'not_observed', 'requestId': command.requestId},
+        };
+      }
+      checkSend();
+      final params = {...command.query.params}..remove('channel');
+      final prepared = await _api!.call('K260930001926', params);
+      check();
+      admission = PaymentAdmissionResult.parse({
+        'result': {
+          'state': 'intent_observed',
+          'requestId': command.requestId,
+          'intent': prepared is Map ? prepared['result'] : null,
+        },
+      }, command.query);
+    }
+    if (!['prepared', 'confirmed'].contains(admission.admissionStatus)) {
+      return {
+        'result': {'state': 'unknown', 'requestId': command.requestId},
+      };
+    }
+    final scope = {
+      'storeRef': command.params['storeRef'],
+      'orderRef': command.params['orderRef'],
+      'intentRef': admission.intentRef,
+      'expectedTotalCents': command.params['expectedTotalCents'],
+      'accountType': command.accountType,
+    };
+    Object normalize(Object? raw) {
+      final value = raw is Map ? raw['result'] : null;
+      if (value is! Map ||
+          !['confirmed', 'not_sent', 'closed_or_refunded'].contains(value['state']) ||
+          (value['state'] == 'closed_or_refunded' &&
+              (value.length != 3 || value['intentRef'] != admission.intentRef ||
+                  value['refundRef'] is! String || !uuidPattern.hasMatch(value['refundRef']))) ||
+          (value['state'] == 'not_sent' &&
+              (value.length != 2 ||
+                  value['intentRef'] != admission.intentRef)) ||
+          (value['state'] == 'confirmed' &&
+              (value.length != 2 ||
+                  value['receipt'] is! Map ||
+                  value['receipt']['intentRef'] != admission.intentRef))) {
+        throw const CcsopFailure('PROVIDER_RECEIPT_INVALID');
+      }
+      return {
+        'result': {
+          'state': value['state'],
+          'requestId': command.requestId,
+          if (value['state'] == 'confirmed') 'receipt': value['receipt'],
+          if (value['state'] == 'closed_or_refunded') ...{
+            'intentRef': value['intentRef'], 'refundRef': value['refundRef'],
+          },
+        },
+      };
+    }
+
+    final original = normalize(await _api!.call('K260930001928', scope));
+    check();
+    final observed = ProviderPaymentResult.parse(original, command);
+    if (authCode == null || observed.confirmed) return original;
+    if (observed.state != 'not_sent') return original;
+    checkSend();
+    final result = normalize(
+      await _api!.call('K260930001927', {...scope, 'paymentCode': authCode}),
+    );
+    check();
+    return result;
+  }
+
   final OrderJournal _orderJournal;
   // Also coordinates draft handoff across controller instances in this isolate.
   static bool _orderBusy = false;
@@ -219,6 +950,38 @@ class StaffAuthController extends ChangeNotifier {
     _auth = null;
     _busy = false;
     _changed();
+  }
+
+  Future<VoucherLookup> lookupVoucher({required String provider, required String requestId}) async {
+    final session = _session, api = _api, epoch = _epoch;
+    if(session==null || api==null || _busy || !session.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    if(!['douyin','meituan'].contains(provider) || !uuidPattern.hasMatch(requestId)) throw const FormatException();
+    if(!session.permissions.contains('voucher.$provider')) throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    final raw=await api.call('K260930001950',{'storeRef':session.storeRef,'provider':provider,'requestId':requestId});
+    _check(epoch);
+    if(!identical(session,_session) || !session.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    return VoucherLookup.parse(raw,storeRef:session.storeRef,employeeRef:session.employeeRef,provider:provider,requestId:requestId);
+  }
+
+  Future<Object?> readVoucherReport({required String from, required String to, String provider = 'all', String? afterVoucher}) async {
+    final session = _session, api = _api, epoch = _epoch;
+    if (session == null || api == null || _busy || !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!session.permissions.contains('report.read')) throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    if ((afterVoucher != null && !RegExp(r'^[a-f0-9]{64}$').hasMatch(afterVoucher)) || !['all', 'douyin', 'meituan'].contains(provider) ||
+        !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(from) ||
+        !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(to) || from.compareTo(to) > 0) {
+      throw const FormatException('Invalid report filter');
+    }
+    final result = await api.call('K260930001924', {
+      'storeRef': session.storeRef, 'from': from, 'to': to,
+      if (provider != 'all') 'provider': provider,
+      'afterVoucher': ?afterVoucher,
+    });
+    _check(epoch);
+    if (!identical(session, _session) || !session.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    return result;
   }
 
   Future<Object?> readWorkbench({String? afterTable}) async {
@@ -457,6 +1220,81 @@ class StaffAuthController extends ChangeNotifier {
       throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
     }
     return identity;
+  }
+
+  /// Read only: no journal acknowledgement, channel retries or payment confirmation.
+  Future<ReceiptDocument> readReceiptDocument(String orderRef) async {
+    final epoch = _epoch;
+    final store = _session?.storeRef;
+    void validate() {
+      _check(epoch);
+      final identity = _session;
+      if (_busy || identity == null || _api == null || !identity.expiresAt.isAfter(_now())) {
+        throw const CcsopFailure('SESSION_REQUIRED');
+      }
+      if (identity.storeRef != store || !identity.permissions.contains('orders.read')) {
+        throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+      }
+    }
+    validate();
+    if (!RegExp(r'^D[0-9]{11}$').hasMatch(orderRef)) throw const CcsopFailure('RECEIPT_ORDER_INVALID');
+    final raw = await _api!.call('K260930001932', {'storeRef': store, 'orderRef': orderRef});
+    validate();
+    return ReceiptDocument.parse(raw, storeRef: store!, orderRef: orderRef);
+  }
+
+  /// Original settled table receipt only; never confirms or retries a payment.
+  Future<TableReceiptDocument> readTableReceiptDocument(String checkoutRef) async {
+    final epoch = _epoch;
+    final store = _session?.storeRef;
+    void validate() {
+      _check(epoch);
+      final identity = _session;
+      if (_busy || identity == null || _api == null ||
+          !identity.expiresAt.isAfter(_now())) {
+        throw const CcsopFailure('SESSION_REQUIRED');
+      }
+      if (identity.storeRef != store ||
+          !identity.permissions.contains('orders.read')) {
+        throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+      }
+    }
+    validate();
+    if (!RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$').hasMatch(checkoutRef)) {
+      throw const CcsopFailure('TABLE_RECEIPT_CHECKOUT_INVALID');
+    }
+    final raw = await _api!.call('K260930001936', {
+      'storeRef': store, 'checkoutRef': checkoutRef,
+    });
+    validate();
+    return TableReceiptDocument.parse(raw, storeRef: store!, checkoutRef: checkoutRef);
+  }
+
+  /// Query-only channel recovery may finish a previously paid recharge on the
+  /// server. It never sends a new payer code, prepares a new order or retries pay.
+  Future<RechargeResult> queryRecharge(String rechargeRef, {
+    required String channel, int? expectedPrincipalCents,
+  }) async {
+    final epoch = _epoch, store = _session?.storeRef;
+    if (!validRechargeRef(rechargeRef) || !['wechat', 'alipay'].contains(channel) ||
+        (expectedPrincipalCents != null && (expectedPrincipalCents < 1 || expectedPrincipalCents > 100000000))) {
+      throw const CcsopFailure('RECHARGE_QUERY_INVALID');
+    }
+    void validate() {
+      _check(epoch);
+      final identity = _session;
+      if (_busy || identity == null || _api == null || !identity.expiresAt.isAfter(_now())) {
+        throw const CcsopFailure('SESSION_REQUIRED');
+      }
+      if (identity.storeRef != store || !identity.permissions.contains('payment.$channel')) {
+        throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+      }
+    }
+    validate();
+    final raw = await _api!.call('K260930001934', {'storeRef': store, 'rechargeRef': rechargeRef});
+    validate();
+    return RechargeResult.parse(raw, storeRef: store!, rechargeRef: rechargeRef,
+      expectedPrincipalCents: expectedPrincipalCents);
   }
 
   /// Read only: no journal acknowledgement, channel retries or payment confirmation.

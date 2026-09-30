@@ -8,7 +8,7 @@ import 'printer_status.dart';
 import 'usb_printer_permission.dart';
 import 'test_receipt_preview_dialog.dart';
 
-/// Discovery and explicitly requested read-only status, without employee login.
+/// Discovery and diagnostics without employee login; no business receipt data.
 class PrinterDiscoveryDialog extends StatefulWidget {
   const PrinterDiscoveryDialog({
     super.key,
@@ -274,6 +274,21 @@ class _PrinterDiscoveryDialogState extends State<PrinterDiscoveryDialog>
                       ),
                 ],
                 if (data.usbPrinters.isNotEmpty) Text(t('printerUsbNotice')),
+                if (const bool.fromEnvironment('CASHIER_USB_RASTER_OUTPUT', defaultValue: false))
+                  for (final usb in data.usbPrinters.where((device) => device.hasPermission))
+                    for (final interface in usb.interfaces.where((i) =>
+                      i.hasBulkOutput && i.alternate == 0 && [1, 2].contains(i.protocol)))
+                      for (final endpoint in interface.endpoints.where((e) =>
+                        e.type == 2 && e.address > 0 && e.address < 16))
+                        TextButton(
+                          onPressed: busy || statusBusy || permissionBusy || !foreground ? null : () {
+                            final selection = UsbPrinterSelection.choose(usb, interface, endpoint);
+                            unawaited(showDialog<void>(context: context, builder: (_) =>
+                              TestReceiptPreviewDialog(language: widget.language, target: selection)));
+                          },
+                          child: Text('${t('printerOutputPreview')} · ${usb.vendorProduct} · '
+                            '${usb.deviceId} · ${interface.id} · OUT ${endpoint.address}'),
+                        ),
               ],
               const SizedBox(height: 12),
               Text(t('printerReadinessUnknown')),

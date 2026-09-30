@@ -1,5 +1,12 @@
 import 'dart:async';
 
+import 'provider_recovery_panel.dart';
+import 'voucher_report_panel.dart';
+import 'voucher_lookup_panel.dart';
+import 'balance_refund_recovery_panel.dart';
+import 'recharge_recovery_panel.dart';
+import 'recharge_collect_panel.dart';
+
 import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
@@ -8,6 +15,7 @@ import '../network/cashier_realtime_client.dart';
 import '../strings.dart';
 import 'table_snapshot.dart';
 import 'live_orders_panel.dart';
+import 'table_checkout_recovery_panel.dart';
 import 'live_opening_panel.dart';
 import 'live_catalog_panel.dart';
 import 'live_order_members_panel.dart';
@@ -39,10 +47,17 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   LiveTable? selected;
   LiveTable? orderingTable;
   bool opening = false;
+  bool voucherReport = false;
+  bool voucherLookup = false;
   bool catalog = false;
   bool orderRecovery = false;
   bool cartDrafts = false;
   bool cashRecovery = false;
+  bool tableCheckoutRecovery = false;
+  bool providerRecovery = false;
+  bool refundRecovery = false;
+  bool rechargeRecovery = false;
+  bool rechargeCollect = false;
   bool servingRecovery = false;
   bool tableClear = false;
   LiveTable? clearingTable;
@@ -60,6 +75,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     final session = widget.auth.session;
     if (widget.enableRealtime && session != null) {
       realtime =
@@ -68,7 +86,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       realtime!.addListener(realtimeChanged);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (mounted && foreground) {
         unawaited(load());
         realtime?.start();
       }
@@ -116,6 +134,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   }
 
   Future<void> load({int? target, bool reset = false}) async {
+    if (!mounted || !foreground) return;
     final generation = ++epoch;
     final session = widget.auth.session;
     if (session == null) return;
@@ -135,6 +154,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     try {
       final raw = await widget.auth.readWorkbench(afterTable: cursor);
       if (!mounted ||
+          !foreground ||
           generation != epoch ||
           !identical(session, widget.auth.session)) {
         return;
@@ -187,6 +207,24 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (voucherLookup) {
+      return VoucherLookupPanel(auth: widget.auth,language:widget.language,
+        onBack:(){setState(()=>voucherLookup=false);unawaited(load(reset:true));});
+    }
+    if (voucherReport) {
+      return VoucherReportPanel(auth: widget.auth, language: widget.language,
+        onBack: () {setState(() => voucherReport = false); unawaited(load(reset: true));});
+    }
+    if (tableCheckoutRecovery) {
+      return TableCheckoutRecoveryPanel(
+        auth: widget.auth,
+        language: widget.language,
+        onBack: () {
+          setState(() => tableCheckoutRecovery = false);
+          unawaited(load(reset: true));
+        },
+      );
+    }
     if (tableClear) {
       return LiveTableClearPanel(
         auth: widget.auth,
@@ -208,6 +246,46 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         language: widget.language,
         onBack: () {
           setState(() => servingRecovery = false);
+          unawaited(load(reset: true));
+        },
+      );
+    }
+    if (providerRecovery) {
+      return ProviderRecoveryPanel(
+        auth: widget.auth,
+        language: widget.language,
+        onBack: () {
+          setState(() => providerRecovery = false);
+          unawaited(load(reset: true));
+        },
+      );
+    }
+    if (refundRecovery) {
+      return BalanceRefundRecoveryPanel(
+        auth: widget.auth,
+        language: widget.language,
+        onBack: () {
+          setState(() => refundRecovery = false);
+          unawaited(load(reset: true));
+        },
+      );
+    }
+    if (rechargeRecovery) {
+      return RechargeRecoveryPanel(
+        auth: widget.auth,
+        language: widget.language,
+        onBack: () {
+          setState(() => rechargeRecovery = false);
+          unawaited(load(reset: true));
+        },
+      );
+    }
+    if (rechargeCollect) {
+      return RechargeCollectPanel(
+        auth: widget.auth,
+        language: widget.language,
+        onBack: () {
+          setState(() => rechargeCollect = false);
           unawaited(load(reset: true));
         },
       );
@@ -322,6 +400,33 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(widget.auth.session?.displayName ?? ''),
+              if (const bool.fromEnvironment('CASHIER_VOUCHER_LOOKUP') &&
+                  ['voucher.douyin','voucher.meituan'].any((p)=>widget.auth.session?.permissions.contains(p)==true))
+                OutlinedButton(key:const ValueKey('voucher-lookup-open'),onPressed:foreground?()=>setState(()=>voucherLookup=true):null,
+                  child:Text(t('voucherLookupTitle'))),
+              if (const bool.fromEnvironment('CASHIER_VOUCHER_REPORT') &&
+                  widget.auth.session?.permissions.contains('report.read') == true)
+                OutlinedButton(key: const ValueKey('voucher-report-open'),
+                  onPressed: foreground ? () => setState(() => voucherReport = true) : null,
+                  child: Text(t('voucherReportTitle'))),
+              if (const bool.fromEnvironment('CASHIER_TABLE_CHECKOUT') &&
+                  [
+                    'payment.wechat',
+                    'payment.alipay',
+                    'payment.cash',
+                    'payment.balance',
+                  ].any(
+                    (permission) =>
+                        widget.auth.session?.permissions.contains(permission) ==
+                        true,
+                  ))
+                OutlinedButton(
+                  key: const ValueKey('table-checkout-recovery-open'),
+                  onPressed: foreground
+                      ? () => setState(() => tableCheckoutRecovery = true)
+                      : null,
+                  child: Text(t('tableCheckoutRecoveryTitle')),
+                ),
               if (widget.auth.session?.permissions.contains('table.clear') ==
                   true)
                 OutlinedButton(
@@ -355,6 +460,41 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                   onPressed: () => setState(() => cartDrafts = true),
                   child: Text(t('cartDraftsTitle')),
                 ),
+              if (const bool.fromEnvironment(
+                    'CASHIER_BALANCE_REFUND',
+                    defaultValue: false,
+                  ) &&
+                  widget.auth.session?.permissions.contains('payment.refund') ==
+                      true)
+                OutlinedButton(
+                  key: const ValueKey('balance-refund-recovery-open'),
+                  onPressed: () => setState(() => refundRecovery = true),
+                  child: Text(t('refundRecoveryTitle')),
+                ),
+              if (const bool.fromEnvironment(
+                    'CASHIER_STORE_RECHARGE',
+                    defaultValue: false,
+                  ) &&
+                  ['payment.wechat', 'payment.alipay'].any(
+                    (p) => widget.auth.session?.permissions.contains(p) == true,
+                  ))
+                OutlinedButton(
+                  key: const ValueKey('recharge-recovery-open'),
+                  onPressed: () => setState(() => rechargeRecovery = true),
+                  child: Text(t('rechargeRecoveryTitle')),
+                ),
+              if (const bool.fromEnvironment(
+                    'CASHIER_STORE_RECHARGE',
+                    defaultValue: false,
+                  ) &&
+                  ['payment.wechat', 'payment.alipay'].any(
+                    (p) => widget.auth.session?.permissions.contains(p) == true,
+                  ))
+                OutlinedButton(
+                  key: const ValueKey('recharge-collect-open'),
+                  onPressed: () => setState(() => rechargeCollect = true),
+                  child: Text(t('rechargeCollectTitle')),
+                ),
               if (widget.auth.session?.permissions.contains('payment.cash') ==
                   true)
                 OutlinedButton(
@@ -364,6 +504,22 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                   }),
                   child: Text(t('cashRecoveryTitle')),
                 ),
+              if (const bool.fromEnvironment(
+                    'CASHIER_PROVIDER',
+                    defaultValue: false,
+                  ) ||
+                  const bool.fromEnvironment(
+                    'CASHIER_BALANCE',
+                    defaultValue: false,
+                  ))
+                if (['payment.wechat', 'payment.alipay', 'payment.balance'].any(
+                  (p) => widget.auth.session?.permissions.contains(p) == true,
+                ))
+                  OutlinedButton(
+                    key: const ValueKey('provider-recovery-open'),
+                    onPressed: () => setState(() => providerRecovery = true),
+                    child: Text(t('provider_recovery')),
+                  ),
               if (widget.auth.session?.permissions.contains('orders.create') ==
                   true)
                 OutlinedButton(
@@ -544,6 +700,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                   Text(
                     '${t('livePending')}: $currency ${formatCents(session.pendingCents)}',
                   ),
+                  if (session.refundedOrders > 0)
+                    Text(
+                      '${t('liveRefunded')}: $currency ${formatCents(session.refundedCents)} (${session.refundedOrders})',
+                    ),
                 ],
               ),
             ],

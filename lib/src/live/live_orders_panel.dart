@@ -6,9 +6,14 @@ import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'order_snapshot.dart';
 import 'order_preview_dialog.dart';
+import 'receipt_document_dialog.dart';
+import 'table_receipt_dialog.dart';
+import 'table_checkout_dialog.dart';
 import 'live_cash_recovery_panel.dart';
 import 'live_serving_recovery_panel.dart';
 import 'table_snapshot.dart';
+import 'provider_payment_panel.dart';
+import 'balance_refund_dialog.dart';
 
 class LiveOrdersPanel extends StatefulWidget {
   const LiveOrdersPanel({
@@ -41,6 +46,88 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   BuildContext? cashDialog;
   BuildContext? previewDialog;
   bool previewOpening = false;
+  bool tableCheckoutOpening = false;
+  int checkoutScopeEpoch = 0;
+  Future<void> openTableCheckout() async {
+    final identity = widget.auth.session,
+        snapshot = data,
+        generation = checkoutScopeEpoch;
+    if (!foreground ||
+        loading ||
+        cashBusy ||
+        previewOpening ||
+        snapshot == null ||
+        identity == null) {
+      return;
+    }
+    previewOpening = true;
+    tableCheckoutOpening = true;
+    try {
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          previewDialog = ctx;
+          if (!mounted ||
+              !foreground ||
+              checkoutScopeEpoch != generation ||
+              !identical(identity, widget.auth.session)) {
+            return discardStaleConfirmation(ctx);
+          }
+          return TableCheckoutDialog(
+            auth: widget.auth,
+            tableRef: widget.table.reference,
+            sessionRef: widget.table.session!.reference,
+            language: widget.language,
+          );
+        },
+      );
+    } finally {
+      previewDialog = null;
+      previewOpening = false;
+      tableCheckoutOpening = false;
+      if (mounted && foreground) await load(reset: true);
+    }
+  }
+
+  Future<void> openBalanceRefund(LiveOrder order) async {
+    final identity = widget.auth.session, generation = epoch;
+    if (!foreground ||
+        loading ||
+        cashBusy ||
+        previewOpening ||
+        data?.orders.contains(order) != true ||
+        identity == null ||
+        !identity.expiresAt.isAfter(DateTime.now())) {
+      return;
+    }
+    previewOpening = true;
+    try {
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          previewDialog = ctx;
+          if (!mounted ||
+              !foreground ||
+              epoch != generation ||
+              !identical(identity, widget.auth.session)) {
+            return discardStaleConfirmation(ctx);
+          }
+          return BalanceRefundDialog(
+            auth: widget.auth,
+            orderRef: order.reference,
+            language: widget.language,
+          );
+        },
+      );
+    } finally {
+      previewDialog = null;
+      previewOpening = false;
+      if (mounted && foreground) await load(reset: true);
+    }
+  }
+
   Widget discardStaleConfirmation(BuildContext context) {
     final route = ModalRoute.of(context);
     // The invalidation may precede the dialog builder, before cashDialog exists.
@@ -53,7 +140,11 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
     return const SizedBox.shrink();
   }
 
-  Future<void> previewOrder(LiveOrder order) async {
+  Future<void> previewOrder(
+    LiveOrder order, {
+    bool receiptDocument = false,
+    bool tableReceipt = false,
+  }) async {
     final snapshot = data, identity = widget.auth.session;
     if (!foreground ||
         loading ||
@@ -72,6 +163,34 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
         context: context,
         builder: (ctx) {
           previewDialog = ctx;
+          if (receiptDocument || tableReceipt) {
+            if (!mounted ||
+                !foreground ||
+                epoch != generation ||
+                !identical(identity, widget.auth.session)) {
+              return discardStaleConfirmation(ctx);
+            }
+            if (tableReceipt) {
+              final checkout = order.tableCheckoutRef;
+              if (checkout == null || order.status != 'paid') {
+                return discardStaleConfirmation(ctx);
+              }
+              return TableReceiptDialog(
+                auth: widget.auth,
+                checkoutRef: checkout,
+                tableRef: widget.table.reference,
+                sessionRef: widget.table.session!.reference,
+                language: widget.language,
+              );
+            }
+            return ReceiptDocumentDialog(
+              auth: widget.auth,
+              orderRef: order.reference,
+              tableRef: widget.table.reference,
+              sessionRef: widget.table.session!.reference,
+              language: widget.language,
+            );
+          }
           return OrderPreviewDialog(
             auth: widget.auth,
             order: order,
@@ -191,6 +310,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   bool servingEligible(LiveOrder order, OrderItem item) =>
       foreground &&
       widget.auth.session?.permissions.contains('orders.serve') == true &&
+      order.refund == null &&
       {'open', 'clearing'}.contains(data?.sessionStatus) &&
       item.servingKnown &&
       item.remainingQuantity! > 0 &&
@@ -321,14 +441,18 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   @override
   void initState() {
     super.initState();
+    foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     widget.auth.addListener(authChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(load());
+      if (mounted && foreground) unawaited(load());
     });
   }
 
   void authChanged() {
+    ++checkoutScopeEpoch;
     ++epoch;
     closeCashDialog();
     if (mounted) {
@@ -350,11 +474,15 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
       widget.auth.addListener(authChanged);
       authChanged();
     }
-    if (oldWidget.revision != widget.revision ||
+    final scopeChanged =
         oldWidget.table.reference != widget.table.reference ||
-        oldWidget.table.session?.reference != widget.table.session?.reference) {
+        oldWidget.table.session?.reference != widget.table.session?.reference;
+    if (scopeChanged) ++checkoutScopeEpoch;
+    if (oldWidget.revision != widget.revision || scopeChanged) {
       ++epoch;
-      closeCashDialog();
+      // A store-wide event may be our own payment confirmation. Keep the
+      // original checkout route; each command is revalidated by the server.
+      if (scopeChanged || !tableCheckoutOpening) closeCashDialog();
       data = null;
       loading = false;
       schedule();
@@ -378,6 +506,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
     if (foreground) {
       unawaited(load(reset: true));
     } else {
+      ++checkoutScopeEpoch;
       ++epoch;
       closeCashDialog();
       debounce?.cancel();
@@ -451,6 +580,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
 
   @override
   void dispose() {
+    ++checkoutScopeEpoch;
     ++epoch;
     debounce?.cancel();
     widget.auth.removeListener(authChanged);
@@ -491,6 +621,19 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                     child: Text(t('ordersBack')),
                   ),
                   Text('${widget.table.name} · ${t('ordersDetails')}'),
+                  if (const bool.fromEnvironment('CASHIER_TABLE_CHECKOUT'))
+                    OutlinedButton(
+                      key: const ValueKey('table-checkout-open'),
+                      onPressed:
+                          cashBusy ||
+                              loading ||
+                              !foreground ||
+                              previewOpening ||
+                              data == null
+                          ? null
+                          : () => unawaited(openTableCheckout()),
+                      child: Text(t('tableCheckoutTitle')),
+                    ),
                   if (widget.auth.session?.permissions.contains(
                         'orders.serve',
                       ) ==
@@ -534,8 +677,13 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                           Text(t('sessionSummaryTitle')),
                           for (final status in ['paid', 'pending', 'expired'])
                             Text(
-                              '${t('order_$status')}: ${data!.sessionSummary!.buckets[status]!.orderCount} · ${data!.sessionSummary!.currency} ${formatCents(data!.sessionSummary!.buckets[status]!.totalCents)}',
+                              '${t(status == 'paid' ? 'grossCollected' : 'order_$status')}: ${data!.sessionSummary!.buckets[status]!.orderCount} · ${data!.sessionSummary!.currency} ${formatCents(data!.sessionSummary!.buckets[status]!.totalCents)}',
                             ),
+                          for (final key in ['refunded', 'netPaid'])
+                            if (data!.sessionSummary!.buckets.containsKey(key))
+                              Text(
+                                '${t(key == 'refunded' ? 'liveRefunded' : 'livePaid')}: ${data!.sessionSummary!.buckets[key]!.orderCount} · ${data!.sessionSummary!.currency} ${formatCents(data!.sessionSummary!.buckets[key]!.totalCents)}',
+                              ),
                         ],
                       ),
               ),
@@ -567,9 +715,39 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Text(
-                                  '${order.reference} · ${t('order_${order.status}')} · ${order.currency} ${formatCents(order.totalCents)}',
+                                  '${order.reference} · ${t(order.refund != null ? 'liveRefunded' : 'order_${order.status}')} · ${order.currency} ${formatCents(order.totalCents)}',
                                 ),
                                 Text('${order.createdAt.toLocal()}'),
+                                if (const bool.fromEnvironment(
+                                      'CASHIER_BALANCE_REFUND',
+                                      defaultValue: false,
+                                    ) &&
+                                    order.cashierOrder &&
+                                    order.status == 'paid' &&
+                                    widget.auth.session?.permissions.contains(
+                                          'payment.refund',
+                                        ) ==
+                                        true)
+                                  OutlinedButton(
+                                    onPressed:
+                                        foreground &&
+                                            !loading &&
+                                            !cashBusy &&
+                                            !previewOpening
+                                        ? () => unawaited(
+                                            openBalanceRefund(order),
+                                          )
+                                        : null,
+                                    child: Text(t('refundTitle')),
+                                  ),
+                                if (order.refund case final refund?) ...[
+                                  Text(
+                                    '${t('refundPrincipal')}: ${order.currency} ${formatCents(refund.principalCents)} · ${t('refundGift')}: ${order.currency} ${formatCents(refund.giftCents)}',
+                                  ),
+                                  Text(
+                                    '${t('liveRefunded')}: ${refund.refundedAt.toLocal()}',
+                                  ),
+                                ],
                                 Align(
                                   alignment: Alignment.centerRight,
                                   child: OutlinedButton(
@@ -583,6 +761,81 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                     child: Text(t('orderPreviewTitle')),
                                   ),
                                 ),
+                                if (const bool.fromEnvironment(
+                                      'CASHIER_RECEIPT_READ',
+                                      defaultValue: false,
+                                    ) &&
+                                    order.cashierOrder &&
+                                    order.status == 'paid' &&
+                                    order.tableCheckoutRef == null)
+                                  OutlinedButton(
+                                    key: ValueKey(
+                                      'receipt-document-${order.reference}',
+                                    ),
+                                    onPressed:
+                                        cashBusy ||
+                                            loading ||
+                                            !foreground ||
+                                            previewOpening
+                                        ? null
+                                        : () => unawaited(
+                                            previewOrder(
+                                              order,
+                                              receiptDocument: true,
+                                            ),
+                                          ),
+                                    child: Text(t('receiptDocumentTitle')),
+                                  ),
+                                if (const bool.fromEnvironment(
+                                      'CASHIER_TABLE_RECEIPT_READ',
+                                    ) &&
+                                    order.tableCheckoutRef != null &&
+                                    order.status == 'paid')
+                                  OutlinedButton(
+                                    key: ValueKey(
+                                      'table-receipt-${order.reference}',
+                                    ),
+                                    onPressed:
+                                        cashBusy ||
+                                            loading ||
+                                            !foreground ||
+                                            previewOpening
+                                        ? null
+                                        : () => unawaited(
+                                            previewOrder(
+                                              order,
+                                              tableReceipt: true,
+                                            ),
+                                          ),
+                                    child: Text(t('tableReceiptTitle')),
+                                  ),
+                                if (const bool.fromEnvironment(
+                                      'CASHIER_PROVIDER',
+                                      defaultValue: false,
+                                    ) ||
+                                    const bool.fromEnvironment(
+                                      'CASHIER_BALANCE',
+                                      defaultValue: false,
+                                    ))
+                                  if (order.cashierOrder &&
+                                      foreground &&
+                                      !loading &&
+                                      !cashBusy &&
+                                      {
+                                        'open',
+                                        'clearing',
+                                      }.contains(data?.sessionStatus) &&
+                                      order.status == 'pending' &&
+                                      order.currency == 'CNY')
+                                    ProviderPaymentPanel(
+                                      key: ValueKey(
+                                        'provider-${order.reference}-$epoch',
+                                      ),
+                                      auth: widget.auth,
+                                      orderRef: order.reference,
+                                      totalCents: order.totalCents,
+                                      language: widget.language,
+                                    ),
                                 if (cashEligible(order))
                                   Align(
                                     alignment: Alignment.centerRight,

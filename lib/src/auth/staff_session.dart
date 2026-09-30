@@ -18,6 +18,7 @@ const staffPermissions = {
   'payment.wechat',
   'payment.alipay',
   'payment.balance',
+  'payment.refund',
   'voucher.meituan',
   'voucher.douyin',
   'shift.manage',

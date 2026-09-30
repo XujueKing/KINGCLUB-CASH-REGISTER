@@ -4,21 +4,25 @@ import 'package:flutter/material.dart';
 
 import '../strings.dart';
 import 'test_receipt_renderer.dart';
+import 'test_receipt_output_panel.dart';
+import 'usb_printer_permission.dart';
 
 typedef TestReceiptRender = Future<RenderedTestReceipt> Function({
   required UiLanguage language,
   required int widthDots,
 });
 
-/// Local-only diagnostic preview. Deliberately has no transport or print action.
+/// Local diagnostic preview; output requires an explicitly selected USB target.
 class TestReceiptPreviewDialog extends StatefulWidget {
   const TestReceiptPreviewDialog({
     super.key,
     required this.language,
     this.render,
+    this.target,
   });
   final UiLanguage language;
   final TestReceiptRender? render;
+  final UsbPrinterSelection? target;
   @override
   State<TestReceiptPreviewDialog> createState() =>
       _TestReceiptPreviewDialogState();
@@ -161,6 +165,10 @@ class _TestReceiptPreviewDialogState extends State<TestReceiptPreviewDialog> {
                   ),
                 ),
               ),
+              if (widget.target != null && receipt != null)
+                Flexible(child: SingleChildScrollView(child: TestReceiptOutputPanel(
+                  receipt: receipt!, target: widget.target!, language: language,
+                ))),
             ],
           ),
         ),

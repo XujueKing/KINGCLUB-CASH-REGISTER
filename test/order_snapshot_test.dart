@@ -12,6 +12,25 @@ OrderSnapshot parse(Object? raw, {String? after}) => OrderSnapshot.parse(
   afterOrder: after,
 );
 void main() {
+  test('table receipt navigation accepts only a paid original UUID', () {
+    const checkout = '00000000-0000-4000-8000-000000000001';
+    for (final value in [checkout, null, '', 'wrong', true, 123]) {
+      final raw = orderFixture();
+      final order = ((raw['result'] as Map)['orders'] as List).first as Map;
+      order['status'] = 'paid';
+      order['tableCheckoutRef'] = value;
+      // Use an older response without the optional aggregate to isolate parsing.
+      (raw['result'] as Map).remove('sessionSummary');
+      if (value == checkout || value == null) {
+        expect(parse(raw).orders.single.tableCheckoutRef, value);
+      } else {
+        expect(() => parse(raw), throwsFormatException);
+      }
+    }
+    final raw = orderFixture();
+    (((raw['result'] as Map)['orders'] as List).first as Map)['tableCheckoutRef'] = checkout;
+    expect(() => parse(raw), throwsFormatException);
+  });
   Map<String, dynamic> line(Map<String, dynamic> raw) =>
       ((((raw['result'] as Map)['orders'] as List).first as Map)['items']
                   as List)

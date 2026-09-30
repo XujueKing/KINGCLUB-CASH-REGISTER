@@ -84,17 +84,25 @@ int? _servingCount(Map<String, dynamic> value, String key) {
 class LiveOrder {
   LiveOrder(Map<String, dynamic> value)
     : reference = _ref(value['orderRef']),
+      tableCheckoutRef = _tableCheckoutRef(value['tableCheckoutRef']),
       cashierOrder = value.containsKey('cashierOrder')
           ? _cashierOrigin(value['cashierOrder'])
           : false,
       status = value['status'] as String,
       currency = value['currency'] as String,
       totalCents = _positive(value['totalCents']),
+      refund = value['refund'] == null
+          ? null
+          : OrderRefund(_map(value['refund'])),
       createdAt = _time(value['createdAt']),
       items = List.unmodifiable(
         (value['items'] as List).map((item) => OrderItem(_map(item))),
       ) {
-    if (!{'pending', 'paid', 'expired'}.contains(status) ||
+    if ((tableCheckoutRef != null && status != 'paid') || (refund != null &&
+            (status != 'paid' ||
+                !cashierOrder ||
+                refund!.totalCents != totalCents)) ||
+        !{'pending', 'paid', 'expired'}.contains(status) ||
         !RegExp(r'^[A-Z]{3}$').hasMatch(currency) ||
         items.isEmpty ||
         items.length > 50 ||
@@ -105,10 +113,53 @@ class LiveOrder {
     }
   }
   final String reference, status, currency;
+  // Read-only navigation, never a payment or refund authorization.
+  final String? tableCheckoutRef;
   final bool cashierOrder;
   final int totalCents;
+  final OrderRefund? refund;
   final DateTime createdAt;
   final List<OrderItem> items;
+}
+
+String? _tableCheckoutRef(Object? value) {
+  if (value == null) return null;
+  if (value is! String || !RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+  ).hasMatch(value)) {
+    throw const FormatException();
+  }
+  return value;
+}
+
+class OrderRefund {
+  OrderRefund(Map<String, dynamic> value)
+    : reference = value['refundRef'] as String,
+      accountType = value['accountType'] as String,
+      totalCents = _positive(value['totalCents'], 100000000),
+      principalCents = _refundAmount(value['principalCents']),
+      giftCents = _refundAmount(value['giftCents']),
+      refundedAt = _time(value['refundedAt']) {
+    if (value.length != 6 ||
+        !RegExp(
+          r'^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+        ).hasMatch(reference) ||
+        !{'platform_cash', 'store_balance'}.contains(accountType) ||
+        principalCents + giftCents != totalCents ||
+        (accountType == 'platform_cash' && giftCents != 0)) {
+      throw const FormatException();
+    }
+  }
+  final String reference, accountType;
+  final int totalCents, principalCents, giftCents;
+  final DateTime refundedAt;
+}
+
+int _refundAmount(Object? value) {
+  if (value is! int || value < 0 || value > 100000000) {
+    throw const FormatException();
+  }
+  return value;
 }
 
 bool _cashierOrigin(Object? value) {
@@ -195,7 +246,10 @@ class SessionOrderSummary {
   final Map<String, OrderSummaryBucket> buckets;
   factory SessionOrderSummary.parse(Object? raw, List<LiveOrder> orders) {
     final data = _map(raw), currency = data['currency'];
-    if (data.length != 4 ||
+    final refundKnown =
+        data.containsKey('refunded') && data.containsKey('netPaid');
+    if (data.length != (refundKnown ? 6 : 4) ||
+        data.containsKey('refunded') != data.containsKey('netPaid') ||
         currency is! String ||
         !RegExp(r'^[A-Z]{3}$').hasMatch(currency)) {
       throw const FormatException();
@@ -228,6 +282,39 @@ class SessionOrderSummary {
       buckets[status] = OrderSummaryBucket(n, cents);
     }
     if (orders.any((order) => order.currency != currency)) {
+      throw const FormatException();
+    }
+    if (refundKnown) {
+      for (final key in ['refunded', 'netPaid']) {
+        final bucket = _map(data[key]),
+            n = bucket['orderCount'],
+            amount = bucket['totalCents'];
+        if (bucket.length != 2 ||
+            n is! int ||
+            amount is! int ||
+            n < 0 ||
+            amount < 0 ||
+            n > 9007199254740991 ||
+            amount > 9007199254740991 ||
+            (n == 0 ? amount != 0 : amount < n)) {
+          throw const FormatException();
+        }
+        buckets[key] = OrderSummaryBucket(n, amount);
+      }
+      final paid = buckets['paid']!,
+          refund = buckets['refunded']!,
+          net = buckets['netPaid']!;
+      if (refund.orderCount + net.orderCount != paid.orderCount ||
+          refund.totalCents + net.totalCents != paid.totalCents) {
+        throw const FormatException();
+      }
+      final page = orders.where((order) => order.refund != null);
+      if (page.length > refund.orderCount ||
+          page.fold<int>(0, (sum, order) => sum + order.refund!.totalCents) >
+              refund.totalCents) {
+        throw const FormatException();
+      }
+    } else if (orders.any((order) => order.refund != null)) {
       throw const FormatException();
     }
     return SessionOrderSummary._(currency, Map.unmodifiable(buckets));

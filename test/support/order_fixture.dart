@@ -12,7 +12,7 @@ Map<String, dynamic> orderFixture() => {
     'observedAt': '2026-09-29T08:00:00.000Z',
     'nextAfterOrder': null,
     'orders': [
-      {
+      <String, dynamic>{
         'orderRef': 'D00000000001',
         'status': 'pending',
         'currency': 'CNY',

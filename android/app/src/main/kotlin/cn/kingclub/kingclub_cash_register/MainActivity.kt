@@ -7,6 +7,14 @@ class MainActivity : FlutterActivity() {
     private var printerDiscovery: PrinterDiscoveryBridge? = null
     private var printerStatus: PrinterStatusBridge? = null
     private var usbPrinterPermission: UsbPrinterPermissionBridge? = null
+    private var usbRasterOutput: UsbRasterOutputBridge? = null
+
+    override fun onResume() { super.onResume(); usbRasterOutput?.setForeground(true) }
+    override fun onPause() { usbRasterOutput?.setForeground(false); super.onPause() }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        usbRasterOutput?.setForeground(hasFocus)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -16,6 +24,8 @@ class MainActivity : FlutterActivity() {
         printerStatus = PrinterStatusBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         usbPrinterPermission?.dispose()
         usbPrinterPermission = UsbPrinterPermissionBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        usbRasterOutput?.dispose()
+        usbRasterOutput = UsbRasterOutputBridge(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -25,6 +35,8 @@ class MainActivity : FlutterActivity() {
         printerStatus = null
         usbPrinterPermission?.dispose()
         usbPrinterPermission = null
+        usbRasterOutput?.dispose()
+        usbRasterOutput = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
@@ -6,31 +5,8 @@ import 'package:flutter/foundation.dart';
 
 import '../strings.dart';
 import 'escpos_raster.dart';
+import 'raster_preview.dart';
 
-// Pixel loops run off the UI isolate on Android. No dart:ui objects cross isolates.
-({MonochromeRaster raster, Uint8List pixels}) _preparePreview(
-  ({int width, int height, Uint8List rgba}) input,
-) {
-  final raster = MonochromeRaster.fromStraightRgba(
-    width: input.width,
-    height: input.height,
-    rgba: input.rgba,
-  );
-  final pixels = Uint8List(input.width * input.height * 4);
-  for (var pixel = 0; pixel < input.width * input.height; pixel++) {
-    final row = pixel ~/ input.width, column = pixel % input.width;
-    final black =
-        raster.pixels[row * raster.rowBytes + column ~/ 8] &
-            (0x80 >> (column % 8)) !=
-        0;
-    final shade = black ? 0 : 255;
-    pixels[pixel * 4] = shade;
-    pixels[pixel * 4 + 1] = shade;
-    pixels[pixel * 4 + 2] = shade;
-    pixels[pixel * 4 + 3] = 255;
-  }
-  return (raster: raster, pixels: pixels);
-}
 
 class RenderedTestReceipt {
   RenderedTestReceipt(this.raster, Uint8List png)
@@ -65,7 +41,6 @@ Future<RenderedTestReceipt> renderTestReceipt({
   final painters = <TextPainter>[];
   ui.Picture? picture;
   ui.Image? source;
-  ui.Image? preview;
   try {
     var height = 32.0;
     for (var index = 0; index < lines.length; index++) {
@@ -103,34 +78,9 @@ Future<RenderedTestReceipt> renderTestReceipt({
     );
     picture = recorder.endRecording();
     source = await picture.toImage(widthDots, rows);
-    final bytes = await source.toByteData(
-      format: ui.ImageByteFormat.rawStraightRgba,
-    );
-    if (bytes == null) throw const FormatException('TEST_RECEIPT_IMAGE_FAILED');
-    final prepared = await compute(_preparePreview, (
-      width: widthDots,
-      height: rows,
-      rgba: bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
-    ), debugLabel: 'test-receipt-raster');
-    final decoded = Completer<ui.Image>();
-    ui.decodeImageFromPixels(
-      prepared.pixels,
-      widthDots,
-      rows,
-      ui.PixelFormat.rgba8888,
-      decoded.complete,
-    );
-    preview = await decoded.future;
-    final png = await preview.toByteData(format: ui.ImageByteFormat.png);
-    if (png == null) throw const FormatException('TEST_RECEIPT_PNG_FAILED');
-    return RenderedTestReceipt(
-      prepared.raster,
-      Uint8List.fromList(
-        png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
-      ),
-    );
+    final prepared = await rasterPreview(source);
+    return RenderedTestReceipt(prepared.raster, prepared.png);
   } finally {
-    preview?.dispose();
     source?.dispose();
     picture?.dispose();
     for (final painter in painters) {
