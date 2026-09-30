@@ -235,8 +235,11 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     }
     if (!identical(oldWidget.auth, widget.auth) ||
         !identical(oldWidget.orderContext, widget.orderContext) ||
-        oldWidget.memberRef != widget.memberRef ||
-        oldWidget.revision != widget.revision) {
+        oldWidget.memberRef != widget.memberRef) {
+      invalidate();
+    } else if (oldWidget.revision != widget.revision && !attempted) {
+      // Once sent, wait for the original response/recovery even if its own
+      // notification arrives first. Auth/scope/lifecycle changes still invalidate.
       invalidate();
     }
   }

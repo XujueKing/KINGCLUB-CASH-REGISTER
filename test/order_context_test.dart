@@ -335,7 +335,8 @@ void main() {
       auth.gate = Completer<OrderContextSnapshot>();
       await tester.pumpWidget(panel(auth, revision: 1));
       await tester.pump();
-      expect(find.byType(LiveCartPanel), findsNothing);
+      expect(find.byType(LiveCartPanel), findsOneWidget);
+      expect(find.text(tr(UiLanguage.zh, 'cartStale')), findsOneWidget);
       auth.invalidate();
       await tester.pump();
       auth.gate!.complete(parse(contextData()));

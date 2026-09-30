@@ -61,6 +61,14 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
   @override
   void didUpdateWidget(covariant LiveOrderMembersPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.auth == widget.auth &&
+        oldWidget.tableRef == widget.tableRef &&
+        oldWidget.sessionRef == widget.sessionRef &&
+        cart &&
+        foreground) {
+      // The cart handles refresh hints and owns any submitted request's receipt.
+      return;
+    }
     if (oldWidget.auth != widget.auth) {
       oldWidget.auth.removeListener(identityChanged);
       widget.auth.addListener(identityChanged);

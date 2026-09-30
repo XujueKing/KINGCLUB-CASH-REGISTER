@@ -131,6 +131,67 @@ bool enabled(WidgetTester tester) =>
 
 void main() {
   testWidgets(
+    'realtime notification cannot replace an in-flight order or its receipt',
+    (tester) async {
+      final auth = CartAuth()..submitGate = Completer<OrderRequestResult>();
+      final revision = ValueNotifier(0);
+      tester.view.physicalSize = const Size(1024, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<int>(
+              valueListenable: revision,
+              builder: (_, value, _) => LiveOrderMembersPanel(
+                auth: auth,
+                language: UiLanguage.zh,
+                tableRef: m.tableRef,
+                sessionRef: m.sessionRef,
+                revision: value,
+                onBack: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tap(tester, 'order-member-member-000');
+      await tap(tester, 'catalog-add-p001');
+      await tap(tester, 'cart-submit');
+      await tester.tap(find.byKey(const ValueKey('cart-confirm')));
+      await tester.pump(const Duration(milliseconds: 300));
+      revision.value++;
+      await tester.pump();
+      expect(find.byType(LiveCartPanel), findsOneWidget);
+      expect(auth.submits, 1);
+      final command = o.command();
+      auth.submitGate!.complete(
+        OrderRequestResult.parse(
+          {'result': o.receipt(command.params)},
+          command,
+          submission: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text(tr(UiLanguage.zh, 'orderRecoveryConfirmed')),
+        findsOneWidget,
+      );
+      revision.value++;
+      await tester.pumpAndSettle();
+      expect(
+        find.text(tr(UiLanguage.zh, 'orderRecoveryConfirmed')),
+        findsOneWidget,
+      );
+      expect(auth.submits, 1);
+      await tester.pumpWidget(const SizedBox());
+      revision.dispose();
+      auth.dispose();
+    },
+  );
+  testWidgets(
     'in-flight submit disables actions and ignores late response after identity invalidation',
     (tester) async {
       final auth = CartAuth()..submitGate = Completer<OrderRequestResult>();
