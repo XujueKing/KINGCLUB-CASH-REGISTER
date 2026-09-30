@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../live/catalog_snapshot.dart';
+import '../live/member_identity.dart';
 import '../live/voucher_lookup.dart';
 import '../live/order_context_snapshot.dart';
 import '../live/order_command.dart';
@@ -1069,6 +1070,36 @@ class StaffAuthController extends ChangeNotifier {
       throw const CcsopFailure('SESSION_REQUIRED');
     }
     return value;
+  }
+
+  Future<MemberIdentity> readMemberIdentity(String identityCode) async {
+    final session = _session, api = _api, epoch = _epoch;
+    if (session == null ||
+        api == null ||
+        _busy ||
+        !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!session.permissions.contains('orders.create')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    if (!MemberIdentity.codePattern.hasMatch(identityCode)) {
+      throw const CcsopFailure('CASHIER_MEMBER_IDENTITY_INVALID');
+    }
+    final elapsed = Stopwatch()..start();
+    final raw = await api.call('K261001001951', {
+      'storeRef': session.storeRef,
+      'identityCode': identityCode,
+    });
+    _check(epoch);
+    if (!session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    return MemberIdentity.parse(
+      raw,
+      storeRef: session.storeRef,
+      elapsed: elapsed.elapsed,
+    );
   }
 
   Future<CatalogSnapshot> readCatalog({

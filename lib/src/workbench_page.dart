@@ -4,6 +4,7 @@ import '../main.dart';
 import 'auth/staff_auth_controller.dart';
 import 'hardware/printer_discovery_dialog.dart';
 import 'live/live_catalog_panel.dart';
+import 'live/member_identity_panel.dart';
 import 'live/live_tables_panel.dart';
 import 'live/voucher_report_panel.dart';
 import 'strings.dart';
@@ -189,19 +190,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
       language: widget.language,
       onBack: () => setState(() => page = 0),
     ),
-    3 => Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.people_outline, size: 48, color: forest),
-            const SizedBox(height: 16),
-            Text(t('memberIntegrationPending'), textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    ),
+    3 => MemberIdentityPanel(auth: widget.auth, language: widget.language),
     4 =>
       widget.auth.session?.permissions.contains('report.read') == true
           ? VoucherReportPanel(

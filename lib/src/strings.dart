@@ -6,6 +6,16 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'memberIdentityTitle': '扫码识别会员|Scan member identity|掃碼識別會員|สแกนรหัสสมาชิก',
+  'memberIdentityHelp': '请顾客打开 KING APP「我的二维码」，将扫码枪对准会员码。|Ask the guest to open My QR code in KING and scan the member code.|請顧客開啟 KING APP「我的二維碼」，將掃碼槍對準會員碼。|ให้ลูกค้าเปิดรหัส QR ของฉันใน KING แล้วสแกนรหัสสมาชิก',
+  'memberIdentityInput': '扫描会员身份码|Scan member code|掃描會員身分碼|สแกนรหัสสมาชิก',
+  'memberIdentityScan': '识别|Identify|識別|ตรวจสอบ',
+  'memberIdentityFailed': '未能确认会员，请检查身份码并让顾客刷新后重扫。|Could not confirm this member. Ask the guest to refresh their identity code and scan again.|未能確認會員，請檢查身分碼並請顧客重新整理後重掃。|ยืนยันสมาชิกไม่ได้ ให้ลูกค้ารีเฟรชรหัสสมาชิกแล้วสแกนอีกครั้ง',
+  'memberIdentityRecognized':
+      '已确认当前会员身份|Current member identified|已確認目前會員身分|ยืนยันตัวตนสมาชิกแล้ว',
+  'memberIdentityNotice': '身份识别不代表已入座或已付款。结果短时有效，更换顾客请重新扫码。|Identity only; this does not seat or charge the guest. This result expires shortly. Scan again for the next guest.|身分識別不代表已入座或已付款。結果短時有效，更換顧客請重新掃碼。|ยืนยันตัวตนเท่านั้น ไม่ใช่การจัดที่นั่งหรือชำระเงิน ผลมีอายุสั้น กรุณาสแกนใหม่เมื่อลูกค้าเปลี่ยน',
+  'memberIdentityClear':
+      '清除，下一位|Clear for next guest|清除，下一位|ล้างเพื่อลูกค้าคนถัดไป',
   'tablePaymentPending': '有未付订单|Unpaid orders|有未付訂單|มีรายการยังไม่ชำระ',
   'tableTools': '业务工具与待处理|Tools & pending tasks|業務工具與待處理|เครื่องมือและงานรอดำเนินการ',
   'memberIntegrationPending': '会员、预约与存取酒正在接入，暂不可操作。|Member, reservation and bottle services are not yet available.|會員、預約與存取酒正在接入，暫不可操作。|บริการสมาชิก การจอง และฝากรับเครื่องดื่มยังไม่พร้อมใช้งาน',
