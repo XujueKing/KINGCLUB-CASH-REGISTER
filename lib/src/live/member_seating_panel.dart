@@ -340,14 +340,10 @@ class _SeatingConfirmation extends StatefulWidget {
 }
 
 class _SeatingConfirmationState extends State<_SeatingConfirmation> {
-  bool arrived = false, reservation = false, busy = false;
+  bool busy = false;
   String t(String key) => tr(widget.language, key);
   Future<void> confirm() async {
-    if (busy ||
-        widget.blocked ||
-        !arrived ||
-        !reservation ||
-        !widget.stillCurrent()) {
+    if (busy || widget.blocked || !widget.stillCurrent()) {
       return;
     }
     final session = widget.auth.session,
@@ -367,8 +363,10 @@ class _SeatingConfirmationState extends State<_SeatingConfirmation> {
         context: widget.orderContext,
         member: widget.member,
         now: DateTime.now(),
-        arrivalConfirmed: arrived,
-        reservationChecked: reservation,
+        // The employee confirms this member and table with the single seating action.
+        // Keep the existing server contract; do not auto-submit on scan.
+        arrivalConfirmed: true,
+        reservationChecked: true,
       );
       result = await widget.auth.confirmSeating(
         command,
@@ -389,29 +387,9 @@ class _SeatingConfirmationState extends State<_SeatingConfirmation> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const SizedBox(height: 8),
-      CheckboxListTile(
-        key: const ValueKey('seating-arrived'),
-        contentPadding: EdgeInsets.zero,
-        title: Text(t('seatingArrived')),
-        value: arrived,
-        onChanged: busy || widget.blocked
-            ? null
-            : (v) => setState(() => arrived = v == true),
-      ),
-      CheckboxListTile(
-        key: const ValueKey('seating-reservation'),
-        contentPadding: EdgeInsets.zero,
-        title: Text(t('seatingReservation')),
-        value: reservation,
-        onChanged: busy || widget.blocked
-            ? null
-            : (v) => setState(() => reservation = v == true),
-      ),
       FilledButton(
         key: const ValueKey('seating-confirm'),
-        onPressed: busy || widget.blocked || !arrived || !reservation
-            ? null
-            : () => unawaited(confirm()),
+        onPressed: busy || widget.blocked ? null : () => unawaited(confirm()),
         child: Text(
           '${t('seatingConfirm')} · ${widget.orderContext.tableName}',
         ),

@@ -166,11 +166,7 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('member-identity-scan')));
       await tester.pumpAndSettle();
-      for (final key in [
-        'seating-arrived',
-        'seating-reservation',
-        'seating-confirm',
-      ]) {
+      for (final key in ['seating-confirm']) {
         await tester.ensureVisible(find.byKey(ValueKey(key)));
         await tester.tap(find.byKey(ValueKey(key)));
         await tester.pump();
@@ -351,7 +347,7 @@ void main() {
     },
   );
   testWidgets(
-    'table scan requires two attestations and rereads current members after confirmed seating',
+    'table scan uses one confirmation and rereads current members after seating',
     (tester) async {
       tester.view.physicalSize = const Size(1366, 768);
       tester.view.devicePixelRatio = 1;
@@ -380,26 +376,8 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('member-identity-scan')));
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<FilledButton>(find.byKey(const ValueKey('seating-confirm')))
-            .onPressed,
-        isNull,
-      );
-      await tester.ensureVisible(find.byKey(const ValueKey('seating-arrived')));
-      await tester.tap(find.byKey(const ValueKey('seating-arrived')));
-      await tester.pump();
-      expect(
-        tester
-            .widget<FilledButton>(find.byKey(const ValueKey('seating-confirm')))
-            .onPressed,
-        isNull,
-      );
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('seating-reservation')),
-      );
-      await tester.tap(find.byKey(const ValueKey('seating-reservation')));
-      await tester.pump();
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(auth.confirms, 0);
       await tester.ensureVisible(find.byKey(const ValueKey('seating-confirm')));
       await tester.tap(find.byKey(const ValueKey('seating-confirm')));
       await tester.pumpAndSettle();
