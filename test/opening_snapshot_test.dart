@@ -121,6 +121,11 @@ void main() {
       0,
     );
   });
+  test('active table without legacy minimum still uses its daily rule', () {
+    final value = parseContext({...context(), 'minimumSeats': null});
+    expect(value.minimumSeats, isNull);
+    expect(value.mode, context()['rule']['rule']['mode']);
+  });
   test('disabled tables and existing clearing sessions remain explicit', () {
     final value = parseContext({
       ...context(),

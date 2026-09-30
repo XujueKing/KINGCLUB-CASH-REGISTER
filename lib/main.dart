@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'src/workbench_page.dart';
 import 'src/auth/staff_access_page.dart';
 
 Future<void> main() async {
@@ -19,11 +18,7 @@ const ink = Color(0xFF263831);
 const gold = Color(0xFFC7AA70);
 
 class CashierApp extends StatelessWidget {
-  const CashierApp({
-    super.key,
-    this.preview = const bool.fromEnvironment('CASHIER_PREVIEW'),
-  });
-  final bool preview;
+  const CashierApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -72,9 +67,7 @@ class CashierApp extends StatelessWidget {
           ),
         ),
       ),
-      home: preview
-          ? const WorkbenchPage(preview: true)
-          : const StaffAccessPage(),
+      home: const StaffAccessPage(),
     );
   }
 }

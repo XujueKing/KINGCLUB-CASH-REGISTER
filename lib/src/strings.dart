@@ -6,6 +6,7 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'memberIntegrationPending': '会员、预约与存取酒正在接入，暂不可操作。|Member, reservation and bottle services are not yet available.|會員、預約與存取酒正在接入，暫不可操作。|บริการสมาชิก การจอง และฝากรับเครื่องดื่มยังไม่พร้อมใช้งาน',
   'staffChooseStore': '选择门店|Choose a store|選擇門店|เลือกร้าน',
   'staffCancelSelection': '取消|Cancel|取消|ยกเลิก',
   'voucherLookupTitle':'原核销查询|Original redemption lookup|原核銷查詢|ค้นหาการใช้คูปองเดิม',

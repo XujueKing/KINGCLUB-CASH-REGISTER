@@ -51,6 +51,7 @@ class StaffSession {
     required this.employeeRef,
     required this.displayName,
     required this.storeRef,
+    required this.storeName,
     required this.sessionId,
     required this.apiKeyId,
     required this._apiKey,
@@ -66,6 +67,7 @@ class StaffSession {
       storeRef,
       sessionId,
       apiKeyId;
+  final String? storeName;
   final String _apiKey, _refreshToken;
   final DateTime expiresAt, refreshExpiresAt;
   final Set<String> permissions;
@@ -131,6 +133,13 @@ class StaffSession {
         ),
         displayName: _text(employee['displayName'], max: 100),
         storeRef: storeRef,
+        storeName:
+            value['store'] is Map &&
+                (value['store'] as Map)['storeName'] != null
+            ? _text((value['store'] as Map)['storeName'], max: 128)
+            : value['storeName'] == null
+            ? null
+            : _text(value['storeName'], max: 128),
         sessionId: _text(value['sessionId'], pattern: uuidPattern),
         apiKeyId: _text(value['apiKeyId'], pattern: uuidPattern),
         apiKey: _text(value['apiKey'], pattern: secretPattern),
@@ -153,6 +162,7 @@ class StaffSession {
     'value': {
       'employee': {'employeeRef': employeeRef, 'displayName': displayName},
       'storeRef': storeRef,
+      if (storeName != null) 'storeName': storeName,
       'sessionId': sessionId,
       'apiKeyId': apiKeyId,
       'apiKey': _apiKey,

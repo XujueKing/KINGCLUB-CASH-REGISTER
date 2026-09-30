@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/main.dart';
 
 void main() {
-  testWidgets('Render workbench, menu and checkout for visual inspection', (
+  testWidgets('Render the single product login for visual inspection', (
     tester,
   ) async {
     await tester.runAsync(() async {
@@ -31,35 +31,10 @@ void main() {
     await tester.pumpWidget(
       const RepaintBoundary(
         key: ValueKey('capture'),
-        child: CashierApp(preview: true),
+        child: CashierApp(),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('desk-T01')));
-    await tester.pumpAndSettle();
-    await expectLater(
-      find.byKey(const ValueKey('capture')),
-      matchesGoldenFile('../artifacts/workbench.png'),
-    );
-    await tester.tap(find.byKey(const ValueKey('open-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('product-p1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('variant-six')));
-    await tester.tap(find.text('加入草稿'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('product-p6')));
-    await tester.pumpAndSettle();
-    await expectLater(
-      find.byKey(const ValueKey('capture')),
-      matchesGoldenFile('../artifacts/menu.png'),
-    );
-    await tester.tap(find.byKey(const ValueKey('checkout')));
-    await tester.pumpAndSettle();
-    await expectLater(
-      find.byKey(const ValueKey('capture')),
-      matchesGoldenFile('../artifacts/checkout.png'),
-    );
     expect(tester.takeException(), isNull);
   }, skip: !const bool.fromEnvironment('CAPTURE_PREVIEW'));
 }

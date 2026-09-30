@@ -396,7 +396,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
-                data?.storeName ?? widget.auth.session?.storeRef ?? '',
+                data?.storeName ?? widget.auth.session?.storeName ?? t('tables'),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(widget.auth.session?.displayName ?? ''),
@@ -585,12 +585,17 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
               ? const SizedBox()
               : data.tables.isEmpty
               ? Center(child: Text(t('liveNoTables')))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: data.tables.length,
-                  itemBuilder: (context, index) =>
-                      tableCard(data.tables[index], data.currency),
-                ),
+              : LayoutBuilder(builder: (context, box) {
+                  final columns = (box.maxWidth / 340).floor().clamp(1, 4);
+                  final width = (box.maxWidth - 32 - (columns - 1) * 12) / columns;
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Wrap(spacing: 12, runSpacing: 12, children: [
+                      for (final table in data.tables)
+                        SizedBox(width: width, child: tableCard(table, data.currency)),
+                    ]),
+                  );
+                }),
         ),
         Padding(
           padding: const EdgeInsets.all(12),

@@ -68,7 +68,8 @@ void main() {
     expect(parse(disabled).tables.single.stateLabel, 'tableDisabled');
     expect(parse(disabled).tables.single.minimumSeats, isNull);
     disabled['result']['tables'][0]['tableStatus'] = 'active';
-    expect(() => parse(disabled), throwsA(isA<CcsopFailure>()));
+    expect(parse(disabled).tables.single.stateLabel, 'free');
+    expect(parse(disabled).tables.single.minimumSeats, isNull);
     final clearing = tableFixture();
     clearing['result']['tables'][0]['session']['status'] = 'clearing';
     expect(parse(clearing).tables.single.stateLabel, 'cleaning');

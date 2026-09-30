@@ -60,7 +60,7 @@ class OpeningContext {
       businessDate = _date(value['businessDate']),
       maximumSeats = _int(value['maximumSeats'], 1, 65535),
       minimumSeats =
-          value['minimumSeats'] == null && value['tableStatus'] == 'disabled'
+          value['minimumSeats'] == null
           ? null
           : _int(value['minimumSeats'], 1, 65535),
       ruleSource = _choice(value['ruleSource'], {

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../strings.dart';
-import '../live/live_tables_panel.dart';
+import '../workbench_page.dart';
 import '../hardware/printer_discovery_dialog.dart';
 import 'staff_auth_controller.dart';
 
@@ -155,6 +155,15 @@ class _StaffAccessPageState extends State<StaffAccessPage>
     final message = auth.errorCode == 'SECURE_STORAGE_FAILED'
         ? 'staffStorageFailure'
         : notice;
+    if (session != null) {
+      return WorkbenchPage(
+        key: ObjectKey(session),
+        auth: auth,
+        language: language,
+        onLanguage: (value) => setState(() => language = value),
+        onLogout: auth.busy ? null : logout,
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('KINGCLUB POS'),
@@ -191,66 +200,56 @@ class _StaffAccessPageState extends State<StaffAccessPage>
         ],
       ),
       body: SafeArea(
-        child: session != null
-            ? LiveTablesPanel(
-                key: ObjectKey(session),
-                auth: auth,
-                language: language,
-              )
-            : Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          t('staffLogin'),
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(t('authHint')),
-                        const SizedBox(height: 20),
-                        if (auth.busy) ...[
-                          const LinearProgressIndicator(),
-                          const SizedBox(height: 16),
-                          Text(t('staffVerifying')),
-                        ],
-                        if (message != null) ...[
-                          Semantics(liveRegion: true, child: Text(t(message))),
-                          const SizedBox(height: 16),
-                        ],
-                        if (session == null)
-                          Form(
-                            key: form,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                field(
-                                  employee,
-                                  'staffAccount',
-                                  'staff-account',
-                                ),
-                                field(
-                                  password,
-                                  'staffPassword',
-                                  'staff-password',
-                                  secret: true,
-                                ),
-                                FilledButton(
-                                  key: const ValueKey('staff-login'),
-                                  onPressed: auth.busy ? null : login,
-                                  child: Text(t('staffSignIn')),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    t('staffLogin'),
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Text(t('authHint')),
+                  const SizedBox(height: 20),
+                  if (auth.busy) ...[
+                    const LinearProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(t('staffVerifying')),
+                  ],
+                  if (message != null) ...[
+                    Semantics(liveRegion: true, child: Text(t(message))),
+                    const SizedBox(height: 16),
+                  ],
+                  if (session == null)
+                    Form(
+                      key: form,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          field(employee, 'staffAccount', 'staff-account'),
+                          field(
+                            password,
+                            'staffPassword',
+                            'staff-password',
+                            secret: true,
+                          ),
+                          FilledButton(
+                            key: const ValueKey('staff-login'),
+                            onPressed: auth.busy ? null : login,
+                            child: Text(t('staffSignIn')),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
+            ),
+          ),
+        ),
       ),
     );
   }

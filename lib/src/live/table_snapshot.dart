@@ -95,7 +95,7 @@ class LiveTable {
       name = _text(value['tableName']),
       status = _text(value['tableStatus']),
       minimumSeats =
-          value['minimumSeats'] == null && value['tableStatus'] == 'disabled'
+          value['minimumSeats'] == null
           ? null
           : _number(value['minimumSeats']),
       maximumSeats = _number(value['maximumSeats']),
