@@ -132,6 +132,71 @@ Future<void> login(StaffAuthController controller) => controller.login(
 
 void main() {
   test(
+    'single store login omits store input and trusts validated server binding',
+    () async {
+      final storage = TestStorage(), auth = TestAuth();
+      final c = controller(storage, auth, TestApi());
+      addTearDown(c.dispose);
+      await c.login(
+        base: 'https://service.invalid',
+        loginName: 'test-employee',
+        password: 'TEST-ONLY-PASSWORD',
+      );
+      expect(auth.params!.containsKey('storeRef'), false);
+      expect(c.session!.storeRef, 'test-store');
+    },
+  );
+  test(
+    'multiple stores require selection and a second authenticated request',
+    () async {
+      final storage = TestStorage(), auth = TestAuth();
+      auth.result = {
+        'requiresStoreSelection': true,
+        'stores': [
+          {'storeRef': 'test-store', 'storeName': 'First'},
+          {'storeRef': 'second-store', 'storeName': 'Second'},
+        ],
+      };
+      final c = controller(storage, auth, TestApi());
+      addTearDown(c.dispose);
+      await c.login(
+        base: 'https://service.invalid',
+        loginName: 'test-employee',
+        password: 'TEST-ONLY-PASSWORD',
+        selectStore: (stores) async {
+          expect(c.session, isNull);
+          expect(storage.data.containsKey(SessionVault.sessionKey), false);
+          expect(stores.map((s) => s['storeName']), ['First', 'Second']);
+          auth.result = response();
+          return 'test-store';
+        },
+      );
+      expect(auth.params!['storeRef'], 'test-store');
+      expect(c.session!.storeRef, 'test-store');
+    },
+  );
+  test('cancelling store selection creates no persisted session', () async {
+    final storage = TestStorage(), auth = TestAuth();
+    auth.result = {
+      'requiresStoreSelection': true,
+      'stores': [
+        {'storeRef': 'test-store', 'storeName': 'First'},
+        {'storeRef': 'second-store', 'storeName': 'Second'},
+      ],
+    };
+    final c = controller(storage, auth, TestApi());
+    addTearDown(c.dispose);
+    await c.login(
+      base: 'https://service.invalid',
+      loginName: 'test-employee',
+      password: 'TEST-ONLY-PASSWORD',
+      selectStore: (_) async => null,
+    );
+    expect(c.session, isNull);
+    expect(storage.data.containsKey(SessionVault.sessionKey), false);
+    expect(c.busy, false);
+  });
+  test(
     'logout during secure session save cannot install a business client',
     () async {
       final storage = TestStorage()..gate = Completer<void>();

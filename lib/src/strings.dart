@@ -6,6 +6,8 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'staffChooseStore': '选择门店|Choose a store|選擇門店|เลือกร้าน',
+  'staffCancelSelection': '取消|Cancel|取消|ยกเลิก',
   'voucherLookupTitle':'原核销查询|Original redemption lookup|原核銷查詢|ค้นหาการใช้คูปองเดิม',
   'voucherLookupNotice':'只查当前员工的原请求，不重新核销。未查到或结果不明时不要换号重试；逐券成功不代表订单已结账。|Reads this employee’s original request only; never redeems again. Missing or unknown is not permission to retry with a new ID. Coupon success does not mean order settlement.|只查目前員工原請求，不重新核銷。未查到或結果不明時勿換號重試；逐券成功不代表订单已結帳。|อ่านคำขอเดิมของพนักงานนี้เท่านั้น ไม่ใช้คูปองซ้ำ หากไม่พบหรือไม่ทราบผล อย่าสร้างรหัสใหม่ คูปองสำเร็จไม่ได้หมายถึงปิดบิลแล้ว',
   'voucherLookupRequest':'原请求编号（小写UUID，不是券码）|Original request ID (lowercase UUID, not coupon code)|原請求編號（小寫UUID，非券碼）|รหัสคำขอเดิม (UUID ตัวเล็ก ไม่ใช่รหัสคูปอง)',

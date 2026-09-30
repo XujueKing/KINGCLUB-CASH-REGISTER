@@ -86,7 +86,7 @@ class StaffSession {
     Map<String, dynamic> value, {
     required String base,
     required String deviceId,
-    required String expectedStore,
+    String? expectedStore,
     DateTime? now,
     bool allowExpiredAccess = false,
   }) {
@@ -96,7 +96,9 @@ class StaffSession {
           ? jsonObject(value['store'])['storeRef']
           : value['storeRef'];
       final storeRef = _text(store, max: 64, pattern: _reference);
-      if (storeRef != expectedStore) throw const FormatException('Wrong store');
+      if (expectedStore != null && storeRef != expectedStore) {
+        throw const FormatException('Wrong store');
+      }
       final expires = _time(value['expiresAtMs']),
           refreshExpires = _time(value['refreshExpiresAtMs']);
       final current = now ?? DateTime.now();

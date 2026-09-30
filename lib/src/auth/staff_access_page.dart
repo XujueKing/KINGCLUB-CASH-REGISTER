@@ -19,8 +19,7 @@ class StaffAccessPage extends StatefulWidget {
 class _StaffAccessPageState extends State<StaffAccessPage>
     with WidgetsBindingObserver {
   late final StaffAuthController auth;
-  final endpoint = TextEditingController();
-  final store = TextEditingController();
+  static const serviceEndpoint = String.fromEnvironment('CASHIER_SERVICE_URL');
   final employee = TextEditingController();
   final password = TextEditingController();
   final form = GlobalKey<FormState>();
@@ -97,8 +96,28 @@ class _StaffAccessPageState extends State<StaffAccessPage>
     setState(() => notice = null);
     try {
       await auth.login(
-        base: endpoint.text.trim(),
-        storeRef: store.text.trim(),
+        base: serviceEndpoint,
+        selectStore: (stores) async {
+          if (!mounted || !foreground) return null;
+          final selected = await showDialog<String>(
+            context: context,
+            builder: (context) => SimpleDialog(
+              title: Text(t('staffChooseStore')),
+              children: [
+                for (final store in stores)
+                  SimpleDialogOption(
+                    onPressed: () => Navigator.pop(context, store['storeRef']),
+                    child: Text(store['storeName']!),
+                  ),
+                SimpleDialogOption(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(t('staffCancelSelection')),
+                ),
+              ],
+            ),
+          );
+          return mounted && foreground ? selected : null;
+        },
         loginName: employee.text.trim(),
         password: secret,
       );
@@ -125,8 +144,6 @@ class _StaffAccessPageState extends State<StaffAccessPage>
     WidgetsBinding.instance.removeObserver(this);
     auth.removeListener(changed);
     if (widget.controller == null) auth.dispose();
-    endpoint.dispose();
-    store.dispose();
     employee.dispose();
     password.dispose();
     super.dispose();
@@ -210,13 +227,6 @@ class _StaffAccessPageState extends State<StaffAccessPage>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                field(
-                                  endpoint,
-                                  'endpoint',
-                                  'staff-endpoint',
-                                  url: true,
-                                ),
-                                field(store, 'staffStore', 'staff-store'),
                                 field(
                                   employee,
                                   'staffAccount',

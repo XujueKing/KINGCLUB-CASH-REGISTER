@@ -21,7 +21,8 @@ class UiAuth extends StaffAuthController {
   @override
   Future<void> login({
     required String base,
-    required String storeRef,
+    String? storeRef,
+    Future<String?> Function(List<Map<String, String>> stores)? selectStore,
     required String loginName,
     required String password,
   }) async {
@@ -67,21 +68,17 @@ void main() {
   });
 
   testWidgets(
-    'Validation blocks unsafe endpoint, password clears and errors are redacted',
+    'Only account and password are shown; password clears and errors are redacted',
     (tester) async {
       final auth = UiAuth();
       await show(tester, auth);
       Future<void> enter(String field, String value) =>
           tester.enterText(find.byKey(ValueKey('staff-$field')), value);
-      await enter('endpoint', 'http://service.invalid');
-      await enter('store', 'test-store');
+      expect(find.byKey(const ValueKey('staff-endpoint')), findsNothing);
+      expect(find.byKey(const ValueKey('staff-store')), findsNothing);
+      expect(find.byType(TextFormField), findsNWidgets(2));
       await enter('account', 'cashier');
       await enter('password', 'test-only-password');
-      await tester.ensureVisible(find.byKey(const ValueKey('staff-login')));
-      await tester.tap(find.byKey(const ValueKey('staff-login')));
-      await tester.pumpAndSettle();
-      expect(auth.logins, 0);
-      await enter('endpoint', 'https://service.invalid');
       auth.gate = Completer<void>();
       await tester.ensureVisible(find.byKey(const ValueKey('staff-login')));
       await tester.tap(find.byKey(const ValueKey('staff-login')));

@@ -825,7 +825,8 @@ class StaffAuthController extends ChangeNotifier {
 
   Future<void> login({
     required String base,
-    required String storeRef,
+    String? storeRef,
+    Future<String?> Function(List<Map<String, String>> stores)? selectStore,
     required String loginName,
     required String password,
   }) async {
@@ -839,13 +840,51 @@ class StaffAuthController extends ChangeNotifier {
       _check(epoch);
       final auth = _authFactory(canonicalBase);
       _auth = auth;
-      final result = await auth.call('K260929001901', {
+      var result = await auth.call('K260929001901', {
         'loginName': loginName,
         'password': password,
-        'storeRef': storeRef,
+        'storeRef': ?storeRef,
         'deviceId': device,
       });
       _check(epoch);
+      if (result['requiresStoreSelection'] == true) {
+        final rawStores = result['stores'];
+        if (rawStores is! List || rawStores.length < 2 || selectStore == null) {
+          throw const CcsopFailure('INVALID_RESPONSE');
+        }
+        final stores = <Map<String, String>>[];
+        final refs = <String>{};
+        for (final raw in rawStores) {
+          if (raw is! Map ||
+              raw['storeRef'] is! String ||
+              raw['storeName'] is! String) {
+            throw const CcsopFailure('INVALID_RESPONSE');
+          }
+          final ref = raw['storeRef'] as String,
+              name = raw['storeName'] as String;
+          if (!RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(ref) ||
+              name.isEmpty ||
+              name.length > 128 ||
+              !refs.add(ref)) {
+            throw const CcsopFailure('INVALID_RESPONSE');
+          }
+          stores.add(Map.unmodifiable({'storeRef': ref, 'storeName': name}));
+        }
+        storeRef = await selectStore(List.unmodifiable(stores))
+            .timeout(const Duration(minutes: 2), onTimeout: () => throw const CcsopFailure('STORE_SELECTION_EXPIRED'));
+        _check(epoch);
+        if (storeRef == null) return;
+        if (!refs.contains(storeRef)) {
+          throw const CcsopFailure('INVALID_RESPONSE');
+        }
+        result = await auth.call('K260929001901', {
+          'loginName': loginName,
+          'password': password,
+          'storeRef': storeRef,
+          'deviceId': device,
+        });
+        _check(epoch);
+      }
       final session = StaffSession.fromServer(
         result,
         base: canonicalBase,
