@@ -166,6 +166,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('live-table-test-table')));
+      await tester.pumpAndSettle();
       await tap(tester, const ValueKey('opening-table-test-table'));
       expect(find.byKey(const ValueKey('opening-party-size')), findsOneWidget);
       await tester.tap(find.text(tr(UiLanguage.zh, 'ordersBack')));

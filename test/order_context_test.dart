@@ -356,13 +356,9 @@ void main() {
         findsNothing,
       );
       auth.gate = null;
-      tester.binding.handleAppLifecycleStateChanged(
-        AppLifecycleState.paused,
-      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await tester.pump();
-      tester.binding.handleAppLifecycleStateChanged(
-        AppLifecycleState.resumed,
-      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('order-member-member-000')),
@@ -382,6 +378,8 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('live-table-test-table')));
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('order-members-open-test-table')),

@@ -45,6 +45,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     with WidgetsBindingObserver {
   TableSnapshot? snapshot;
   LiveTable? selected;
+  String? focusedTableRef;
   LiveTable? orderingTable;
   bool opening = false;
   bool voucherReport = false;
@@ -397,11 +398,43 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       );
     }
     final data = snapshot;
+    final focused = data?.tables
+        .where((table) => table.reference == focusedTableRef)
+        .firstOrNull;
+    if (focused != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('table-detail-back'),
+              onPressed: () => setState(() => focusedTableRef = null),
+              icon: const Icon(Icons.arrow_back),
+              label: Text(t('ordersBack')),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Center(
+                child: SizedBox(
+                  width: 620,
+                  height:
+                      440 *
+                      MediaQuery.textScalerOf(context).scale(1).clamp(1, 2),
+                  child: tableDetails(focused, data!.currency),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Row(
             children: [
               Expanded(
@@ -409,54 +442,45 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                   data?.storeName ??
                       widget.auth.session?.storeName ??
                       t('tables'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 22,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              OutlinedButton.icon(
-                key: const ValueKey('table-tools'),
-                onPressed: foreground ? showTools : null,
-                icon: const Icon(Icons.apps_rounded, size: 20),
-                label: Text(t('tableTools')),
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                key: const ValueKey('live-refresh'),
-                onPressed: loading ? null : () => unawaited(load(reset: true)),
-                icon: const Icon(Icons.refresh, size: 20),
-                label: Text(t('liveRefresh')),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-          child: Wrap(
-            spacing: 20,
-            runSpacing: 4,
-            children: [
-              if (data != null)
-                Text('${t('liveBusinessDate')}: ${data.businessDate}'),
               if (realtime != null)
-                Text(
-                  t(switch (realtime!.state) {
+                Tooltip(
+                  message: t(switch (realtime!.state) {
                     CashierRealtimeState.offline => 'realtimeOffline',
                     CashierRealtimeState.connecting => 'realtimeConnecting',
                     CashierRealtimeState.connected => 'realtimeConnected',
                   }),
-                ),
-              if (data != null)
-                Tooltip(
-                  message: t(
-                    realtime == null ? 'liveReadOnly' : 'liveRealtimeReadOnly',
+                  child: Icon(
+                    realtime!.state == CashierRealtimeState.connected
+                        ? Icons.wifi
+                        : Icons.wifi_off,
+                    color: realtime!.state == CashierRealtimeState.connected
+                        ? const Color(0xFF166534)
+                        : const Color(0xFFB45309),
+                    size: 20,
                   ),
-                  child: Text(
-                    '${t('liveObserved')}: ${data.observedAt.toLocal().toString().substring(11, 19)}',
-                    style: const TextStyle(color: Color(0xFF63746C)),
-                  ),
                 ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                key: const ValueKey('table-tools'),
+                onPressed: foreground ? showTools : null,
+                icon: const Icon(Icons.apps_rounded, size: 18),
+                label: Text(t('tableTools')),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                key: const ValueKey('live-refresh'),
+                tooltip: t('liveRefresh'),
+                onPressed: loading ? null : () => unawaited(load(reset: true)),
+                icon: const Icon(Icons.refresh),
+              ),
             ],
           ),
         ),
@@ -475,25 +499,18 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
               ? Center(child: Text(t('liveNoTables')))
               : LayoutBuilder(
                   builder: (context, box) {
-                    final minimumWidth =
-                        widget.language == UiLanguage.en ||
-                            widget.language == UiLanguage.th
-                        ? 400
-                        : 360;
-                    final columns = ((box.maxWidth - 40) / minimumWidth)
+                    final scale = MediaQuery.textScalerOf(context)
+                        .scale(1)
+                        .clamp(1.0, 2.0);
+                    final columns = ((box.maxWidth - 24) / (190 * scale))
                         .floor()
-                        .clamp(1, 5);
+                        .clamp(1, 8);
                     return GridView.count(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                       crossAxisCount: columns,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      mainAxisExtent:
-                          (widget.language == UiLanguage.en ||
-                                  widget.language == UiLanguage.th
-                              ? 420
-                              : 256) *
-                          MediaQuery.textScalerOf(context).scale(1).clamp(1, 2),
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      mainAxisExtent: 124 * scale,
                       children: [
                         for (final table in data.tables)
                           tableCard(table, data.currency),
@@ -503,7 +520,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 ),
         ),
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Wrap(
             alignment: WrapAlignment.center,
             spacing: 20,
@@ -516,6 +533,11 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 child: Text(t('livePrevious')),
               ),
               Text('${t('livePage')} ${page + 1}'),
+              if (data != null)
+                Text(
+                  '${t('liveBusinessDate')}: ${data.businessDate}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               OutlinedButton(
                 key: const ValueKey('live-next'),
                 onPressed: loading || data?.nextAfterTable == null
@@ -720,7 +742,80 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       ),
   ];
 
+  Color tableColor(LiveTable table) => table.status != 'active'
+      ? const Color(0xFF64748B)
+      : table.session == null
+      ? Colors.white
+      : table.session!.status == 'clearing'
+      ? const Color(0xFF1D4ED8)
+      : table.session!.pendingCents > 0
+      ? const Color(0xFFB45309)
+      : const Color(0xFF15803D);
+
   Widget tableCard(LiveTable table, String currency) {
+    final session = table.session;
+    final empty = table.status == 'active' && session == null;
+    final textColor = empty ? const Color(0xFF263C30) : Colors.white;
+    final state =
+        session != null && session.status == 'open' && session.pendingCents > 0
+        ? 'tablePaymentPending'
+        : table.stateLabel;
+    return Material(
+      key: ValueKey('live-table-${table.reference}'),
+      color: tableColor(table),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: empty ? const Color(0xFFABBCAF) : tableColor(table),
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => setState(() => focusedTableRef = table.reference),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: DefaultTextStyle(
+            style: TextStyle(color: textColor, fontSize: 13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  table.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${session?.partySize ?? '—'} / ${table.maximumSeats}${session == null ? '' : ' · ${session.elapsedMinutes} min'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const Spacer(),
+                Text(
+                  t(state),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                if (session != null && session.pendingCents > 0)
+                  Text(
+                    '$currency ${formatCents(session.pendingCents)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget tableDetails(LiveTable table, String currency) {
     final session = table.session;
     final active = table.status == 'active';
     final accent = !active
@@ -735,7 +830,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         if (widget.auth.session?.permissions.contains('orders.read') == true)
           FilledButton(
             key: ValueKey('orders-open-${table.reference}'),
-            onPressed: () => setState(() => selected = table),
+            onPressed: () => setState(() {
+              focusedTableRef = null;
+              selected = table;
+            }),
             child: Text(t('ordersDetails')),
           ),
         if (active &&
@@ -743,7 +841,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
             widget.auth.session?.permissions.contains('orders.create') == true)
           OutlinedButton(
             key: ValueKey('order-members-open-${table.reference}'),
-            onPressed: () => setState(() => orderingTable = table),
+            onPressed: () => setState(() {
+              focusedTableRef = null;
+              orderingTable = table;
+            }),
             child: Text(t('orderMembersTitle')),
           ),
         if (active &&
@@ -751,6 +852,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
           TextButton(
             key: ValueKey('tableClear-table-${table.reference}'),
             onPressed: () => setState(() {
+              focusedTableRef = null;
               tableClear = true;
               clearingTable = table;
             }),
@@ -763,6 +865,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         OutlinedButton(
           key: ValueKey('opening-table-${table.reference}'),
           onPressed: () => setState(() {
+            focusedTableRef = null;
             opening = true;
             openingTable = table.reference;
             openingCurrency = currency;
@@ -771,7 +874,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         ),
     ];
     return Container(
-      key: ValueKey('live-table-${table.reference}'),
+      key: ValueKey('table-detail-${table.reference}'),
       decoration: BoxDecoration(
         color: session == null ? Colors.white : const Color(0xFFF0F7F3),
         borderRadius: BorderRadius.circular(14),

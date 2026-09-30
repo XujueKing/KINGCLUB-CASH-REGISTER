@@ -13,6 +13,56 @@ import 'package:kingclub_cash_register/src/live/live_tables_panel.dart';
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
+    'Cashier viewport shows 24 complete tiles with distinct real states',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = TableAuth();
+      addTearDown(auth.dispose);
+      final fixture = tableFixture(count: 24);
+      final tables = fixture['result']['tables'] as List;
+      tables[0]['session'] = null;
+      tables[1]['session']['pendingCents'] = 0;
+      tables[1]['session']['pendingOrders'] = 0;
+      tables[3]['session']['status'] = 'clearing';
+      tables[4]['tableStatus'] = 'disabled';
+      auth.reply = fixture;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WorkbenchPage(
+            auth: auth,
+            language: UiLanguage.zh,
+            onLanguage: (_) {},
+            onLogout: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final first = tester.getRect(
+        find.byKey(const ValueKey('live-table-test-000')),
+      );
+      final last = tester.getRect(
+        find.byKey(const ValueKey('live-table-test-023')),
+      );
+      expect(first.top, lessThanOrEqualTo(116));
+      expect(last.bottom, lessThanOrEqualTo(672));
+      final colors = [
+        for (var i = 0; i < 5; i++)
+          tester
+              .widget<Material>(
+                find.byKey(
+                  ValueKey('live-table-test-${i.toString().padLeft(3, '0')}'),
+                ),
+              )
+              .color,
+      ];
+      expect(colors.toSet().length, 5);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'Occupied and empty cards align with all actions in four languages',
     (tester) async {
       tester.view.devicePixelRatio = 1;

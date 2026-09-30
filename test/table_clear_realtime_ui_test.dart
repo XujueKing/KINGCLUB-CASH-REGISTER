@@ -42,6 +42,8 @@ void main() {
   }
 
   Future<void> confirmDialog(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('tableClear-table-test-000')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('tableClear-open')));
@@ -129,6 +131,8 @@ void main() {
         find.byKey(const ValueKey('opening-table-test-000')),
         findsNothing,
       );
+      await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('tableClear-table-test-000')));
       await tester.pumpAndSettle();
       expect(find.textContaining('H00000000002'), findsOneWidget);

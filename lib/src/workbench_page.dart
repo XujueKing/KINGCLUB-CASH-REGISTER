@@ -123,29 +123,17 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                   color: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
-                    vertical: 14,
+                    vertical: 0,
                   ),
                   child: Row(
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              t('workbench'),
-                              style: const TextStyle(
-                                fontSize: 21,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              widget.auth.session?.storeName ?? 'KINGCLUB',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF728078),
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          t(labels[page]),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       Text(widget.auth.session?.displayName ?? ''),

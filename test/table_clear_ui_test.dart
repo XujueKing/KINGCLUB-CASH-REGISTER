@@ -114,6 +114,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('tableClear-table-test-000')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('tableClear-open')));
@@ -127,6 +129,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(auth.requested.length, reads + 1);
     expect(find.byKey(const ValueKey('opening-table-test-000')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('tableClear-table-test-000')));
     await tester.pumpAndSettle();
     expect(find.textContaining('H00000000002'), findsOneWidget);
