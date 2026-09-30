@@ -155,41 +155,47 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12),
-          child: Wrap(
-            spacing: 16,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(
             children: [
-              OutlinedButton(
+              TextButton.icon(
                 onPressed: widget.onBack,
-                child: Text(t('ordersBack')),
+                icon: const Icon(Icons.arrow_back, size: 18),
+                label: Text(t('ordersBack')),
               ),
-              Text(
-                t('orderMembersTitle'),
-                style: Theme.of(context).textTheme.titleLarge,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${data?.tableName ?? ''} · ${t('orderMembersTitle')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-              OutlinedButton(
+              Tooltip(
+                message: t('orderMembersNotice'),
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Icon(Icons.info_outline, size: 20),
+                ),
+              ),
+              IconButton(
                 key: const ValueKey('order-members-refresh'),
+                tooltip: t('liveRefresh'),
                 onPressed: loading ? null : () => unawaited(load(reset: true)),
-                child: Text(t('liveRefresh')),
+                icon: const Icon(Icons.refresh),
               ),
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(t('orderMembersNotice')),
-        ),
         if (data != null)
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 24,
-              runSpacing: 8,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
               children: [
-                Text(data!.tableName),
-                Text(data!.sessionRef),
                 Text(
                   t(
                     data!.paymentTiming == 'prepay'
@@ -197,8 +203,8 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
                         : 'livePostpay',
                   ),
                 ),
+                const SizedBox(width: 16),
                 Text('${t('guests')}: ${data!.partySize ?? '—'}'),
-                Text('${t('liveObserved')}: ${data!.observedAt.toLocal()}'),
               ],
             ),
           ),
@@ -248,25 +254,33 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
                 ),
         ),
         if (selected != null)
-          FilledButton(
-            key: const ValueKey('order-member-cart'),
-            onPressed: loading || !foreground
-                ? null
-                : () => setState(() {
-                    cart = true;
-                  }),
-            child: Text(t('cartTitle')),
-          ),
-        if (selected != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              '${t('orderMemberSelected')}: ${selected!.nickname ?? t('orderMemberUnnamed')} (${selected!.reference})',
-              key: const ValueKey('order-member-selection'),
+          Container(
+            color: const Color(0xFFE8F1EC),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${t('orderMemberSelected')}: ${selected!.nickname ?? t('orderMemberUnnamed')} (${selected!.reference})',
+                    key: const ValueKey('order-member-selection'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                FilledButton.icon(
+                  key: const ValueKey('order-member-cart'),
+                  onPressed: loading || !foreground
+                      ? null
+                      : () => setState(() => cart = true),
+                  icon: const Icon(Icons.shopping_cart_outlined, size: 20),
+                  label: Text(t('cartTitle')),
+                ),
+              ],
             ),
           ),
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Wrap(
             spacing: 20,
             crossAxisAlignment: WrapCrossAlignment.center,

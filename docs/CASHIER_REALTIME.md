@@ -1,6 +1,6 @@
 # 独立员工实时连接与桌台刷新
 
-状态：客户端连接管理及页面接入已本地实现。编译开关CASHIER_REALTIME默认false；后端KINGCLUB_CASHIER_REALTIME_ENABLED也默认false。生产尚未部署、事件源与跨进程总线尚待接通，不把当前进度当作实店实时验收。
+2026-10-01 更新：线上已补齐独立收银 WebSocket 精确代理路径，并启用 KINGCLUB 收银实时服务。独立诊断会话通过加密员工登录、桌台读取及公网 connection.ready 验签解密，随后退出。实际订单变化投递和跨端业务仍待验收；不能把握手成功等同于全部实时闭环。默认配置开关仍为 false，部署须显式设置。部署证据见后端 `docs/commerce/2026-10-01-cashier-realtime-rollout.md`。
 
 ## 协议与安全
 
