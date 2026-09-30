@@ -210,6 +210,25 @@ void main() {
       auth.dispose();
     },
   );
+  testWidgets('refresh retains the grid until the replacement arrives', (
+    tester,
+  ) async {
+    final auth = TableAuth();
+    await show(tester, auth);
+    auth.gate = Completer<Object?>();
+    await tester.tap(find.byKey(const ValueKey('live-refresh')));
+    await tester.pump();
+    expect(find.text('Test table 0'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('table-detail-back')), findsNothing);
+    auth.gate!.complete(tableFixture(count: 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Test table 0'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
   testWidgets(
     'Next page requests server cursor and replaces rather than sums snapshots',
     (tester) async {

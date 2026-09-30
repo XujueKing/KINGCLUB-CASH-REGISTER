@@ -32,6 +32,7 @@ abstract interface class JsonTransport {
 /// Bounded, TLS-validated, non-redirecting, non-retrying transport.
 class IoJsonTransport implements JsonTransport {
   final _clients = <HttpClient>{};
+  final _idle = <HttpClient>[];
   bool _closed = false;
   static const maxBytes = 1024 * 1024;
 
@@ -47,9 +48,14 @@ class IoJsonTransport implements JsonTransport {
     if (encoded.length > maxBytes) {
       throw const CcsopFailure('REQUEST_TOO_LARGE');
     }
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    final client = _idle.isNotEmpty
+        ? _idle.removeLast()
+        : (HttpClient()
+            ..connectionTimeout = const Duration(seconds: 8)
+            ..idleTimeout = const Duration(seconds: 30));
     _clients.add(client);
     var sent = false;
+    var reusable = false;
     try {
       return await (() async {
         final request = await client.postUrl(uri);
@@ -82,10 +88,12 @@ class IoJsonTransport implements JsonTransport {
           }
           bytes.addAll(chunk);
         }
-        return JsonReply(
+        final reply = JsonReply(
           response.statusCode,
           jsonObject(jsonDecode(utf8.decode(bytes))),
         );
+        reusable = true;
+        return reply;
       })().timeout(const Duration(seconds: 20));
     } on CcsopFailure {
       rethrow;
@@ -93,18 +101,25 @@ class IoJsonTransport implements JsonTransport {
       // Do not leak URLs, response bodies, payment codes or credentials.
       throw CcsopFailure('TRANSPORT_FAILED', deliveryUncertain: sent);
     } finally {
-      client.close(force: true);
       _clients.remove(client);
+      // An in-flight request owns its client: cancelling it cannot interrupt
+      // another request. Only fully consumed responses return to the idle pool.
+      if (reusable && !_closed && _idle.length < 4) {
+        _idle.add(client);
+      } else {
+        client.close(force: true);
+      }
     }
   }
 
   @override
   void close() {
     _closed = true;
-    for (final client in _clients) {
+    for (final client in {..._clients, ..._idle}) {
       client.close(force: true);
     }
     _clients.clear();
+    _idle.clear();
   }
 }
 

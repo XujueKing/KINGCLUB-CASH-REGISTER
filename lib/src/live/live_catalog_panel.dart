@@ -59,6 +59,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       oldWidget.auth.removeListener(identityChanged);
       widget.auth.addListener(identityChanged);
       category = null;
+      data = null;
       unawaited(load(reset: true));
     } else if (oldWidget.revision != widget.revision && foreground) {
       unawaited(load(reset: true));
@@ -77,6 +78,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
 
   Future<void> load({bool reset = false, int? target}) async {
     final generation = ++epoch, identity = widget.auth.session;
+    final previousPage = page;
     if (reset) {
       cursors
         ..clear()
@@ -85,7 +87,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     }
     final requestedPage = target ?? page;
     setState(() {
-      data = null;
+      if (requestedPage != previousPage) data = null;
       loading = true;
       failed = false;
     });
@@ -120,6 +122,8 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
   }
 
   void select(String? ref) {
+    if (category == ref) return;
+    data = null;
     category = ref;
     unawaited(load(reset: true));
   }
@@ -352,7 +356,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                   IconButton.filledTonal(
                     key: ValueKey('catalog-add-${p.reference}'),
                     tooltip: t('cartAdd'),
-                    onPressed: foreground && available
+                    onPressed: foreground && !loading && available
                         ? () => widget.onSelect!(p)
                         : null,
                     icon: const Icon(Icons.add),

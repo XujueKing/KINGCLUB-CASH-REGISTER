@@ -139,6 +139,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     final generation = ++epoch;
     final session = widget.auth.session;
     if (session == null) return;
+    final previousPage = page;
     if (reset) {
       cursors
         ..clear()
@@ -150,7 +151,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     setState(() {
       loading = true;
       failed = false;
-      snapshot = null;
+      if (requestedPage != previousPage) snapshot = null;
     });
     try {
       final raw = await widget.auth.readWorkbench(afterTable: cursor);
@@ -771,7 +772,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => setState(() => focusedTableRef = table.reference),
+        onTap: loading
+            ? null
+            : () => setState(() => focusedTableRef = table.reference),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: DefaultTextStyle(

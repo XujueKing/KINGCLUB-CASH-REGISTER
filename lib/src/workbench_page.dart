@@ -80,7 +80,9 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                         child: InkWell(
                           key: ValueKey('nav-$index'),
                           borderRadius: BorderRadius.circular(14),
-                          onTap: () => setState(() => page = index),
+                          onTap: page == index
+                              ? null
+                              : () => setState(() => page = index),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               vertical: 13,
@@ -181,7 +183,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
   Widget content() => switch (page) {
     // Order views require selection of a real table and its current session.
     0 || 2 => LiveTablesPanel(
-      key: ValueKey('tables-$page'),
+      key: const ValueKey('tables'),
       auth: widget.auth,
       language: widget.language,
     ),
