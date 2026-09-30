@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +11,7 @@ Future<void> main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   runApp(const CashierApp());
 }
 
@@ -17,8 +20,61 @@ const paper = Color(0xFFF5F4EF);
 const ink = Color(0xFF263831);
 const gold = Color(0xFFC7AA70);
 
-class CashierApp extends StatelessWidget {
+class CashierApp extends StatefulWidget {
   const CashierApp({super.key});
+
+  @override
+  State<CashierApp> createState() => _CashierAppState();
+}
+
+class _CashierAppState extends State<CashierApp> with WidgetsBindingObserver {
+  Timer? immersiveRestore;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  void restoreFullscreen() {
+    immersiveRestore?.cancel();
+    // Android temporarily prevents hiding navigation after the keyboard closes.
+    immersiveRestore = Timer(const Duration(milliseconds: 1300), () {
+      if (!mounted) return;
+      final binding = WidgetsBinding.instance;
+      if (binding.lifecycleState != null &&
+          binding.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      if (binding.platformDispatcher.views.any(
+        (view) => view.viewInsets.bottom > 0,
+      )) {
+        return;
+      }
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
+      );
+    });
+  }
+
+  @override
+  void didChangeMetrics() => restoreFullscreen();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      restoreFullscreen();
+    } else {
+      immersiveRestore?.cancel();
+    }
+  }
+
+  @override
+  void dispose() {
+    immersiveRestore?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

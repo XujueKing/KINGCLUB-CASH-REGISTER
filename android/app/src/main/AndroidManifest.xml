@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <application
-        android:label="KINGCLUB 收银预览"
+        android:label="KINGCLUB 收银"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
