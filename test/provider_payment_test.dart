@@ -25,12 +25,8 @@ void main(){
       expect(result.resolved,isTrue);expect(result.closedUnpaid,isTrue);
       expect(result.confirmed,isFalse);expect(result.refunded,isFalse);
       expect(result.orderRetained,isFalse);
-      if(channel=='wechat') {
-        final retained=ProviderPaymentResult.parse(response({...closed,'orderRetained':true}),command);
-        expect(retained.orderRetained,isTrue);expect(retained.resolved,isTrue);expect(retained.confirmed,isFalse);
-      } else {
-        expect(()=>ProviderPaymentResult.parse(response({...closed,'orderRetained':true}),command),throwsA(anything));
-      }
+      final retained=ProviderPaymentResult.parse(response({...closed,'orderRetained':true}),command);
+      expect(retained.orderRetained,isTrue);expect(retained.resolved,isTrue);expect(retained.confirmed,isFalse);
       for(final patch in [{'totalCents':101},{'closedBy':'E00000000002'},{'orderRef':'D00000000002'},
         {'requestId':'other'},{'channel':'member_balance'},{'closureStatus':'confirmed'},{'extra':true},{'orderRetained':false},{'orderRetained':'true'}]) {
         expect(()=>ProviderPaymentResult.parse(response({...closed,...patch}),command),throwsA(anything));

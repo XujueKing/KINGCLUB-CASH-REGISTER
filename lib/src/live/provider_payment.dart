@@ -54,7 +54,7 @@ class ProviderPaymentResult {
       final retained=r is Map && r['orderRetained']==true;
       if(raw.length!=3 || !['wechat','alipay','member_balance'].contains(command.query.channel) ||
         r is! Map || r.length!=(command.query.channel=='member_balance'?10:9)+(retained?1:0) ||
-        (r.containsKey('orderRetained')&&(!retained||command.query.channel!='wechat')) ||
+        (r.containsKey('orderRetained')&&(!retained||!['wechat','alipay'].contains(command.query.channel))) ||
         (command.query.channel=='member_balance'&&r['accountType']!=command.accountType) || r['storeRef']!=p['storeRef'] || r['orderRef']!=p['orderRef'] ||
         r['requestId']!=command.requestId || r['channel']!=p['channel'] || r['currency']!='CNY' ||
         r['totalCents'] is! int || r['totalCents']!=p['expectedTotalCents'] ||
