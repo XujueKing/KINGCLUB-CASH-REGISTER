@@ -798,7 +798,12 @@ class StaffAuthController extends ChangeNotifier {
     }
   }
 
-  Future<ProviderPaymentResult> queryProvider(ProviderPayment command) async {
+  Future<ProviderPaymentResult> queryProvider(ProviderPayment command) => _recoverProvider(command);
+
+  Future<ProviderPaymentResult> closeProvider(ProviderPayment command, {required bool Function() stillCurrent}) =>
+    _recoverProvider(command, closeUnpaid: true, stillCurrent: stillCurrent);
+
+  Future<ProviderPaymentResult> _recoverProvider(ProviderPayment command, {bool closeUnpaid=false, bool Function()? stillCurrent}) async {
     if (_providerBusy) throw const CcsopFailure('PAYMENT_IN_PROGRESS');
     _providerBusy = true;
     try {
@@ -816,7 +821,7 @@ class StaffAuthController extends ChangeNotifier {
         throw const CcsopFailure('PROVIDER_ORIGINAL_REQUEST_REQUIRED');
       }
       _providerIdentity(command.query.channel);
-      final raw = await _paymentCall(command, epoch);
+      final raw = await _paymentCall(command, epoch, closeUnpaid: closeUnpaid, stillCurrent: stillCurrent);
       _check(epoch);
       _providerIdentity(command.query.channel);
       final result = ProviderPaymentResult.parse(raw, command);
@@ -893,6 +898,7 @@ class StaffAuthController extends ChangeNotifier {
     ProviderPayment command,
     int epoch, {
     String? authCode,
+    bool closeUnpaid = false,
     bool Function()? stillCurrent,
   }) async {
     void check() {
@@ -908,6 +914,11 @@ class StaffAuthController extends ChangeNotifier {
     }
 
     check();
+    if (closeUnpaid) {
+      if(command.query.channel!='alipay'||authCode!=null)throw const CcsopFailure('PROVIDER_SCOPE_CHANGED');
+      checkSend();
+      return _api!.call('K261002001962', command.params);
+    }
     if (command.query.channel != 'member_balance') {
       if (authCode != null) checkSend();
       return _api!.call(authCode == null ? 'K260930001949' : 'K260930001948', {

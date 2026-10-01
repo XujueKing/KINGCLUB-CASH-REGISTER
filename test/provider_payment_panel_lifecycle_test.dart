@@ -52,10 +52,10 @@ void main() {
     auth.wait=Completer<List<ProviderPayment>>()..complete([original]);
     await mount(tester,auth);
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining(original.requestId));
+    await tester.tap(find.text(tr(UiLanguage.en,'provider_query')));
     await tester.pumpAndSettle();
     expect(find.text(tr(UiLanguage.en,code=='ORDERING_POSTPAY_OUT_OF_STOCK'?'postpayStockUnavailable':'paymentStockUnavailable')),findsOneWidget);
-    expect(find.textContaining(original.requestId),findsOneWidget);
+    expect(find.text(tr(UiLanguage.en,'provider_query')),findsOneWidget);
     expect(auth.collections,0);
     await tester.pumpWidget(const SizedBox());
     auth.dispose();
@@ -101,7 +101,7 @@ void main() {
       await tester.pumpAndSettle();
       old.complete([original]);
       await tester.pumpAndSettle();
-      expect(find.textContaining(original.requestId), findsNothing);
+      expect(find.text(tr(UiLanguage.en,'provider_query')), findsNothing);
       expect(auth.reads, 2);
       expect(auth.collections, 0);
       await tester.pumpWidget(const SizedBox());

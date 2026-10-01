@@ -27,6 +27,7 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
   bool get balanceEntry=>pending.any((entry)=>entry.requestId==retryRequest)
     ?pending.firstWhere((entry)=>entry.requestId==retryRequest).query.channel=='member_balance':channel=='member_balance';
   List<ProviderPayment> pending=[];
+  final closeableRequests=<String>{};
   String? retryRequest;
   bool busy=false,ready=false,foreground=true,resolved=false;
   int epoch=0;
@@ -36,7 +37,7 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
   int queryAttempts=0;
   String t(String key)=>tr(widget.language,key);
   @override void initState(){super.initState();selectAllowedChannel();foreground=WidgetsBinding.instance.lifecycleState==null||WidgetsBinding.instance.lifecycleState==AppLifecycleState.resumed;WidgetsBinding.instance.addObserver(this);widget.auth.addListener(invalidate);if(foreground)unawaited(load());}
-  void invalidate(){selectAllowedChannel();epoch++;loadGeneration++;queryTimer?.cancel();queryAttempts=0;code.clear();if(mounted)setState((){ready=false;loadingOriginals=false;pending=[];status='';retryRequest=null;resolved=false;accountType=null;});if(foreground&&!busy)unawaited(load());}
+  void invalidate(){closeableRequests.clear();selectAllowedChannel();epoch++;loadGeneration++;queryTimer?.cancel();queryAttempts=0;code.clear();if(mounted)setState((){ready=false;loadingOriginals=false;pending=[];status='';retryRequest=null;resolved=false;accountType=null;});if(foreground&&!busy)unawaited(load());}
   @override void didChangeAppLifecycleState(AppLifecycleState state){foreground=state==AppLifecycleState.resumed;invalidate();}
   @override void didUpdateWidget(covariant ProviderPaymentPanel old) {
     super.didUpdateWidget(old);
@@ -63,15 +64,16 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
     } catch(_){if(valid())setState((){ready=false;pending=[];status=t('provider_review');});}
     finally{if(valid())setState(()=>loadingOriginals=false);}
   }
-  Future<void> run({ProviderPayment? original,bool retry=false,bool automatic=false}) async {
+  Future<void> run({ProviderPayment? original,bool retry=false,bool automatic=false,bool close=false}) async {
     if(busy||!ready||!foreground||(original==null&&widget.recoveryOnly))return;
     queryTimer?.cancel();if(!automatic)queryAttempts=0;
     final e=epoch,payerCode=code.text;code.clear();setState(()=>busy=true);
     bool unresolved=false;
     try {
       final result=original==null?await widget.auth.collectProvider(orderRef:widget.orderRef,channel:channel,totalCents:widget.totalCents,
-        authCode:payerCode,accountType:channel=='member_balance'?accountType:null,stillCurrent:()=>current(e)):retry?await widget.auth.retryOriginalProvider(original,authCode:payerCode,stillCurrent:()=>current(e)):await widget.auth.queryProvider(original);
+        authCode:payerCode,accountType:channel=='member_balance'?accountType:null,stillCurrent:()=>current(e)):close?await widget.auth.closeProvider(original,stillCurrent:()=>current(e)):retry?await widget.auth.retryOriginalProvider(original,authCode:payerCode,stillCurrent:()=>current(e)):await widget.auth.queryProvider(original);
       if(current(e)) {
+        if(original!=null){closeableRequests.remove(original.requestId);if(result.canCloseUnpaid)closeableRequests.add(original.requestId);}
         setState((){resolved=result.resolved;status=t(result.refunded?'provider_balance_refunded':result.orderRetained?'provider_attempt_closed':'provider_${result.state}');
         retryRequest=original!=null&&['not_sent','not_observed'].contains(result.state)?original.requestId:null;});
       }
@@ -107,8 +109,11 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
       ],
       PaymentCodeField(controller:code,enabled:ready&&!busy&&foreground,label:t('provider_code')),
       FilledButton(onPressed:ready&&!busy&&foreground&&(channel!='member_balance'||accountType!=null)&&widget.auth.session?.permissions.contains(paymentPermissions[channel])==true?()=>unawaited(run()):null,child:Text(t('provider_collect'))),
-    ] else ...[for(final original in pending)OutlinedButton(onPressed:busy||!ready||!foreground?null:()=>unawaited(run(original:original)),
-      child:Text('${t('provider_query')} · ${original.requestId}'))],
+    ] else ...[for(final original in pending)...[
+      OutlinedButton(onPressed:busy||!ready||!foreground?null:()=>unawaited(run(original:original)),child:Text(t('provider_query'))),
+      if(original.query.channel=='alipay'&&closeableRequests.contains(original.requestId))
+        OutlinedButton(onPressed:busy||!ready||!foreground?null:()=>unawaited(run(original:original,close:true)),child:Text(t('provider_close_attempt'))),
+    ]],
     if(pending.any((e)=>e.requestId==retryRequest))...[
       if(balanceEntry)Text(t('balance_${pending.firstWhere((e)=>e.requestId==retryRequest).accountType}')),
       PaymentCodeField(controller:code,enabled:ready&&!busy&&foreground,label:t('provider_code')),

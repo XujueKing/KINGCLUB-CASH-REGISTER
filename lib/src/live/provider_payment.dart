@@ -35,10 +35,11 @@ class ProviderPayment {
 }
 
 class ProviderPaymentResult {
-  ProviderPaymentResult._(this.state, {this.refunded = false, this.orderRetained = false});
+  ProviderPaymentResult._(this.state, {this.refunded = false, this.orderRetained = false, this.canCloseUnpaid = false});
   final String state;
   final bool refunded;
   final bool orderRetained;
+  final bool canCloseUnpaid;
   bool get confirmed => state=='confirmed';
   bool get closedUnpaid => state=='closed_unpaid';
   bool get resolved => confirmed || refunded || closedUnpaid;
@@ -47,6 +48,10 @@ class ProviderPaymentResult {
     raw=raw is Map?raw['result']:null;
     if(raw is! Map || raw['requestId']!=command.requestId ||
       !['confirmed','pending','unknown','closed_or_refunded','closed_unpaid','not_sent','not_observed'].contains(raw['state'])) {
+      throw const CcsopFailure('PROVIDER_RECEIPT_INVALID');
+    }
+    if(raw.containsKey('canCloseUnpaid')&&(raw['canCloseUnpaid'] is! bool||
+      (raw['canCloseUnpaid']==true&&(command.query.channel!='alipay'||!['pending','unknown'].contains(raw['state']))))) {
       throw const CcsopFailure('PROVIDER_RECEIPT_INVALID');
     }
     if(raw['state']=='closed_unpaid') {
@@ -96,7 +101,7 @@ class ProviderPaymentResult {
         throw const CcsopFailure('PROVIDER_RECEIPT_INVALID');
       }
     }
-    return ProviderPaymentResult._(raw['state'] as String);
+    return ProviderPaymentResult._(raw['state'] as String,canCloseUnpaid:raw['canCloseUnpaid']==true);
   }
 }
 

@@ -223,6 +223,7 @@ const copy = <String, String>{
       '确认金额并收款|Confirm amount and collect|確認金額並收款|ยืนยันยอดและรับชำระ',
   'provider_query': '查询原交易，勿重复收款|Check original transaction; do not charge again|查詢原交易，勿重複收款|ตรวจสอบรายการเดิม อย่าเรียกเก็บซ้ำ',
   'provider_closed_unpaid': '商品已售罄，本单未扣款并已关闭，请重新选择商品。|Sold out. This order was closed without a charge. Please select items again.|商品已售罄，本單未扣款並已關閉，請重新選擇商品。|สินค้าหมด ปิดคำสั่งซื้อแล้วโดยไม่มีการหักเงิน โปรดเลือกสินค้าใหม่',
+  'provider_close_attempt': '结束本次收款（保留账单）|End payment attempt (keep bill)|結束本次收款（保留帳單）|ยุติการชำระครั้งนี้ (เก็บบิลไว้)',
   'provider_attempt_closed': '本次收款已关闭，未扣款。消费账单保留，可重新收款。|Payment attempt closed without a charge. The bill remains; collect again.|本次收款已關閉，未扣款。消費帳單保留，可重新收款。|ปิดการชำระครั้งนี้โดยไม่หักเงิน บิลยังคงอยู่ สามารถรับชำระใหม่ได้',
   'provider_confirmed': '服务端已确认付款|Payment confirmed by server|服務端已確認付款|เซิร์ฟเวอร์ยืนยันการชำระเงินแล้ว',
   'provider_pending': '等待付款结果，请查询原交易|Payment pending; check original transaction|等待付款結果，請查詢原交易|รอผลชำระเงิน โปรดตรวจสอบรายการเดิม',
