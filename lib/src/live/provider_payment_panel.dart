@@ -26,7 +26,7 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
     ?pending.firstWhere((entry)=>entry.requestId==retryRequest).query.channel=='member_balance':channel=='member_balance';
   List<ProviderPayment> pending=[];
   String? retryRequest;
-  bool busy=false,ready=false,foreground=true,paid=false;
+  bool busy=false,ready=false,foreground=true,resolved=false;
   int epoch=0;
   int loadGeneration=0;
   bool loadingOriginals=false;
@@ -34,7 +34,7 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
   int queryAttempts=0;
   String t(String key)=>tr(widget.language,key);
   @override void initState(){super.initState();foreground=WidgetsBinding.instance.lifecycleState==null||WidgetsBinding.instance.lifecycleState==AppLifecycleState.resumed;WidgetsBinding.instance.addObserver(this);widget.auth.addListener(invalidate);if(foreground)unawaited(load());}
-  void invalidate(){epoch++;loadGeneration++;queryTimer?.cancel();queryAttempts=0;code.clear();if(mounted)setState((){ready=false;loadingOriginals=false;pending=[];status='';retryRequest=null;paid=false;accountType=null;});if(foreground&&!busy)unawaited(load());}
+  void invalidate(){epoch++;loadGeneration++;queryTimer?.cancel();queryAttempts=0;code.clear();if(mounted)setState((){ready=false;loadingOriginals=false;pending=[];status='';retryRequest=null;resolved=false;accountType=null;});if(foreground&&!busy)unawaited(load());}
   @override void didChangeAppLifecycleState(AppLifecycleState state){foreground=state==AppLifecycleState.resumed;invalidate();}
   @override void didUpdateWidget(covariant ProviderPaymentPanel old) {
     super.didUpdateWidget(old);
@@ -70,7 +70,7 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
       final result=original==null?await widget.auth.collectProvider(orderRef:widget.orderRef,channel:channel,totalCents:widget.totalCents,
         authCode:payerCode,accountType:channel=='member_balance'?accountType:null,stillCurrent:()=>current(e)):retry?await widget.auth.retryOriginalProvider(original,authCode:payerCode,stillCurrent:()=>current(e)):await widget.auth.queryProvider(original);
       if(current(e)) {
-        setState((){paid=result.resolved;status=t(result.refunded?'provider_balance_refunded':'provider_${result.state}');
+        setState((){resolved=result.resolved;status=t(result.refunded?'provider_balance_refunded':'provider_${result.state}');
         retryRequest=original!=null&&['not_sent','not_observed'].contains(result.state)?original.requestId:null;});
       }
       if(current(e)&&result.resolved)widget.onResolved?.call();
@@ -94,7 +94,7 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
     if(busy||loadingOriginals)const LinearProgressIndicator(),
     if(!ready&&!busy&&!loadingOriginals&&foreground)
       OutlinedButton(onPressed:()=>unawaited(load(clearMessage:true)),child:Text(t('ordersRefresh'))),
-    if(pending.isEmpty&&!paid&&!widget.recoveryOnly)...[
+    if(pending.isEmpty&&!resolved&&!widget.recoveryOnly)...[
       Wrap(spacing:12,children:[for(final c in [if(const bool.fromEnvironment('CASHIER_PROVIDER',defaultValue:false))...['wechat','alipay'],if(const bool.fromEnvironment('CASHIER_BALANCE',defaultValue:false))'member_balance'])ChoiceChip(label:Text(t('provider_$c')),selected:channel==c,
         onSelected:busy||!ready||!foreground||widget.auth.session?.permissions.contains(paymentPermissions[c])!=true?null:(_)=>setState((){channel=c;accountType=null;code.clear();}))]),
       if(channel=='member_balance')...[

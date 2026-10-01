@@ -14,6 +14,23 @@ Map<String,dynamic> receipt(ProviderPayment command)=>{
   'confirmationStatus':'confirmed',
 };
 void main(){
+  test('unpaid closure resolves original request without claiming payment or refund',(){
+    for(final channel in ['wechat','alipay']) {
+      final command=ProviderPayment.create(staff.session(),'D00000000001',channel,100);
+      final closed={'storeRef':command.params['storeRef'],'orderRef':command.params['orderRef'],
+        'intentRef':'00000000-0000-4000-8000-000000000001','requestId':command.requestId,
+        'channel':channel,'totalCents':100,'currency':'CNY','closedBy':command.query.employeeRef,'closureStatus':'closed_unpaid'};
+      dynamic response(Map<String,dynamic> r)=>{'result':{'state':'closed_unpaid','requestId':command.requestId,'receipt':r}};
+      final result=ProviderPaymentResult.parse(response(closed),command);
+      expect(result.resolved,isTrue);expect(result.closedUnpaid,isTrue);
+      expect(result.confirmed,isFalse);expect(result.refunded,isFalse);
+      for(final patch in [{'totalCents':101},{'closedBy':'E00000000002'},{'orderRef':'D00000000002'},
+        {'requestId':'other'},{'channel':'member_balance'},{'closureStatus':'confirmed'},{'extra':true}]) {
+        expect(()=>ProviderPaymentResult.parse(response({...closed,...patch}),command),throwsA(anything));
+      }
+    }
+  });
+
   test('balance commands require explicit account type and never carry a code',(){
     final identity=staff.session();
     expect(()=>ProviderPayment.create(identity,'D00000000001','member_balance',100),throwsA(anything));

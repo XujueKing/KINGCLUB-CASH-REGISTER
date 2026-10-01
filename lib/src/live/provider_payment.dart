@@ -39,13 +39,26 @@ class ProviderPaymentResult {
   final String state;
   final bool refunded;
   bool get confirmed => state=='confirmed';
-  bool get resolved => confirmed || refunded;
+  bool get closedUnpaid => state=='closed_unpaid';
+  bool get resolved => confirmed || refunded || closedUnpaid;
   factory ProviderPaymentResult.parse(dynamic raw,ProviderPayment command) {
     // Encrypted super-interface payload is {result: ...}, as for other commands.
     raw=raw is Map?raw['result']:null;
     if(raw is! Map || raw['requestId']!=command.requestId ||
-      !['confirmed','pending','unknown','closed_or_refunded','not_sent','not_observed'].contains(raw['state'])) {
+      !['confirmed','pending','unknown','closed_or_refunded','closed_unpaid','not_sent','not_observed'].contains(raw['state'])) {
       throw const CcsopFailure('PROVIDER_RECEIPT_INVALID');
+    }
+    if(raw['state']=='closed_unpaid') {
+      final r=raw['receipt'],p=command.params;
+      if(raw.length!=3 || !['wechat','alipay'].contains(command.query.channel) ||
+        r is! Map || r.length!=9 || r['storeRef']!=p['storeRef'] || r['orderRef']!=p['orderRef'] ||
+        r['requestId']!=command.requestId || r['channel']!=p['channel'] || r['currency']!='CNY' ||
+        r['totalCents'] is! int || r['totalCents']!=p['expectedTotalCents'] ||
+        r['closedBy']!=command.query.employeeRef || r['closureStatus']!='closed_unpaid' ||
+        r['intentRef'] is! String || !uuidPattern.hasMatch(r['intentRef'])) {
+        throw const CcsopFailure('PROVIDER_RECEIPT_INVALID');
+      }
+      return ProviderPaymentResult._('closed_unpaid');
     }
     if(raw['state']=='closed_or_refunded' && command.query.channel=='member_balance') {
       if(raw.length!=4 || raw['intentRef'] is! String || !uuidPattern.hasMatch(raw['intentRef']) ||
