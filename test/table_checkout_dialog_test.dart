@@ -10,6 +10,8 @@ import 'package:kingclub_cash_register/src/live/table_checkout_command.dart';
 import 'package:kingclub_cash_register/src/live/table_checkout_cancellation.dart';
 import 'package:kingclub_cash_register/src/live/table_checkout_dialog.dart';
 import 'package:kingclub_cash_register/src/live/table_checkout_result.dart';
+import 'package:kingclub_cash_register/src/live/table_receipt_dialog.dart';
+import 'package:kingclub_cash_register/src/live/receipt_document.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 
@@ -20,12 +22,12 @@ import 'table_checkout_result_test.dart' as settlement;
 import 'table_checkout_cancellation_test.dart' show cancellationFixture;
 
 class CheckoutDialogAuth extends StaffAuthController {
-  CheckoutDialogAuth() {
+  CheckoutDialogAuth({List<String> permissions = const ['workbench.read', 'payment.balance']}) {
     final now = DateTime.now();
     identity = StaffSession.fromServer(
       {
         ...staff.response(),
-        'permissions': ['workbench.read', 'payment.balance'],
+        'permissions': permissions,
         'expiresAtMs': now
             .add(const Duration(minutes: 10))
             .millisecondsSinceEpoch,
@@ -44,6 +46,12 @@ class CheckoutDialogAuth extends StaffAuthController {
   int preparations = 0, collections = 0, recoveries = 0;
   int cancellations = 0;
   int cancellationQueries = 0;
+  String? requestedReceipt;
+  @override
+  Future<TableReceiptDocument> readTableReceiptDocument(String checkoutRef) async {
+    requestedReceipt = checkoutRef;
+    throw const CcsopFailure('TEST_RECEIPT_UNAVAILABLE');
+  }
   String admissionStatus = 'prepared';
   bool cancellationConfirmed = true;
   bool quoteUnavailable = false;
@@ -189,6 +197,25 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('settled checkout opens its server receipt without collecting again', (tester) async {
+    final auth = CheckoutDialogAuth(permissions: ['workbench.read', 'payment.balance', 'orders.read'])..saved = fixture.command();
+    await mount(tester, auth);
+    await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuery')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutRecover')));
+    await tester.pumpAndSettle();
+    final receipt = find.byKey(const ValueKey('checkout-settled-receipt'));
+    await tester.ensureVisible(receipt);
+    await tester.tap(receipt);
+    await tester.pumpAndSettle();
+    final dialog = tester.widget<TableReceiptDialog>(find.byType(TableReceiptDialog));
+    expect(dialog.checkoutRef, settlement.checkout);
+    expect(dialog.tableRef, 'TEST_TABLE');
+    expect(dialog.sessionRef, 'TEST_SESSION');
+    expect(auth.requestedReceipt, settlement.checkout);
+    expect(auth.collections, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets(
     'server-disabled checkout has a clear message and no payment request',
     (tester) async {

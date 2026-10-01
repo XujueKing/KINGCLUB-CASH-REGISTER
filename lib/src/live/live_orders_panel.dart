@@ -789,10 +789,10 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                     '${t('liveRefunded')}: ${refund.refundedAt.toLocal()}',
                                   ),
                                 ],
-                                if (const bool.fromEnvironment(
-                                      'CASHIER_RECEIPT_READ',
-                                      defaultValue: false,
-                                    ) &&
+                                if (widget.auth.session?.permissions.contains(
+                                          'orders.read',
+                                        ) ==
+                                        true &&
                                     order.cashierOrder &&
                                     order.status == 'paid' &&
                                     order.tableCheckoutRef == null)
@@ -814,9 +814,10 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                           ),
                                     child: Text(t('receiptDocumentTitle')),
                                   ),
-                                if (const bool.fromEnvironment(
-                                      'CASHIER_TABLE_RECEIPT_READ',
-                                    ) &&
+                                if (widget.auth.session?.permissions.contains(
+                                          'orders.read',
+                                        ) ==
+                                        true &&
                                     order.tableCheckoutRef != null &&
                                     order.status == 'paid')
                                   OutlinedButton(
@@ -837,14 +838,17 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                           ),
                                     child: Text(t('tableReceiptTitle')),
                                   ),
-                                if (const bool.fromEnvironment(
-                                      'CASHIER_PROVIDER',
-                                      defaultValue: false,
-                                    ) ||
-                                    const bool.fromEnvironment(
-                                      'CASHIER_BALANCE',
-                                      defaultValue: false,
-                                    ))
+                                if ([
+                                  'payment.wechat',
+                                  'payment.alipay',
+                                  'payment.balance',
+                                ].any(
+                                  (permission) =>
+                                      widget.auth.session?.permissions.contains(
+                                        permission,
+                                      ) ==
+                                      true,
+                                ))
                                   if (order.cashierOrder &&
                                       foreground &&
                                       !snapshotRefreshing &&

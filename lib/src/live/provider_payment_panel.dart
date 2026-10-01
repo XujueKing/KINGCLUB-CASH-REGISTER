@@ -20,7 +20,9 @@ class ProviderPaymentPanel extends StatefulWidget {
 }
 class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with WidgetsBindingObserver {
   final code=TextEditingController();
-  String channel=const bool.fromEnvironment('CASHIER_PROVIDER',defaultValue:false)?'wechat':'member_balance',status='';
+  String channel='wechat',status='';
+  List<String> get allowedChannels => ['wechat','alipay','member_balance'].where((c)=>widget.auth.session?.permissions.contains(paymentPermissions[c])==true).toList();
+  void selectAllowedChannel(){final allowed=allowedChannels;if(!allowed.contains(channel)&&allowed.isNotEmpty)channel=allowed.first;}
   String? accountType;
   bool get balanceEntry=>pending.any((entry)=>entry.requestId==retryRequest)
     ?pending.firstWhere((entry)=>entry.requestId==retryRequest).query.channel=='member_balance':channel=='member_balance';
@@ -33,8 +35,8 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
   Timer? queryTimer;
   int queryAttempts=0;
   String t(String key)=>tr(widget.language,key);
-  @override void initState(){super.initState();foreground=WidgetsBinding.instance.lifecycleState==null||WidgetsBinding.instance.lifecycleState==AppLifecycleState.resumed;WidgetsBinding.instance.addObserver(this);widget.auth.addListener(invalidate);if(foreground)unawaited(load());}
-  void invalidate(){epoch++;loadGeneration++;queryTimer?.cancel();queryAttempts=0;code.clear();if(mounted)setState((){ready=false;loadingOriginals=false;pending=[];status='';retryRequest=null;resolved=false;accountType=null;});if(foreground&&!busy)unawaited(load());}
+  @override void initState(){super.initState();selectAllowedChannel();foreground=WidgetsBinding.instance.lifecycleState==null||WidgetsBinding.instance.lifecycleState==AppLifecycleState.resumed;WidgetsBinding.instance.addObserver(this);widget.auth.addListener(invalidate);if(foreground)unawaited(load());}
+  void invalidate(){selectAllowedChannel();epoch++;loadGeneration++;queryTimer?.cancel();queryAttempts=0;code.clear();if(mounted)setState((){ready=false;loadingOriginals=false;pending=[];status='';retryRequest=null;resolved=false;accountType=null;});if(foreground&&!busy)unawaited(load());}
   @override void didChangeAppLifecycleState(AppLifecycleState state){foreground=state==AppLifecycleState.resumed;invalidate();}
   @override void didUpdateWidget(covariant ProviderPaymentPanel old) {
     super.didUpdateWidget(old);
@@ -95,7 +97,7 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
     if(!ready&&!busy&&!loadingOriginals&&foreground)
       OutlinedButton(onPressed:()=>unawaited(load(clearMessage:true)),child:Text(t('ordersRefresh'))),
     if(pending.isEmpty&&!resolved&&!widget.recoveryOnly)...[
-      Wrap(spacing:12,children:[for(final c in [if(const bool.fromEnvironment('CASHIER_PROVIDER',defaultValue:false))...['wechat','alipay'],if(const bool.fromEnvironment('CASHIER_BALANCE',defaultValue:false))'member_balance'])ChoiceChip(label:Text(t('provider_$c')),selected:channel==c,
+      Wrap(spacing:12,children:[for(final c in allowedChannels)ChoiceChip(label:Text(t('provider_$c')),selected:channel==c,
         onSelected:busy||!ready||!foreground||widget.auth.session?.permissions.contains(paymentPermissions[c])!=true?null:(_)=>setState((){channel=c;accountType=null;code.clear();}))]),
       if(channel=='member_balance')...[
         Text(t('balance_account_notice')),

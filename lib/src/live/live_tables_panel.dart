@@ -718,18 +718,16 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         }),
         child: Text(t('cashRecoveryTitle')),
       ),
-    if (const bool.fromEnvironment('CASHIER_PROVIDER', defaultValue: false) ||
-        const bool.fromEnvironment('CASHIER_BALANCE', defaultValue: false))
-      if ([
-        'payment.wechat',
-        'payment.alipay',
-        'payment.balance',
-      ].any((p) => widget.auth.session?.permissions.contains(p) == true))
-        OutlinedButton(
-          key: const ValueKey('provider-recovery-open'),
-          onPressed: () => setState(() => providerRecovery = true),
-          child: Text(t('provider_recovery')),
-        ),
+    if ([
+      'payment.wechat',
+      'payment.alipay',
+      'payment.balance',
+    ].any((p) => widget.auth.session?.permissions.contains(p) == true))
+      OutlinedButton(
+        key: const ValueKey('provider-recovery-open'),
+        onPressed: () => setState(() => providerRecovery = true),
+        child: Text(t('provider_recovery')),
+      ),
     if (widget.auth.session?.permissions.contains('orders.create') == true)
       OutlinedButton(
         key: const ValueKey('catalog-open'),

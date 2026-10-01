@@ -8,6 +8,7 @@ import '../strings.dart';
 import '../network/ccsop_client.dart';
 import 'table_checkout_command.dart';
 import 'table_checkout_result.dart';
+import 'table_receipt_dialog.dart';
 import 'table_snapshot.dart';
 import 'payment_code_field.dart';
 
@@ -67,6 +68,33 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         ? 'balance_$value'
         : 'provider_$value',
   );
+  Future<void> openReceipt() async {
+    final settled = result;
+    final identity = widget.auth.session;
+    final generation = epoch;
+    if (busy ||
+        !foreground ||
+        settled?.settled != true ||
+        identity?.permissions.contains('orders.read') != true) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        if (!current(generation) || !identical(identity, widget.auth.session)) {
+          return AlertDialog(content: Text(t('receiptDocumentReload')));
+        }
+        return TableReceiptDialog(
+          auth: widget.auth,
+          checkoutRef: settled!.checkoutRef,
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          language: widget.language,
+        );
+      },
+    );
+  }
+
   bool current(int e) => mounted && foreground && epoch == e;
   bool get fresh =>
       quote != null &&
@@ -603,7 +631,22 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                 label(original.accountType ?? original.channel),
                               ),
                               Text('CNY ${formatCents(original.totalCents)}'),
-                              SelectableText(original.requestId),
+                              if (result?.settled == true &&
+                                  widget.auth.session?.permissions.contains(
+                                        'orders.read',
+                                      ) ==
+                                      true)
+                                OutlinedButton(
+                                  key: const ValueKey(
+                                    'checkout-settled-receipt',
+                                  ),
+                                  onPressed: busy || !foreground
+                                      ? null
+                                      : openReceipt,
+                                  child: Text(t('tableReceiptTitle')),
+                                ),
+                              if (result?.settled != true)
+                                SelectableText(original.requestId),
                               if (result?.settled != true && !cancelled) ...[
                                 OutlinedButton(
                                   onPressed: busy

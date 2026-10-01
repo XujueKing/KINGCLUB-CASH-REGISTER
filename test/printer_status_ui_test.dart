@@ -73,7 +73,8 @@ void main() {
         tester.widget<Text>(report).data,
         contains(tr(language, 'printerStateNoPaper')),
       );
-      expect(find.textContaining('999'), findsOneWidget);
+      expect(find.byKey(const ValueKey('printer-paper-code')), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('printer-paper-code'))).data, contains('999'));
       expect(tester.takeException(), isNull);
       await tester.tap(find.byKey(const ValueKey('printer-inspect-close')));
       await tester.pumpAndSettle();
