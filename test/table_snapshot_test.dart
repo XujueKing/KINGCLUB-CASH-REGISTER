@@ -17,7 +17,7 @@ void main() {
     data['result']['tables'][0]['session']['temporaryHold'] = true;
     expect(parse(data).tables.single.stateLabel, 'tableTemporaryHold');
     data['result']['tables'][0]['session']['temporaryHold'] = false;
-    expect(parse(data).tables.single.stateLabel, 'tableOpen');
+    expect(parse(data).tables.single.stateLabel, 'tablePaymentPending');
     data['result']['tables'][0]['session']['temporaryHold'] = 'true';
     expect(() => parse(data), throwsA(isA<CcsopFailure>()));
   });
@@ -27,7 +27,7 @@ void main() {
       final data = parse(tableFixture());
       expect(data.tables.single.session!.partySize, isNull);
       expect(data.tables.single.session!.businessDate, '2026-09-28');
-      expect(data.tables.single.stateLabel, 'tableOpen');
+      expect(data.tables.single.stateLabel, 'tablePaymentPending');
       expect(formatCents(1201), '12.01');
       expect(formatCents(9007199254740991), '90071992547409.91');
       expect(() => data.tables.clear(), throwsUnsupportedError);

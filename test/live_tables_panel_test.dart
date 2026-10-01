@@ -103,6 +103,37 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('Temporary hold stays distinct until server releases the table', (tester) async {
+    final auth = TableAuth();
+    final data = tableFixture();
+    final session = data['result']['tables'][0]['session'];
+    session['temporaryHold'] = true;
+    session['paymentTiming'] = 'prepay';
+    session['paidCents'] = 0;
+    session['paidOrders'] = 0;
+    auth.reply = data;
+    await show(tester, auth);
+    expect(find.text('临时占座'), findsOneWidget);
+    expect(find.text('有未付订单'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
+    await tester.pumpAndSettle();
+    expect(find.text('临时占座'), findsNWidgets(2));
+    await tester.tap(find.byKey(const ValueKey('table-detail-back')));
+    await tester.pumpAndSettle();
+    // An expired local timer must not invent release while server still holds it.
+    await tester.pump(const Duration(minutes: 11));
+    expect(find.text('临时占座'), findsOneWidget);
+    data['result']['tables'][0]['session'] = null;
+    await tester.tap(find.byKey(const ValueKey('live-refresh')));
+    await tester.pumpAndSettle();
+    expect(find.text('临时占座'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
+    await tester.pumpAndSettle();
+    expect(find.text('有未付订单'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
+
   testWidgets(
     'Realtime hints coalesce, query again after an in-flight read, and stop in background',
     (tester) async {

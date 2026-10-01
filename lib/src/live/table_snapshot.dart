@@ -124,6 +124,8 @@ class LiveTable {
       ? 'cleaning'
       : session!.temporaryHold
       ? 'tableTemporaryHold'
+      : session!.pendingCents > 0
+      ? 'tablePaymentPending'
       : 'tableOpen';
 }
 

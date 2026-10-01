@@ -762,10 +762,6 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     final session = table.session;
     final empty = table.status == 'active' && session == null;
     final textColor = empty ? const Color(0xFF263C30) : Colors.white;
-    final state =
-        session != null && session.status == 'open' && session.pendingCents > 0
-        ? 'tablePaymentPending'
-        : table.stateLabel;
     return Material(
       key: ValueKey('live-table-${table.reference}'),
       color: tableColor(table),
@@ -804,7 +800,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 ),
                 const Spacer(),
                 Text(
-                  t(state),
+                  t(table.stateLabel),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w700),
