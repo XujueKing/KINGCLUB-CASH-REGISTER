@@ -16,11 +16,13 @@ class LiveCatalogPanel extends StatefulWidget {
     required this.onBack,
     this.revision = 0,
     this.onSelect,
+    this.paymentTiming = 'postpay',
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final VoidCallback onBack;
   final int revision;
+  final String paymentTiming;
   final ValueChanged<CatalogProduct>? onSelect;
   @override
   State<LiveCatalogPanel> createState() => _LiveCatalogPanelState();
@@ -356,7 +358,10 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                   IconButton.filledTonal(
                     key: ValueKey('catalog-add-${p.reference}'),
                     tooltip: t('cartAdd'),
-                    onPressed: foreground && !loading && available
+                    onPressed:
+                        foreground &&
+                            !loading &&
+                            (widget.paymentTiming == 'prepay' || available)
                         ? () => widget.onSelect!(p)
                         : null,
                     icon: const Icon(Icons.add),

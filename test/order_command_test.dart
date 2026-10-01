@@ -135,6 +135,24 @@ Future<OrderRequestResult> submit(
 );
 
 void main() {
+  test(
+    'prepay selection ignores inventory snapshots but retains quantity limits',
+    () {
+      final product = CatalogProduct(c.product());
+      expect(OrderSelection(product, 2, paymentTiming: 'prepay').quantity, 2);
+      for (final quantity in [0, 1001]) {
+        expect(
+          () => OrderSelection(product, quantity, paymentTiming: 'prepay'),
+          fails('ORDERING_OUT_OF_STOCK'),
+        );
+      }
+      expect(
+        () => OrderSelection(product, 2, paymentTiming: 'postpay'),
+        fails('ORDERING_OUT_OF_STOCK'),
+      );
+    },
+  );
+
   test('prepay receipt accepts payment-time allocation and historical reservations only', () {
     final context = m.contextData();
     (context['session'] as Map)['paymentTiming'] = 'prepay';
@@ -147,21 +165,42 @@ void main() {
     );
     for (final state in ['unallocated', 'reserved']) {
       expect(
-        OrderRequestResult.parse({
-          'result': {...receipt(pending.params), 'inventoryState': state},
-        }, pending, submission: true).state,
+        OrderRequestResult.parse(
+          {
+            'result': {...receipt(pending.params), 'inventoryState': state},
+          },
+          pending,
+          submission: true,
+        ).state,
         OrderRequestState.confirmed,
       );
     }
     for (final state in ['issued', 'released']) {
-      expect(() => OrderRequestResult.parse({
-        'result': {...receipt(pending.params), 'inventoryState': state},
-      }, pending, submission: true), fails('ORDER_RECEIPT_MISMATCH'));
+      expect(
+        () => OrderRequestResult.parse(
+          {
+            'result': {...receipt(pending.params), 'inventoryState': state},
+          },
+          pending,
+          submission: true,
+        ),
+        fails('ORDER_RECEIPT_MISMATCH'),
+      );
     }
     final postpay = command();
-    expect(() => OrderRequestResult.parse({
-      'result': {...receipt(postpay.params), 'inventoryState': 'unallocated'},
-    }, postpay, submission: true), fails('ORDER_RECEIPT_MISMATCH'));
+    expect(
+      () => OrderRequestResult.parse(
+        {
+          'result': {
+            ...receipt(postpay.params),
+            'inventoryState': 'unallocated',
+          },
+        },
+        postpay,
+        submission: true,
+      ),
+      fails('ORDER_RECEIPT_MISMATCH'),
+    );
   });
   test('command has immutable nested items, stable UUID, exact prices and no authentication material', () {
     final p = command();

@@ -17,11 +17,16 @@ Map<String, dynamic> _map(Object? v) {
 
 /// Only a catalogue observation; the server rechecks price, inventory and membership.
 class OrderSelection {
-  OrderSelection(this.product, this.quantity) {
-    if (!product.inventoryKnown ||
+  OrderSelection(
+    this.product,
+    this.quantity, {
+    String paymentTiming = 'postpay',
+  }) {
+    if (!{'prepay', 'postpay'}.contains(paymentTiming) ||
         quantity < 1 ||
         quantity > 1000 ||
-        quantity > product.available) {
+        (paymentTiming == 'postpay' &&
+            (!product.inventoryKnown || quantity > product.available))) {
       throw const CcsopFailure('ORDERING_OUT_OF_STOCK');
     }
   }

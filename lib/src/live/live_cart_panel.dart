@@ -330,7 +330,11 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           (old == null && items.length >= 50)) {
         throw const FormatException();
       }
-      final next = OrderSelection(product, quantity);
+      final next = OrderSelection(
+        product,
+        quantity,
+        paymentTiming: currentContext.paymentTiming,
+      );
       final nextTotal =
           total -
           (old == null ? 0 : old.quantity * old.product.priceCents) +
@@ -471,6 +475,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           child: AbsorbPointer(
             absorbing: !editable,
             child: LiveCatalogPanel(
+              paymentTiming: currentContext.paymentTiming,
               auth: widget.auth,
               language: widget.language,
               revision: widget.revision,

@@ -39,6 +39,44 @@ class Storage extends a.TestStorage {
 }
 
 void main() {
+  test('prepay restores unchanged products despite stock shortage or unknown stock', () {
+    final rawContext = m.contextData();
+    (rawContext['session'] as Map)['paymentTiming'] = 'prepay';
+    final context = m.parse(rawContext);
+    final value = CartDraft.decode({
+      ...copy(draft()),
+      'paymentTiming': 'prepay',
+    });
+    for (final changes in [
+      {'available': 0, 'soldOut': true},
+      {'available': 0, 'soldOut': true, 'inventoryKnown': false},
+    ]) {
+      expect(
+        value
+            .restore(
+              identity: o.identity,
+              context: context,
+              products: [product(changes)],
+              now: a.now,
+            )
+            .single
+            .quantity,
+        2,
+      );
+    }
+    expect(
+      () => value.restore(
+        identity: o.identity,
+        context: context,
+        products: [
+          product({'priceCents': 1200}),
+        ],
+        now: a.now,
+      ),
+      o.fails('CART_DRAFT_CATALOG_CHANGED'),
+    );
+  });
+
   test('draft capture requires current ordering permission and eligible seated member', () {
     for (final identity in [a.session(), o.identity]) {
       expect(

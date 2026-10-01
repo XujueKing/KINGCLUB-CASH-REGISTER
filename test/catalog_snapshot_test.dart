@@ -91,6 +91,38 @@ class ViewAuth extends StaffAuthController {
 }
 
 void main() {
+  testWidgets('prepay allows selection with unknown stock; postpay blocks it', (
+    tester,
+  ) async {
+    final auth = ViewAuth();
+    addTearDown(auth.dispose);
+    var selections = 0;
+    for (final timing in ['postpay', 'prepay']) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveCatalogPanel(
+              auth: auth,
+              language: UiLanguage.values.first,
+              onBack: () {},
+              paymentTiming: timing,
+              onSelect: (_) => selections++,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = find.byKey(const ValueKey('catalog-add-p001'));
+      expect(
+        tester.widget<IconButton>(button).onPressed,
+        timing == 'prepay' ? isNotNull : isNull,
+      );
+      if (timing == 'prepay') await tester.tap(button);
+    }
+    expect(selections, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'compact catalog fits fifteen products and respects stock in four languages',
     (tester) async {

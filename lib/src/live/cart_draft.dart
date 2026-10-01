@@ -191,11 +191,17 @@ class CartDraft {
       if (p == null ||
           p.revision != line['revision'] ||
           p.priceCents != line['priceCents'] ||
-          !p.inventoryKnown ||
-          p.available < (line['quantity'] as int)) {
+          (context.paymentTiming == 'postpay' &&
+              (!p.inventoryKnown || p.available < (line['quantity'] as int)))) {
         throw const CcsopFailure('CART_DRAFT_CATALOG_CHANGED');
       }
-      result.add(OrderSelection(p, line['quantity'] as int));
+      result.add(
+        OrderSelection(
+          p,
+          line['quantity'] as int,
+          paymentTiming: context.paymentTiming,
+        ),
+      );
     }
     return List.unmodifiable(result);
   }
