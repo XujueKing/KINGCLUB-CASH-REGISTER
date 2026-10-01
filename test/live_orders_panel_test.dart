@@ -194,7 +194,11 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.text(tr(language, 'servingProgressNotice')),
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Tooltip &&
+                widget.message!.contains(tr(language, 'servingProgressNotice')),
+          ),
           findsOneWidget,
         );
         expect(tester.takeException(), isNull);
@@ -203,6 +207,31 @@ void main() {
       },
     );
   }
+  testWidgets('expired orders retain served history without pending service', (
+    tester,
+  ) async {
+    final raw = orderFixture();
+    final order = ((raw['result'] as Map)['orders'] as List).first as Map;
+    order['status'] = 'expired';
+    final line = (order['items'] as List).first as Map;
+    line['servedQuantity'] = 1;
+    line['remainingQuantity'] = 1;
+    final auth = OrdersAuth()
+      ..ordersGate = (Completer<Object?>()..complete(raw));
+    await show(tester, auth);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('${tr(UiLanguage.en, 'servingDelivered')}: 1'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(tr(UiLanguage.en, 'servingRemaining')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
   testWidgets(
     'unknown progress is explicit and malformed progress hides the snapshot',
     (tester) async {

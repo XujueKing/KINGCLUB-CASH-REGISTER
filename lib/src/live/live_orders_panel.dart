@@ -611,7 +611,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Wrap(
                 spacing: 20,
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -621,6 +621,16 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                     child: Text(t('ordersBack')),
                   ),
                   Text('${widget.table.name} · ${t('ordersDetails')}'),
+                  Tooltip(
+                    message:
+                        '${t('ordersSnapshotNotice')}\n${t('servingProgressNotice')}'
+                        '${data == null ? '' : '\n${t('liveObserved')}: ${data!.observedAt.toLocal()}'}',
+                    triggerMode: TooltipTriggerMode.tap,
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(Icons.info_outline, size: 20),
+                    ),
+                  ),
                   if ([
                     'payment.wechat',
                     'payment.alipay',
@@ -663,14 +673,6 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(t('ordersSnapshotNotice')),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-              child: Text(t('servingProgressNotice')),
-            ),
             if (data != null)
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -696,13 +698,6 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                         ],
                       ),
               ),
-            if (data != null)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  '${t('liveObserved')}: ${data!.observedAt.toLocal()}',
-                ),
-              ),
             if (loading || (cashBusy && !servingConfirming))
               const LinearProgressIndicator(),
             Expanded(
@@ -713,20 +708,53 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                   : data!.orders.isEmpty
                   ? Center(child: Text(t('ordersEmpty')))
                   : ListView.builder(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       itemCount: data!.orders.length,
                       itemBuilder: (context, index) {
                         final order = data!.orders[index];
                         return Card(
                           child: Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Text(
-                                  '${order.reference} · ${t(order.refund != null ? 'liveRefunded' : 'order_${order.status}')} · ${order.currency} ${formatCents(order.totalCents)}',
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${order.reference} · ${t(order.refund != null ? 'liveRefunded' : 'order_${order.status}')} · ${order.currency} ${formatCents(order.totalCents)}',
+                                          ),
+                                          Text('${order.createdAt.toLocal()}'),
+                                        ],
+                                      ),
+                                    ),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: OutlinedButton(
+                                        key: ValueKey(
+                                          'order-preview-${order.reference}',
+                                        ),
+                                        onPressed:
+                                            cashBusy || loading || !foreground
+                                            ? null
+                                            : () => unawaited(
+                                                previewOrder(order),
+                                              ),
+                                        child: Text(t('orderPreviewTitle')),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Text('${order.createdAt.toLocal()}'),
                                 if (const bool.fromEnvironment(
                                       'CASHIER_BALANCE_REFUND',
                                       defaultValue: false,
@@ -757,19 +785,6 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                     '${t('liveRefunded')}: ${refund.refundedAt.toLocal()}',
                                   ),
                                 ],
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: OutlinedButton(
-                                    key: ValueKey(
-                                      'order-preview-${order.reference}',
-                                    ),
-                                    onPressed:
-                                        cashBusy || loading || !foreground
-                                        ? null
-                                        : () => unawaited(previewOrder(order)),
-                                    child: Text(t('orderPreviewTitle')),
-                                  ),
-                                ),
                                 if (const bool.fromEnvironment(
                                       'CASHIER_RECEIPT_READ',
                                       defaultValue: false,
@@ -860,7 +875,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                   ),
                                 for (final item in order.items)
                                   Padding(
-                                    padding: const EdgeInsets.only(top: 12),
+                                    padding: const EdgeInsets.only(top: 6),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -870,7 +885,10 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                         ),
                                         Text(
                                           item.servingKnown
-                                              ? '${t('servingDelivered')}: ${item.servedQuantity} · ${t('servingRemaining')}: ${item.remainingQuantity}'
+                                              ? order.status == 'expired' ||
+                                                        order.refund != null
+                                                    ? '${t('servingDelivered')}: ${item.servedQuantity}'
+                                                    : '${t('servingDelivered')}: ${item.servedQuantity} · ${t('servingRemaining')}: ${item.remainingQuantity}'
                                               : t('servingUnknown'),
                                           key: ValueKey(
                                             'serving-progress-${order.reference}-${item.productRef}',
