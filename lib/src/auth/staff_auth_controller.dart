@@ -1042,6 +1042,8 @@ class StaffAuthController extends ChangeNotifier {
   int _epoch = 0;
   bool _busy = false, _disposed = false;
   String? _error;
+  bool _canRetryRestore = false;
+  bool get canRetryRestore => _canRetryRestore;
   StaffSession? get session => _session;
   bool get busy => _busy;
   String? get errorCode => _error;
@@ -1058,6 +1060,7 @@ class StaffAuthController extends ChangeNotifier {
     if (_disposed) throw const CcsopFailure('CLIENT_CLOSED');
     if (_busy) throw const CcsopFailure('AUTH_IN_PROGRESS');
     _busy = true;
+    _canRetryRestore = false;
     _error = null;
     final epoch = ++_epoch;
     _changed();
@@ -1148,12 +1151,14 @@ class StaffAuthController extends ChangeNotifier {
   Future<void> restore() async {
     final epoch = _begin();
     final prior = _session;
+    StaffSession? saved;
+    bool refreshAttempted = false;
     _session = null;
     _api?.close();
     _api = null;
     _changed();
     try {
-      final saved = prior ?? await _vault.load(now: _now());
+      saved = prior ?? await _vault.load(now: _now());
       _check(epoch);
       if (saved == null) return;
       final device = await _vault.deviceId();
@@ -1166,6 +1171,7 @@ class StaffAuthController extends ChangeNotifier {
       _check(epoch);
       final auth = _authFactory(saved.base.toString());
       _auth = auth;
+      refreshAttempted = true;
       final result = await auth.call('K260929001903', saved.refreshRequest());
       _check(epoch);
       final refreshed = StaffSession.fromServer(
@@ -1184,6 +1190,20 @@ class StaffAuthController extends ChangeNotifier {
       await _install(refreshed, epoch);
     } catch (error) {
       await _fail(error, epoch);
+      // Only a transport-proven unsent refresh may retain the old credential.
+      // Ambiguous delivery can rotate the token server-side and must not replay.
+      final retrySaved = saved;
+      if (_current(epoch) && refreshAttempted && retrySaved != null &&
+          error is CcsopFailure && error.code == 'TRANSPORT_FAILED' &&
+          !error.deliveryUncertain && retrySaved.canRefresh(_now())) {
+        try {
+          final retained = await _vault.saveIfCurrent(retrySaved,
+            () => _current(epoch) && retrySaved.canRefresh(_now()));
+          if (_current(epoch)) _canRetryRestore = retained;
+        } catch (_) {
+          if (_current(epoch)) _error = 'SECURE_STORAGE_FAILED';
+        }
+      }
       rethrow;
     } finally {
       _finish(epoch);
@@ -2589,6 +2609,7 @@ class StaffAuthController extends ChangeNotifier {
   Future<bool> logout() async {
     if (_disposed) throw const CcsopFailure('CLIENT_CLOSED');
     final epoch = ++_epoch, api = _api;
+    _canRetryRestore = false;
     _auth?.close();
     _auth = null;
     _session = null;

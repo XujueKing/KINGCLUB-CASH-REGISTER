@@ -11,11 +11,16 @@ class UiAuth extends StaffAuthController {
   String? submittedPassword;
   Completer<void>? gate;
   bool waiting = false;
+  bool retryRestore = false;
+  @override bool get canRetryRestore => retryRestore;
   @override
   bool get busy => waiting;
   @override
   Future<void> restore() async {
     restores++;
+    if(retryRestore&&restores==1)throw StateError('TEST_OFFLINE');
+    retryRestore=false;
+    notifyListeners();
   }
 
   @override
@@ -49,6 +54,15 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('unsent restore has one reconnect action without entering a password',(tester) async {
+    final auth=UiAuth()..retryRestore=true;
+    await show(tester,auth);
+    final button=find.widgetWithText(FilledButton,'重新连接');expect(button,findsOneWidget);
+    await tester.tap(button);await tester.pumpAndSettle();
+    expect(auth.restores,2);expect(auth.logins,0);expect(button,findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('Cold restore and all four languages fit compact landscape', (
     tester,

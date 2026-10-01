@@ -66,8 +66,9 @@ class _StaffAccessPageState extends State<StaffAccessPage>
     if (auth.busy) return;
     try {
       await auth.restore();
+      if (mounted) setState(() => notice = null);
     } catch (_) {
-      if (mounted) setState(() => notice = 'staffAuthFailure');
+      if (mounted) setState(() => notice = auth.canRetryRestore ? 'staffReconnectNotice' : 'staffAuthFailure');
     }
   }
 
@@ -224,6 +225,8 @@ class _StaffAccessPageState extends State<StaffAccessPage>
                     Semantics(liveRegion: true, child: Text(t(message))),
                     const SizedBox(height: 16),
                   ],
+                  if (auth.canRetryRestore)
+                    FilledButton(onPressed:auth.busy?null:()=>unawaited(restore()),child:Text(t('staffReconnect'))),
                   if (session == null)
                     Form(
                       key: form,

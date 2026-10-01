@@ -521,6 +521,8 @@ const copy = <String, String>{
       '退回本金／现金|Returned principal / cash|退回本金／現金|คืนเงินต้น / เงินสด',
   'refundGift': '退回原赠送|Returned original gifts|退回原贈送|คืนยอดของแถมเดิม',
   'staffExitPreview': '退出后清空演示草稿，进入员工登录；如本机保存有员工会话，将向服务器验证恢复。|Discard preview drafts and open staff sign-in. A saved staff session will be verified with the server.|退出後清空示範草稿，進入員工登入；如本機儲存有員工工作階段，將向伺服器驗證恢復。|ล้างรายการร่างตัวอย่างและเปิดหน้าล็อกอิน หากมีเซสชันที่บันทึกไว้จะตรวจสอบกับเซิร์ฟเวอร์',
+  'staffReconnect': '重新连接|Reconnect|重新連線|เชื่อมต่อใหม่',
+  'staffReconnectNotice': '网络暂不可用，恢复网络后点重新连接，无需重新输入密码。|Network unavailable. Reconnect when online; no password needed.|網路暫不可用，恢復網路後點重新連線，無需重新輸入密碼。|เครือข่ายไม่พร้อม เมื่อออนไลน์แล้วให้เชื่อมต่อใหม่โดยไม่ต้องกรอกรหัสผ่าน',
   'staffLogin': '独立员工登录|Staff sign-in|獨立員工登入|เข้าสู่ระบบพนักงาน',
   'staffStore': '门店编号|Store reference|門店編號|รหัสร้าน',
   'staffAccount': '员工账号|Employee account|員工帳號|บัญชีพนักงาน',
