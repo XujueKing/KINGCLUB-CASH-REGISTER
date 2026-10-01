@@ -497,6 +497,7 @@ const copy = <String, String>{
   'realtimeConnected': '门店实时通道已连接|Store update channel connected|門店即時通道已連線|เชื่อมต่อช่องทางอัปเดตร้านแล้ว',
   'tableDisabled': '停用桌台|Disabled table|停用桌檯|โต๊ะปิดใช้งาน',
   'tableOpen': '已开台|Open session|已開檯|เปิดโต๊ะแล้ว',
+  'tableTemporaryHold': '临时占座|Temporary hold|臨時佔座|จองโต๊ะชั่วคราว',
   'liveRefresh': '刷新桌台|Refresh tables|重新整理桌檯|รีเฟรชโต๊ะ',
   'liveReadOnly': '只读桌台快照 · 尚未接入实时推送，请手动刷新；未付款订单合计不等于最终结账金额。|Read-only snapshot · No live updates yet; refresh manually. Pending orders are not the final bill.|唯讀桌檯快照 · 尚未接入即時推送，請手動重新整理；未付款訂單合計不等於最終結帳金額。|ข้อมูลโต๊ะ ณ เวลาที่อ่าน · ยังไม่อัปเดตอัตโนมัติ โปรดรีเฟรช ยอดคำสั่งซื้อค้างชำระไม่ใช่ยอดบิลสุดท้าย',
   'liveObserved': '本页查询时间|Page observed at|本頁查詢時間|เวลาข้อมูลหน้านี้',

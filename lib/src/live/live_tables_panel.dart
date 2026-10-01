@@ -754,7 +754,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       ? Colors.white
       : table.session!.status == 'clearing'
       ? const Color(0xFF1D4ED8)
-      : table.session!.pendingCents > 0
+      : table.session!.temporaryHold || table.session!.pendingCents > 0
       ? const Color(0xFFB45309)
       : const Color(0xFF15803D);
 

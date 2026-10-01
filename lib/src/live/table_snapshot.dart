@@ -50,6 +50,7 @@ class TableSessionSnapshot {
     : reference = _ref(value['sessionRef']),
       status = _text(value['status']),
       paymentTiming = _text(value['paymentTiming']),
+      temporaryHold = value['temporaryHold'] == true,
       businessDate = _date(value['businessDate']),
       partySize = value['partySize'] == null
           ? null
@@ -66,7 +67,9 @@ class TableSessionSnapshot {
           ? _number(value['refundedOrders'])
           : 0,
       pendingOrders = _number(value['pendingOrders']) {
-    if (value.containsKey('refundedCents') !=
+    if ((value.containsKey('temporaryHold') &&
+            value['temporaryHold'] is! bool) ||
+        value.containsKey('refundedCents') !=
             value.containsKey('refundedOrders') ||
         (refundedOrders == 0
             ? refundedCents != 0
@@ -78,6 +81,7 @@ class TableSessionSnapshot {
     }
   }
   final String reference, status, paymentTiming, businessDate;
+  final bool temporaryHold;
   final int? partySize;
   final int partyRevision,
       elapsedMinutes,
@@ -94,8 +98,7 @@ class LiveTable {
     : reference = _ref(value['tableRef']),
       name = _text(value['tableName']),
       status = _text(value['tableStatus']),
-      minimumSeats =
-          value['minimumSeats'] == null
+      minimumSeats = value['minimumSeats'] == null
           ? null
           : _number(value['minimumSeats']),
       maximumSeats = _number(value['maximumSeats']),
@@ -119,6 +122,8 @@ class LiveTable {
       ? 'free'
       : session!.status == 'clearing'
       ? 'cleaning'
+      : session!.temporaryHold
+      ? 'tableTemporaryHold'
       : 'tableOpen';
 }
 

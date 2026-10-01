@@ -12,6 +12,15 @@ TableSnapshot parse(Object? raw, {String? cursor}) => TableSnapshot.parse(
 );
 
 void main() {
+  test('Server temporary hold is distinct from staff opening', () {
+    final data = tableFixture();
+    data['result']['tables'][0]['session']['temporaryHold'] = true;
+    expect(parse(data).tables.single.stateLabel, 'tableTemporaryHold');
+    data['result']['tables'][0]['session']['temporaryHold'] = false;
+    expect(parse(data).tables.single.stateLabel, 'tableOpen');
+    data['result']['tables'][0]['session']['temporaryHold'] = 'true';
+    expect(() => parse(data), throwsA(isA<CcsopFailure>()));
+  });
   test(
     'Snapshot keeps unknown party size, original business day and exact cents',
     () {
