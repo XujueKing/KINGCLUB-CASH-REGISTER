@@ -740,7 +740,7 @@ class StaffAuthController extends ChangeNotifier {
         },
       }, command.query);
     }
-    if (!['prepared', 'confirmed'].contains(admission.admissionStatus)) {
+    if (!['prepared', 'confirmed', 'closed'].contains(admission.admissionStatus)) {
       return {
         'result': {'state': 'unknown', 'requestId': command.requestId},
       };
@@ -754,6 +754,14 @@ class StaffAuthController extends ChangeNotifier {
     };
     Object normalize(Object? raw) {
       final value = raw is Map ? raw['result'] : null;
+      if(value is Map && value['state']=='closed_unpaid') {
+        if(value['requestId']!=command.requestId || value['receipt'] is! Map ||
+            value['receipt']['intentRef']!=admission.intentRef) {
+          throw const CcsopFailure('PROVIDER_RECEIPT_INVALID');
+        }
+        ProviderPaymentResult.parse(raw,command);
+        return raw as Object;
+      }
       if (value is! Map ||
           !['confirmed', 'not_sent', 'closed_or_refunded'].contains(value['state']) ||
           (value['state'] == 'closed_or_refunded' &&

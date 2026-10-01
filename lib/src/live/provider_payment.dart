@@ -50,8 +50,9 @@ class ProviderPaymentResult {
     }
     if(raw['state']=='closed_unpaid') {
       final r=raw['receipt'],p=command.params;
-      if(raw.length!=3 || !['wechat','alipay'].contains(command.query.channel) ||
-        r is! Map || r.length!=9 || r['storeRef']!=p['storeRef'] || r['orderRef']!=p['orderRef'] ||
+      if(raw.length!=3 || !['wechat','alipay','member_balance'].contains(command.query.channel) ||
+        r is! Map || r.length!=(command.query.channel=='member_balance'?10:9) ||
+        (command.query.channel=='member_balance'&&r['accountType']!=command.accountType) || r['storeRef']!=p['storeRef'] || r['orderRef']!=p['orderRef'] ||
         r['requestId']!=command.requestId || r['channel']!=p['channel'] || r['currency']!='CNY' ||
         r['totalCents'] is! int || r['totalCents']!=p['expectedTotalCents'] ||
         r['closedBy']!=command.query.employeeRef || r['closureStatus']!='closed_unpaid' ||
