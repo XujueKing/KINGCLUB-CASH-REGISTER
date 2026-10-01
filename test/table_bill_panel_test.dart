@@ -45,6 +45,50 @@ class BillAuth extends TableAuth {
 }
 
 void main() {
+  for (final language in UiLanguage.values) {
+    testWidgets(
+      'receipt footer stays visible while long selection scrolls ${language.name}',
+      (tester) async {
+        final auth = BillAuth();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 380,
+                height: 500,
+                child: TableBillPanel(
+                  auth: auth,
+                  language: language,
+                  tableRef: 'test-000',
+                  sessionRef: 'session-0',
+                  revision: 0,
+                  fillHeight: true,
+                  leading: const SizedBox(
+                    height: 1200,
+                    child: Text('Long selection'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final button = find.byKey(const ValueKey('table-bill-checkout'));
+        final before = tester.getRect(button);
+        expect(button.hitTestable(), findsOneWidget);
+        await tester.drag(
+          find.byType(SingleChildScrollView),
+          const Offset(0, -900),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.getRect(button), before);
+        expect(button.hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        auth.dispose();
+      },
+    );
+  }
   Widget page(BillAuth auth, int revision, {bool checkoutAllowed = true}) =>
       MaterialApp(
         home: Scaffold(

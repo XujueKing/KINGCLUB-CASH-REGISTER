@@ -508,8 +508,21 @@ class _LiveCartPanelState extends State<LiveCartPanel>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
+                  child: TableBillPanel(
+                    auth: widget.auth,
+                    language: widget.language,
+                    tableRef: widget.orderContext.tableRef,
+                    sessionRef: widget.orderContext.sessionRef,
+                    revision: widget.revision + billRevision,
+                    checkoutAllowed:
+                        !busy &&
+                        items.isEmpty &&
+                        (!attempted ||
+                            message == 'orderRecoveryConfirmed' ||
+                            message == 'orderRecoveryCancelled'),
+
+                    fillHeight: true,
+                    leading: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
@@ -647,19 +660,6 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                               ],
                             ),
                           ),
-                        TableBillPanel(
-                          auth: widget.auth,
-                          language: widget.language,
-                          tableRef: widget.orderContext.tableRef,
-                          sessionRef: widget.orderContext.sessionRef,
-                          revision: widget.revision + billRevision,
-                          checkoutAllowed:
-                              !busy &&
-                              items.isEmpty &&
-                              (!attempted ||
-                                  message == 'orderRecoveryConfirmed' ||
-                                  message == 'orderRecoveryCancelled'),
-                        ),
                       ],
                     ),
                   ),

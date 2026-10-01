@@ -18,12 +18,15 @@ class TableBillPanel extends StatefulWidget {
     required this.sessionRef,
     required this.revision,
     this.checkoutAllowed = true,
+    this.fillHeight = false,
+    this.leading,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef, sessionRef;
   final int revision;
-  final bool checkoutAllowed;
+  final bool checkoutAllowed, fillHeight;
+  final Widget? leading;
   @override
   State<TableBillPanel> createState() => _TableBillPanelState();
 }
@@ -189,9 +192,6 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   @override
   Widget build(BuildContext context) {
-    if (!canRead) {
-      return const SizedBox.shrink();
-    }
     final pending = snapshot?.sessionSummary?.buckets['pending'];
     final canPay = [
       'payment.cash',
@@ -199,67 +199,79 @@ class _TableBillPanelState extends State<TableBillPanel>
       'payment.alipay',
       'payment.balance',
     ].any((p) => widget.auth.session?.permissions.contains(p) == true);
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.leading != null) widget.leading!,
+        if (canRead) ...[
+          const Divider(),
+          Text(
+            t('tableBillSubmitted'),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          if (loading) const LinearProgressIndicator(),
+          if (failed)
+            TextButton(
+              onPressed: () => unawaited(load()),
+              child: Text(t('tableBillRetry')),
+            ),
+          for (final order in orders.where((o) => o.status != 'expired')) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                t(order.status == 'paid' ? 'tableBillPaid' : 'tableBillUnpaid'),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            for (final item in order.items)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${item.name(widget.language)} · ${item.specification(widget.language)}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 42,
+                      child: Text(
+                        '×${item.quantity}',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 80,
+                      child: Text(
+                        formatCents(item.subtotalCents),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (order.refund != null)
+              Text(
+                '${t('tableBillRefunded')} ${formatCents(order.refund!.totalCents)}',
+              ),
+          ],
+          if (snapshot?.nextAfterOrder != null)
+            TextButton(
+              onPressed: loading ? null : () => unawaited(load(more: true)),
+              child: Text(t('tableBillMore')),
+            ),
+        ],
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Divider(),
-        Text(
-          t('tableBillSubmitted'),
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        if (loading) const LinearProgressIndicator(),
-        if (failed)
-          TextButton(
-            onPressed: () => unawaited(load()),
-            child: Text(t('tableBillRetry')),
-          ),
-        for (final order in orders.where((o) => o.status != 'expired')) ...[
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              t(order.status == 'paid' ? 'tableBillPaid' : 'tableBillUnpaid'),
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-          for (final item in order.items)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${item.name(widget.language)} · ${item.specification(widget.language)}',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 42,
-                    child: Text(
-                      '×${item.quantity}',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  SizedBox(
-                    width: 80,
-                    child: Text(
-                      formatCents(item.subtotalCents),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (order.refund != null)
-            Text(
-              '${t('tableBillRefunded')} ${formatCents(order.refund!.totalCents)}',
-            ),
-        ],
-        if (snapshot?.nextAfterOrder != null)
-          TextButton(
-            onPressed: loading ? null : () => unawaited(load(more: true)),
-            child: Text(t('tableBillMore')),
-          ),
-        if (pending != null)
+        if (widget.fillHeight)
+          Expanded(child: SingleChildScrollView(child: content))
+        else
+          content,
+        if (canRead && pending != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
@@ -268,7 +280,7 @@ class _TableBillPanelState extends State<TableBillPanel>
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
-        if (canPay)
+        if (canRead && canPay)
           FilledButton(
             key: const ValueKey('table-bill-checkout'),
             onPressed:
