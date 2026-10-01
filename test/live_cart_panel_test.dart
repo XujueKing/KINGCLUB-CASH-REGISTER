@@ -379,6 +379,13 @@ void main() {
         findsOneWidget,
       );
       expect(enabled(tester), false);
+      // The receipt is final: add another round without leaving this table.
+      await tap(tester, 'catalog-add-p001');
+      expect(enabled(tester), true);
+      await tap(tester, 'cart-submit');
+      await tap(tester, 'cart-confirm');
+      expect(auth.submits, 2);
+      expect(auth.sent!.single.quantity, 1);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();
     },

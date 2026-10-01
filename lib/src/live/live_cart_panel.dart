@@ -249,9 +249,11 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         refreshAgain = true;
       } else if (items.isNotEmpty && (!busy || confirming)) {
         unawaited(refreshSelection());
-      } else {
+      } else if (items.isNotEmpty) {
         invalidate();
       }
+      // An empty cart has no selected prices to refresh. Keep it usable while
+      // the catalog and table bill refresh themselves from the same revision.
     }
   }
 
@@ -415,7 +417,8 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           !identical(identity, widget.auth.session)) {
         return;
       }
-      // Any attempted delivery leaves this editor terminal. Recovery owns the original ID.
+      // Keep the editor locked until a durable terminal receipt is returned.
+      // An uncertain delivery remains owned by original-request recovery.
       setState(() {
         attempted = true;
         confirming = false;
@@ -432,6 +435,14 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         setState(() {
           items.clear();
           billRevision++;
+          if (result.state != OrderRequestState.notObserved) {
+            // The controller has acknowledged the original durable command.
+            // The next round must not reuse its consumed saved draft.
+            attempted = false;
+            savedDraft = null;
+            draftLoaded = false;
+            dirty = false;
+          }
           message = switch (result.state) {
             OrderRequestState.confirmed => 'orderRecoveryConfirmed',
             OrderRequestState.cancelled => 'orderRecoveryCancelled',
