@@ -1,4 +1,5 @@
 import 'support/lifecycle.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -183,34 +184,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('bill button prepares without a checkbox and never collects', (
+    tester,
+  ) async {
+    final auth = CheckoutDialogAuth();
+    await mount(tester, auth);
+    await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuote')));
+    await tester.pumpAndSettle();
+    expect(auth.preparations, 0);
+    expect(auth.collections, 0);
+    final button = find.widgetWithText(
+      FilledButton,
+      tr(UiLanguage.zh, 'tableCheckoutPrepare'),
+    );
+    expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
+    expect(find.byType(CheckboxListTile), findsNothing);
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(auth.preparations, 1);
+    expect(auth.collections, 0);
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets(
-    'quote requires explicit consent and preparation never collects',
-    (tester) async {
-      final auth = CheckoutDialogAuth();
-      await mount(tester, auth);
-      await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuote')));
-      await tester.pumpAndSettle();
-      expect(auth.preparations, 0);
-      expect(auth.collections, 0);
-      final button = find.widgetWithText(
-        FilledButton,
-        tr(UiLanguage.zh, 'tableCheckoutPrepare'),
-      );
-      expect(tester.widget<FilledButton>(button).onPressed, isNull);
-      await tester.ensureVisible(find.byType(CheckboxListTile));
-      await tester.tap(find.byType(CheckboxListTile));
-      await tester.pump();
-      await tester.ensureVisible(button);
-      await tester.tap(button);
-      await tester.pumpAndSettle();
-      expect(auth.preparations, 1);
-      expect(auth.collections, 0);
-      expect(find.byType(TextField), findsOneWidget);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
-  testWidgets(
-    'cancellation has separate consent, clears code and ends original controls',
+    'cancellation has one confirmation, clears code and ends original controls',
     (tester) async {
       final auth = CheckoutDialogAuth()..saved = fixture.command();
       await mount(tester, auth);
@@ -221,32 +219,24 @@ void main() {
         OutlinedButton,
         tr(UiLanguage.zh, 'tableCheckoutCancel'),
       );
-      expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
+      expect(tester.widget<OutlinedButton>(button).onPressed, isNotNull);
+      expect(find.byType(CheckboxListTile), findsNothing);
       await tester.enterText(find.byType(TextField), 'TEST_ONLY_CODE');
-      final consent = find.widgetWithText(
-        CheckboxListTile,
-        tr(UiLanguage.zh, 'tableCheckoutCancelConsent'),
-      );
-      await tester.ensureVisible(consent);
-      await tester.tap(consent);
-      await tester.pump();
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        isEmpty,
-      );
-      expect(
-        tester
-            .widget<FilledButton>(
-              find.widgetWithText(
-                FilledButton,
-                tr(UiLanguage.zh, 'tableCheckoutCollect'),
-              ),
-            )
-            .onPressed,
-        isNull,
-      );
       await tester.ensureVisible(button);
       await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(auth.cancellations, 0);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.textContaining('TEST_ONLY_CODE'),
+        ),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('table-checkout-confirm-action')),
+      );
       await tester.pumpAndSettle();
       expect(auth.cancellations, 1);
       expect(auth.collections, 0);
@@ -256,6 +246,90 @@ void main() {
         findsOneWidget,
       );
       expect(find.text(tr(UiLanguage.zh, 'tableCheckoutQuery')), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets('dismissed collection confirmation never sends payment', (
+    tester,
+  ) async {
+    final auth = CheckoutDialogAuth()..saved = fixture.command();
+    await mount(tester, auth);
+    await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuery')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'TEST_ONLY_CODE');
+    final button = find.widgetWithText(
+      FilledButton,
+      tr(UiLanguage.zh, 'tableCheckoutCollect'),
+    );
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(auth.collections, 0);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.tap(
+      find.widgetWithText(TextButton, tr(UiLanguage.zh, 'cancel')),
+    );
+    await tester.pumpAndSettle();
+    expect(auth.collections, 0);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'TEST_ONLY_CODE',
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('backgrounding invalidates an open collection confirmation', (
+    tester,
+  ) async {
+    final auth = CheckoutDialogAuth()..saved = fixture.command();
+    await mount(tester, auth);
+    await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuery')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'TEST_ONLY_CODE');
+    final button = find.widgetWithText(
+      FilledButton,
+      tr(UiLanguage.zh, 'tableCheckoutCollect'),
+    );
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await transitionLifecycle(tester, AppLifecycleState.paused);
+    await transitionLifecycle(tester, AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('table-checkout-confirm-action')),
+    );
+    await tester.pumpAndSettle();
+    expect(auth.collections, 0);
+    await transitionLifecycle(tester, AppLifecycleState.resumed);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
+  testWidgets(
+    'one explicit payment confirmation sends once and retains uncertain original',
+    (tester) async {
+      final auth = CheckoutDialogAuth()..saved = fixture.command();
+      await mount(tester, auth);
+      await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuery')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'TEST_ONLY_CODE');
+      final button = find.widgetWithText(
+        FilledButton,
+        tr(UiLanguage.zh, 'tableCheckoutCollect'),
+      );
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(auth.collections, 0);
+      await tester.tap(
+        find.byKey(const ValueKey('table-checkout-confirm-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(auth.collections, 1);
+      expect(auth.saved, isNotNull);
+      expect(
+        find.text(tr(UiLanguage.zh, 'tableCheckoutReview')),
+        findsOneWidget,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

@@ -38,9 +38,9 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   TableCheckoutAdmission? admission;
   TableCheckoutResult? result;
   String choice = 'wechat', message = '';
-  bool foreground = true, busy = false, ready = false, consent = false;
-  bool cancelConsent = false, cancelled = false;
-  bool cancellationNeedsQuery = false;
+  bool foreground = true, busy = false, ready = false;
+  bool cancelled = false;
+  bool cancellationNeedsQuery = false, confirmationOpen = false;
   int epoch = 0;
   Timer? expiry;
   Timer? authorityExpiry;
@@ -98,8 +98,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         result = null;
         ready = false;
         busy = false;
-        consent = false;
-        cancelConsent = false;
+        confirmationOpen = false;
         cancelled = false;
         cancellationNeedsQuery = false;
         message = '';
@@ -198,7 +197,6 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     setState(() {
       busy = true;
       quote = null;
-      consent = false;
       message = '';
     });
     try {
@@ -219,7 +217,6 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         if (current(e)) {
           setState(() {
             quote = null;
-            consent = false;
           });
         }
       });
@@ -239,12 +236,53 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     return '${s.substring(0, 8)}-${s.substring(8, 12)}-${s.substring(12, 16)}-${s.substring(16, 20)}-${s.substring(20)}';
   }
 
+  Future<bool> confirmAction(
+    String title,
+    String notice,
+    TableCheckoutCommand original,
+  ) async {
+    final e = epoch;
+    setState(() {
+      busy = true;
+      confirmationOpen = true;
+    });
+    try {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(t(title)),
+          content: Text(
+            '${label(original.accountType ?? original.channel)} / CNY ${formatCents(original.totalCents)}\n${t(notice)}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(t('cancel')),
+            ),
+            FilledButton(
+              key: const ValueKey('table-checkout-confirm-action'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(t('confirm')),
+            ),
+          ],
+        ),
+      );
+      return current(e) && accepted == true;
+    } finally {
+      if (current(e)) {
+        setState(() {
+          busy = false;
+          confirmationOpen = false;
+        });
+      }
+    }
+  }
+
   Future<void> prepare({bool retry = false}) async {
     if (!foreground ||
         busy ||
         cancelled ||
         cancellationNeedsQuery ||
-        !consent ||
         (retry ? command == null : !fresh || command != null)) {
       return;
     }
@@ -260,7 +298,6 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     setState(() {
       command = original;
       busy = true;
-      consent = false;
       message = '';
     });
     try {
@@ -287,8 +324,6 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     setState(() {
       busy = true;
       admission = null;
-      consent = false;
-      cancelConsent = false;
       message = '';
     });
     input.clear();
@@ -324,16 +359,22 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         original == null ||
         cancelled ||
         result?.settled == true ||
-        (!queryOnly &&
-            (!cancelConsent || admission?.paymentStatus != 'prepared'))) {
+        (!queryOnly && admission?.paymentStatus != 'prepared')) {
       return;
     }
     final e = epoch;
+    if (!queryOnly &&
+        !await confirmAction(
+          'tableCheckoutCancel',
+          'tableCheckoutCancelConsent',
+          original,
+        )) {
+      return;
+    }
+    if (!current(e)) return;
     input.clear();
     setState(() {
       busy = true;
-      consent = false;
-      cancelConsent = false;
       admission = null;
       cancellationNeedsQuery = true;
       message = '';
@@ -371,16 +412,22 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         busy ||
         cancelled ||
         original == null ||
-        admission?.observed != true ||
-        (!recover && !consent)) {
+        admission?.observed != true) {
       return;
     }
     final e = epoch, text = input.text;
+    if (!recover &&
+        !await confirmAction(
+          'tableCheckoutCollect',
+          'tableCheckoutCollectConsent',
+          original,
+        )) {
+      return;
+    }
+    if (!current(e)) return;
     input.clear();
     setState(() {
       busy = true;
-      consent = false;
-      cancelConsent = false;
       message = '';
       admission = null;
     });
@@ -406,11 +453,18 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         });
       }
     } catch (error) {
-      final soldOut=error is CcsopFailure&&error.code=='ORDERING_OUT_OF_STOCK';
+      final soldOut =
+          error is CcsopFailure && error.code == 'ORDERING_OUT_OF_STOCK';
       if (current(e)) {
-        setState(() => message = t(soldOut
-          ? (original.channel=='cash'?'cashStockUnavailable':'paymentStockUnavailable')
-          : 'tableCheckoutReview'));
+        setState(
+          () => message = t(
+            soldOut
+                ? (original.channel == 'cash'
+                      ? 'cashStockUnavailable'
+                      : 'paymentStockUnavailable')
+                : 'tableCheckoutReview',
+          ),
+        );
       }
     } finally {
       if (current(e)) setState(() => busy = false);
@@ -439,7 +493,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                   ),
                 ],
               ),
-              if (busy) const LinearProgressIndicator(),
+              if (busy && !confirmationOpen) const LinearProgressIndicator(),
               Expanded(
                 child: !foreground
                     ? const SizedBox.shrink()
@@ -475,7 +529,6 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                           setState(() {
                                             choice = v;
                                             quote = null;
-                                            consent = false;
                                             expiry?.cancel();
                                           });
                                         }
@@ -528,16 +581,8 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                     },
                                   ),
                                 ),
-                                CheckboxListTile(
-                                  value: consent,
-                                  onChanged: busy
-                                      ? null
-                                      : (v) =>
-                                            setState(() => consent = v == true),
-                                  title: Text(t('tableCheckoutConsent')),
-                                ),
                                 FilledButton(
-                                  onPressed: busy || !consent || !fresh
+                                  onPressed: busy || !fresh
                                       ? null
                                       : () => unawaited(prepare()),
                                   child: Text(t('tableCheckoutPrepare')),
@@ -568,17 +613,8 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                 if (!cancellationNeedsQuery &&
                                     (admission == null ||
                                         admission?.observed == false)) ...[
-                                  CheckboxListTile(
-                                    value: consent,
-                                    onChanged: busy
-                                        ? null
-                                        : (v) => setState(
-                                            () => consent = v == true,
-                                          ),
-                                    title: Text(t('tableCheckoutConsent')),
-                                  ),
                                   OutlinedButton(
-                                    onPressed: busy || !consent
+                                    onPressed: busy
                                         ? null
                                         : () => unawaited(prepare(retry: true)),
                                     child: Text(t('tableCheckoutRetryPrepare')),
@@ -594,21 +630,8 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                   ),
                                   if (admission?.paymentStatus ==
                                       'prepared') ...[
-                                    CheckboxListTile(
-                                      value: cancelConsent,
-                                      onChanged: busy
-                                          ? null
-                                          : (v) => setState(() {
-                                              cancelConsent = v == true;
-                                              consent = false;
-                                              input.clear();
-                                            }),
-                                      title: Text(
-                                        t('tableCheckoutCancelConsent'),
-                                      ),
-                                    ),
                                     OutlinedButton(
-                                      onPressed: busy || !cancelConsent
+                                      onPressed: busy
                                           ? null
                                           : () => unawaited(cancelOriginal()),
                                       child: Text(t('tableCheckoutCancel')),
@@ -640,20 +663,8 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                           ),
                                         ),
                                       ),
-                                    CheckboxListTile(
-                                      value: consent,
-                                      onChanged: busy
-                                          ? null
-                                          : (v) => setState(() {
-                                              consent = v == true;
-                                              cancelConsent = false;
-                                            }),
-                                      title: Text(
-                                        t('tableCheckoutCollectConsent'),
-                                      ),
-                                    ),
                                     FilledButton(
-                                      onPressed: busy || !consent
+                                      onPressed: busy
                                           ? null
                                           : () => unawaited(collect()),
                                       child: Text(t('tableCheckoutCollect')),
