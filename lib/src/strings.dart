@@ -6,6 +6,12 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'tableBillSubmitted': '本桌已点|Table orders|本桌已點|รายการที่สั่งแล้ว',
+  'tableBillPaid': '已付款|Paid|已付款|ชำระแล้ว',
+  'tableBillUnpaid': '待付款|Unpaid|待付款|ยังไม่ชำระ',
+  'tableBillRefunded': '已退款|Refunded|已退款|คืนเงินแล้ว',
+  'tableBillMore': '更多已点商品|More table orders|更多已點商品|ดูรายการเพิ่ม',
+  'tableBillRetry': '账单读取失败，点击重试|Bill unavailable. Retry|帳單讀取失敗，點擊重試|โหลดบิลไม่สำเร็จ ลองใหม่',
   'tableOrderStart': '点单|Order|點單|สั่งอาหาร',
   'paymentStockUnavailable': '商品已售罄，未发起扣款，请修改订单。|Item sold out. No charge was initiated. Please change the order.|商品已售罄，未發起扣款，請修改訂單。|สินค้าหมด ยังไม่ได้เรียกเก็บเงิน โปรดแก้ไขคำสั่งซื้อ',
   'cashStockUnavailable': '商品已售罄，未完成结账；如已收现金，请退还后修改订单。|Item sold out; checkout was not completed. Return any cash received before changing the order.|商品已售罄，未完成結帳；如已收現金，請退還後修改訂單。|สินค้าหมด ยังไม่ได้ปิดบิล หากรับเงินสดแล้ว โปรดคืนเงินก่อนแก้ไขคำสั่งซื้อ',

@@ -11,6 +11,7 @@ import 'live_order_recovery_panel.dart';
 import 'order_command.dart';
 import 'order_context_snapshot.dart';
 import 'table_snapshot.dart';
+import 'table_bill_panel.dart';
 
 /// Explicit local draft save/restore; submission remains a separately confirmed command.
 class LiveCartPanel extends StatefulWidget {
@@ -48,6 +49,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       attempted = false,
       recovery = false;
   int epoch = 0;
+  int billRevision = 0;
   bool confirming = false;
   bool refreshingSelection = false;
   bool refreshAgain = false;
@@ -429,6 +431,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       if (mounted && generation == epoch) {
         setState(() {
           items.clear();
+          billRevision++;
           message = switch (result.state) {
             OrderRequestState.confirmed => 'orderRecoveryConfirmed',
             OrderRequestState.cancelled => 'orderRecoveryCancelled',
@@ -633,6 +636,19 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                               ],
                             ),
                           ),
+                        TableBillPanel(
+                          auth: widget.auth,
+                          language: widget.language,
+                          tableRef: widget.orderContext.tableRef,
+                          sessionRef: widget.orderContext.sessionRef,
+                          revision: widget.revision + billRevision,
+                          checkoutAllowed:
+                              !busy &&
+                              items.isEmpty &&
+                              (!attempted ||
+                                  message == 'orderRecoveryConfirmed' ||
+                                  message == 'orderRecoveryCancelled'),
+                        ),
                       ],
                     ),
                   ),
