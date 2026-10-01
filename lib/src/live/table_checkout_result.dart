@@ -20,9 +20,11 @@ class TableCheckoutResult {
     this.checkoutRef,
     this._command, {
     this.settledAt,
+    this.canCloseUnpaid = false,
   });
   final String state, checkoutRef, _command;
   final DateTime? settledAt;
+  final bool canCloseUnpaid;
   bool get settled => state == 'settled';
   bool get closedUnpaid => state == 'closed_unpaid';
   bool get resolved => settled || closedUnpaid;
@@ -46,7 +48,7 @@ class TableCheckoutResult {
         body,
         state == 'settled' || state == 'closed_unpaid'
             ? ['state', 'checkoutRef', 'receipt']
-            : ['state', 'checkoutRef'],
+            : ['state', 'checkoutRef', if(body.containsKey('canCloseUnpaid')) 'canCloseUnpaid'],
       );
       if (row['checkoutRef'] != checkoutRef ||
           ![
@@ -62,16 +64,23 @@ class TableCheckoutResult {
               ['pending', 'unknown', 'review_required'].contains(state))) {
         throw const FormatException();
       }
+      final canCloseUnpaid=row['canCloseUnpaid']==true;
+      if(row.containsKey('canCloseUnpaid')&&(row['canCloseUnpaid'] is! bool||
+        (canCloseUnpaid&&(command.channel!='alipay'||!['pending','unknown'].contains(state))))) {
+        throw const FormatException();
+      }
       if (state == 'closed_unpaid') {
         final r = _object(row['receipt'], [
           'version', 'checkoutRef', 'storeRef', 'tableRef', 'sessionRef',
           'channel', 'expectedTotalCents', 'paymentProfileFingerprint',
           'employeeRef', 'snapshotFingerprint', 'outTradeNo', 'currency',
           'closureStatus', 'reason', 'closedAt', 'orderCount',
+          if(command.channel=='alipay') 'tradeNo',
         ]);
         final closedAt = r['closedAt'];
-        if (command.channel != 'wechat' || command.accountType != null ||
-            r['version'] != 1 || r['version'] is! int ||
+        if (!['wechat','alipay'].contains(command.channel) || command.accountType != null ||
+            r['version'] != (command.channel=='wechat'?1:2) || r['version'] is! int ||
+            (command.channel=='alipay'&&(r['tradeNo'] is! String||!RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(r['tradeNo'] as String))) ||
             r['checkoutRef'] != checkoutRef || r['storeRef'] != command.storeRef ||
             r['tableRef'] != command.tableRef || r['sessionRef'] != command.sessionRef ||
             r['channel'] != command.channel || r['currency'] != 'CNY' ||
@@ -79,7 +88,7 @@ class TableCheckoutResult {
             r['employeeRef'] != command.employeeRef || r['snapshotFingerprint'] != command.fingerprint ||
             r['outTradeNo'] != checkoutRef.replaceAll('-', '') ||
             r['orderCount'] is! int || r['orderCount'] != command.orderCount ||
-            r['closureStatus'] != 'closed_unpaid' || r['reason'] != 'CLOSED' ||
+            r['closureStatus'] != 'closed_unpaid' || r['reason'] != (command.channel=='wechat'?'CLOSED':'CLOSE_CONFIRMED') ||
             r['paymentProfileFingerprint'] is! String ||
             !RegExp(r'^[0-9a-f]{64}$').hasMatch(r['paymentProfileFingerprint'] as String) ||
             closedAt is! String || !closedAt.endsWith('Z') || DateTime.tryParse(closedAt) == null) {
@@ -92,6 +101,7 @@ class TableCheckoutResult {
           state as String,
           checkoutRef,
           jsonEncode(command.encoded),
+          canCloseUnpaid: canCloseUnpaid,
         );
       }
       final r = _object(row['receipt'], [

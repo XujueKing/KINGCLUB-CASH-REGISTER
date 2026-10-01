@@ -247,9 +247,13 @@ class StaffAuthController extends ChangeNotifier {
     stillCurrent: stillCurrent,
   );
 
+  Future<TableCheckoutResult> closeTableProvider(TableCheckoutCommand command,{required bool Function() stillCurrent}) =>
+    _resolveTableCollection(command,collect:false,closeUnpaid:true,stillCurrent:stillCurrent);
+
   Future<TableCheckoutResult> _resolveTableCollection(
     TableCheckoutCommand command, {
     required bool collect,
+    bool closeUnpaid = false,
     required bool Function() stillCurrent,
     String? payerCode,
     int? cashReceivedCents,
@@ -268,6 +272,7 @@ class StaffAuthController extends ChangeNotifier {
       }
 
       validate();
+      if(closeUnpaid&&(collect||command.channel!='alipay'))throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_CHANGED');
       // Lookup requires the identical durable request and validates the original
       // parent scope. Admission alone is never a settled result.
       final admission = await lookupTableCheckout(command);
@@ -294,7 +299,7 @@ class StaffAuthController extends ChangeNotifier {
         params['accountType'] = command.accountType;
         if (firstSend) params['paymentCode'] = payerCode;
       } else {
-        interfaceId = firstSend ? 'K260930001940' : 'K260930001941';
+        interfaceId = closeUnpaid ? 'K261002001963' : firstSend ? 'K260930001940' : 'K260930001941';
         params['channel'] = command.channel;
         if (firstSend) params['authCode'] = payerCode;
       }

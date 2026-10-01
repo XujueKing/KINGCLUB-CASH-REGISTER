@@ -81,6 +81,16 @@ void main() {
     return controller;
   }
 
+  test('explicit Alipay table close uses original lookup and preserves uncertainty', () async {
+    final command=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'alipay','accountType':null});
+    final storage=staff.TestStorage(),api=CollectionApi(command)..status='pending'..resultState='unknown';
+    final controller=await setup(storage,api);
+    final result=await controller.closeTableProvider(command,stillCurrent:()=>true);
+    expect(result.resolved,false);
+    expect(api.calls.map((e)=>e.$1),['K260930001939','K261002001963']);
+    expect(api.calls.last.$2.keys.toSet(),{'storeRef','checkoutRef','channel','expectedTotalCents'});
+    expect(await controller.pendingTableCheckouts('alipay'),hasLength(1));
+  });
   test('verified unpaid closure removes only original recovery entry, without another payment', () async {
     final command=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'wechat','accountType':null});
     final storage=staff.TestStorage(),api=CollectionApi(command)..status='closed'..resultState='closed_unpaid';

@@ -52,6 +52,16 @@ Map<String, dynamic> settlementFixture(TableCheckoutCommand c) => {
   },
 };
 void main() {
+  test('Alipay v2 closure requires the original trade and version', () {
+    final c=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'alipay','accountType':null});
+    Map<String,dynamic> proof(){final raw=closureFixture(c);(raw['result']['receipt'] as Map).addAll(<String,Object>{'version':2,'channel':'alipay','reason':'CLOSE_CONFIRMED','tradeNo':'TEST_TRADE'});return raw;}
+    expect(TableCheckoutResult.parse(proof(),c,checkoutRef:checkout).closedUnpaid,true);
+    for(final patch in <Map<String,Object>>[{'version':1},{'reason':'CLOSED'},{'tradeNo':''},{'channel':'wechat'}]){
+      final raw=proof();(raw['result']['receipt'] as Map).addAll(patch);
+      expect(()=>TableCheckoutResult.parse(raw,c,checkoutRef:checkout),throwsA(isA<CcsopFailure>()));
+    }
+    expect(TableCheckoutResult.parse({'result':{'state':'pending','checkoutRef':checkout,'canCloseUnpaid':true}},c,checkoutRef:checkout).canCloseUnpaid,true);
+  });
   test('only complete original unpaid closure resolves a collection without marking paid', () {
     final c=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'wechat','accountType':null});
     final result=TableCheckoutResult.parse(closureFixture(c),c,checkoutRef:checkout);

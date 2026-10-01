@@ -443,17 +443,17 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     }
   }
 
-  Future<void> collect({bool recover = false}) async {
+  Future<void> collect({bool recover = false,bool close = false}) async {
     final original = command;
     if (!foreground ||
         busy ||
         cancelled ||
         original == null ||
-        admission?.observed != true) {
+        (admission?.observed != true&&!(close&&result?.canCloseUnpaid==true&&result!.matches(original)))) {
       return;
     }
     final e = epoch, text = input.text;
-    if (!recover &&
+    if (!recover && !close &&
         !await confirmAction(
           'tableCheckoutCollect',
           'tableCheckoutCollectConsent',
@@ -469,7 +469,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       admission = null;
     });
     try {
-      final next = recover
+      final next = close ? await widget.auth.closeTableProvider(original,stillCurrent:()=>current(e)) : recover
           ? await widget.auth.recoverTableCheckout(
               original,
               stillCurrent: () => current(e),
@@ -684,6 +684,8 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                     child: Text(t('tableCheckoutRetryPrepare')),
                                   ),
                                 ],
+                                if(result?.canCloseUnpaid==true&&command?.channel=='alipay')
+                                  OutlinedButton(onPressed:busy?null:()=>unawaited(collect(close:true)),child:Text(t('provider_close_attempt'))),
                                 if (admission?.observed == true) ...[
                                   OutlinedButton(
                                     onPressed: busy

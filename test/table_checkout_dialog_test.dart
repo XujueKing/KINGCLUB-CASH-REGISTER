@@ -177,6 +177,20 @@ class CheckoutDialogAuth extends StaffAuthController {
   }
 }
 
+class ExplicitCloseAuth extends CheckoutDialogAuth {
+  ExplicitCloseAuth():super(permissions:['workbench.read','payment.alipay']) {
+    saved=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'alipay','accountType':null});
+    admissionStatus='pending';
+  }
+  int closes=0;
+  @override Future<TableCheckoutResult> recoverTableCheckout(TableCheckoutCommand command,{required bool Function() stillCurrent}) async =>
+    TableCheckoutResult.parse({'result':{'state':'pending','checkoutRef':settlement.checkout,'canCloseUnpaid':closes==0}},command,checkoutRef:settlement.checkout);
+  @override Future<TableCheckoutResult> closeTableProvider(TableCheckoutCommand command,{required bool Function() stillCurrent}) async {
+    expect(stillCurrent(),true);closes++;
+    return TableCheckoutResult.parse({'result':{'state':'unknown','checkoutRef':settlement.checkout}},command,checkoutRef:settlement.checkout);
+  }
+}
+
 void main() {
   Future<void> mount(WidgetTester tester, CheckoutDialogAuth auth) async {
     tester.view.physicalSize = const Size(1366, 900);
@@ -197,6 +211,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('explicit whole-table close is one button and retains original uncertainty',(tester) async {
+    final auth=ExplicitCloseAuth();await mount(tester,auth);
+    await tester.tap(find.text(tr(UiLanguage.zh,'tableCheckoutQuery')));await tester.pumpAndSettle();
+    await tester.tap(find.text(tr(UiLanguage.zh,'tableCheckoutRecover')));await tester.pumpAndSettle();
+    final close=find.text(tr(UiLanguage.zh,'provider_close_attempt'));expect(close,findsOneWidget);
+    await tester.ensureVisible(close);await tester.tap(close);await tester.pumpAndSettle();
+    expect(auth.closes,1);expect(auth.collections,0);expect(auth.saved,isNotNull);expect(find.byType(AlertDialog),findsNothing);
+    expect(close,findsNothing);await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('settled checkout opens its server receipt without collecting again', (tester) async {
     final auth = CheckoutDialogAuth(permissions: ['workbench.read', 'payment.balance', 'orders.read'])..saved = fixture.command();
     await mount(tester, auth);
