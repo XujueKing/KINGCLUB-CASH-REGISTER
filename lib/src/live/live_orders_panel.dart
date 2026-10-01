@@ -621,7 +621,16 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                     child: Text(t('ordersBack')),
                   ),
                   Text('${widget.table.name} · ${t('ordersDetails')}'),
-                  if (const bool.fromEnvironment('CASHIER_TABLE_CHECKOUT'))
+                  if ([
+                    'payment.wechat',
+                    'payment.alipay',
+                    'payment.cash',
+                    'payment.balance',
+                  ].any(
+                    (permission) =>
+                        widget.auth.session?.permissions.contains(permission) ==
+                        true,
+                  ))
                     OutlinedButton(
                       key: const ValueKey('table-checkout-open'),
                       onPressed:

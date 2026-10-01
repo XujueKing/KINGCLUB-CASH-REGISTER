@@ -220,8 +220,17 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
           });
         }
       });
-    } catch (_) {
-      if (current(e)) setState(() => message = t('tableCheckoutReview'));
+    } catch (error) {
+      if (current(e)) {
+        setState(
+          () => message = t(
+            error is CcsopFailure &&
+                    error.code == 'CASHIER_TABLE_CHECKOUT_NOT_ENABLED'
+                ? 'tableCheckoutUnavailable'
+                : 'tableCheckoutReview',
+          ),
+        );
+      }
     } finally {
       if (current(e)) setState(() => busy = false);
     }

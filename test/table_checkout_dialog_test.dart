@@ -11,6 +11,7 @@ import 'package:kingclub_cash_register/src/live/table_checkout_cancellation.dart
 import 'package:kingclub_cash_register/src/live/table_checkout_dialog.dart';
 import 'package:kingclub_cash_register/src/live/table_checkout_result.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
+import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 
 import 'staff_session_test.dart' as staff;
 import 'table_checkout_command_test.dart' as fixture;
@@ -45,6 +46,7 @@ class CheckoutDialogAuth extends StaffAuthController {
   int cancellationQueries = 0;
   String admissionStatus = 'prepared';
   bool cancellationConfirmed = true;
+  bool quoteUnavailable = false;
   Completer<void>? cancellationWait;
   Future<TableCheckoutCancellation> cancellationResult(
     TableCheckoutCommand command,
@@ -100,6 +102,9 @@ class CheckoutDialogAuth extends StaffAuthController {
     required String channel,
     required String? accountType,
   }) async {
+    if (quoteUnavailable) {
+      throw const CcsopFailure('CASHIER_TABLE_CHECKOUT_NOT_ENABLED');
+    }
     final raw = fixture.tableQuoteFixture();
     (raw['result'] as Map)['accountType'] = accountType;
     return TableCheckoutQuote.parse(
@@ -184,6 +189,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets(
+    'server-disabled checkout has a clear message and no payment request',
+    (tester) async {
+      final auth = CheckoutDialogAuth()..quoteUnavailable = true;
+      await mount(tester, auth);
+      await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuote')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(tr(UiLanguage.zh, 'tableCheckoutUnavailable')),
+        findsOneWidget,
+      );
+      expect(auth.preparations, 0);
+      expect(auth.collections, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
   testWidgets('bill button prepares without a checkbox and never collects', (
     tester,
   ) async {

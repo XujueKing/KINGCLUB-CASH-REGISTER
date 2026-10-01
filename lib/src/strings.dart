@@ -109,6 +109,7 @@ const copy = <String, String>{
   'tableCheckoutTitle': '整桌结账|Table checkout|整桌結帳|ชำระเงินทั้งโต๊ะ',
   'tableCheckoutNotice': '仅收取本场次待付订单。平台现金与本店充值余额分开使用；关闭页面不会取消原交易。|Collect only unpaid orders in this session. Platform cash and store balance stay separate. Closing does not cancel a transaction.|僅收取本場次待付訂單。平台現金與本店儲值餘額分開使用；關閉頁面不會取消原交易。|เรียกเก็บเฉพาะรายการค้างชำระรอบนี้ เงินแพลตฟอร์มกับยอดร้านแยกกัน การปิดหน้าไม่ยกเลิกธุรกรรม',
   'tableCheckoutQuote': '读取整桌账单|Read table bill|讀取整桌帳單|อ่านบิลทั้งโต๊ะ',
+  'tableCheckoutUnavailable': '本店暂未开通整桌结账|Table checkout is not available at this store yet|本店暫未開通整桌結帳|ร้านนี้ยังไม่เปิดใช้การชำระทั้งโต๊ะ',
   'tableCheckoutConsent': '我已核对桌台、支付账户和整桌金额|I checked the table, payment account and total|我已核對桌台、付款帳戶和整桌金額|ฉันตรวจสอบโต๊ะ บัญชี และยอดรวมแล้ว',
   'tableCheckoutPrepare': '确认账单（尚不收款）|Confirm bill (no collection yet)|確認帳單（尚不收款）|ยืนยันบิล (ยังไม่เรียกเก็บ)',
   'tableCheckoutQuery': '查询原结账单|Find original checkout|查詢原結帳單|ค้นหารายการเดิม',

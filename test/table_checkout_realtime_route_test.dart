@@ -23,7 +23,6 @@ class RealtimeCheckoutAuth extends CheckoutDialogAuth {
 }
 
 void main() {
-  // Run in the final behavior batch with --dart-define=CASHIER_TABLE_CHECKOUT=true.
   for (final beforeFirstFrame in [true, false]) {
     testWidgets(
       'store revision preserves original checkout; authority closes it (early=$beforeFirstFrame)',
@@ -70,7 +69,6 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         auth.dispose();
       },
-      skip: !const bool.fromEnvironment('CASHIER_TABLE_CHECKOUT'),
     );
   }
 }

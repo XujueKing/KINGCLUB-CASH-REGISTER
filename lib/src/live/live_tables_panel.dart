@@ -629,16 +629,15 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
             : null,
         child: Text(t('voucherReportTitle')),
       ),
-    if (const bool.fromEnvironment('CASHIER_TABLE_CHECKOUT') &&
-        [
-          'payment.wechat',
-          'payment.alipay',
-          'payment.cash',
-          'payment.balance',
-        ].any(
-          (permission) =>
-              widget.auth.session?.permissions.contains(permission) == true,
-        ))
+    if ([
+      'payment.wechat',
+      'payment.alipay',
+      'payment.cash',
+      'payment.balance',
+    ].any(
+      (permission) =>
+          widget.auth.session?.permissions.contains(permission) == true,
+    ))
       OutlinedButton(
         key: const ValueKey('table-checkout-recovery-open'),
         onPressed: foreground
