@@ -372,6 +372,41 @@ void main() {
     },
   );
   testWidgets(
+    'realtime refresh keeps rows, blocks actions, and replaces or rejects stale data',
+    (tester) async {
+      final auth = OrdersAuth();
+      await show(tester, auth);
+      await tester.pumpAndSettle();
+      auth.ordersGate = Completer<Object?>();
+      await show(tester, auth, revision: 1);
+      expect(find.textContaining('Test product'), findsOneWidget);
+      final preview = find.byKey(const ValueKey('order-preview-D00000000001'));
+      expect(tester.widget<OutlinedButton>(preview).onPressed, isNull);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 450));
+      expect(find.textContaining('Test product'), findsOneWidget);
+      final updated = orderFixture();
+      (((updated['result'] as Map)['orders'] as List).first as Map)['status'] =
+          'paid';
+      auth.ordersGate!.complete(updated);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining(tr(UiLanguage.en, 'order_paid')),
+        findsOneWidget,
+      );
+      expect(tester.widget<OutlinedButton>(preview).onPressed, isNotNull);
+      auth.ordersGate = Completer<Object?>();
+      await show(tester, auth, revision: 2);
+      await tester.pump(const Duration(milliseconds: 450));
+      auth.ordersGate!.completeError(StateError('offline'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Test product'), findsNothing);
+      expect(find.text(tr(UiLanguage.en, 'liveReadFailed')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
     'discards background late replies and reloads on resume and realtime change',
     (tester) async {
       final auth = OrdersAuth()..ordersGate = Completer<Object?>();

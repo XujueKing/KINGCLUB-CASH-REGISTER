@@ -40,6 +40,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   int page = 0, epoch = 0;
   bool loading = false, failed = false, foreground = true, queued = false;
   Timer? debounce;
+  bool get snapshotRefreshing => loading || queued;
   bool cashBusy = false, cashRecovery = false;
   bool servingRecovery = false;
   bool servingConfirming = false;
@@ -53,7 +54,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
         snapshot = data,
         generation = checkoutScopeEpoch;
     if (!foreground ||
-        loading ||
+        snapshotRefreshing ||
         cashBusy ||
         previewOpening ||
         snapshot == null ||
@@ -93,7 +94,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   Future<void> openBalanceRefund(LiveOrder order) async {
     final identity = widget.auth.session, generation = epoch;
     if (!foreground ||
-        loading ||
+        snapshotRefreshing ||
         cashBusy ||
         previewOpening ||
         data?.orders.contains(order) != true ||
@@ -147,7 +148,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   }) async {
     final snapshot = data, identity = widget.auth.session;
     if (!foreground ||
-        loading ||
+        snapshotRefreshing ||
         cashBusy ||
         previewOpening ||
         snapshot == null ||
@@ -232,7 +233,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
       RegExp(r'^D[0-9]{11}$').hasMatch(order.reference);
 
   Future<void> prepareCash(LiveOrder order) async {
-    if (cashBusy || loading || !cashEligible(order)) return;
+    if (cashBusy || snapshotRefreshing || !cashEligible(order)) return;
     final generation = epoch,
         auth = widget.auth,
         identity = widget.auth.session;
@@ -320,7 +321,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
               order.cashierOrder));
 
   Future<void> confirmServing(LiveOrder order, OrderItem item) async {
-    if (cashBusy || loading || !servingEligible(order, item)) return;
+    if (cashBusy || snapshotRefreshing || !servingEligible(order, item)) return;
     final generation = epoch,
         auth = widget.auth,
         identity = widget.auth.session;
@@ -483,7 +484,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
       // A store-wide event may be our own payment confirmation. Keep the
       // original checkout route; each command is revalidated by the server.
       if (scopeChanged || !tableCheckoutOpening) closeCashDialog();
-      data = null;
+      if (scopeChanged) data = null;
       loading = false;
       schedule();
     }
@@ -526,6 +527,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
       authChanged();
       return;
     }
+    final previousPage = page;
     if (reset) {
       cursors
         ..clear()
@@ -536,7 +538,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
     setState(() {
       loading = true;
       failed = false;
-      data = null;
+      if (requested != previousPage) data = null;
     });
     try {
       final raw = await widget.auth.readOrders(
@@ -645,7 +647,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                       key: const ValueKey('table-checkout-open'),
                       onPressed:
                           cashBusy ||
-                              loading ||
+                              snapshotRefreshing ||
                               !foreground ||
                               previewOpening ||
                               data == null
@@ -658,14 +660,14 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                       ) ==
                       true)
                     OutlinedButton(
-                      onPressed: cashBusy
+                      onPressed: cashBusy || snapshotRefreshing
                           ? null
                           : () => setState(() => servingRecovery = true),
                       child: Text(t('servingRecoveryTitle')),
                     ),
                   OutlinedButton(
                     key: const ValueKey('orders-refresh'),
-                    onPressed: loading || cashBusy
+                    onPressed: snapshotRefreshing || cashBusy
                         ? null
                         : () => unawaited(load(reset: true)),
                     child: Text(t('ordersRefresh')),
@@ -698,7 +700,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                         ],
                       ),
               ),
-            if (loading || (cashBusy && !servingConfirming))
+            if (snapshotRefreshing || (cashBusy && !servingConfirming))
               const LinearProgressIndicator(),
             Expanded(
               child: failed
@@ -745,7 +747,9 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                           'order-preview-${order.reference}',
                                         ),
                                         onPressed:
-                                            cashBusy || loading || !foreground
+                                            cashBusy ||
+                                                snapshotRefreshing ||
+                                                !foreground
                                             ? null
                                             : () => unawaited(
                                                 previewOrder(order),
@@ -768,7 +772,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                   OutlinedButton(
                                     onPressed:
                                         foreground &&
-                                            !loading &&
+                                            !snapshotRefreshing &&
                                             !cashBusy &&
                                             !previewOpening
                                         ? () => unawaited(
@@ -798,7 +802,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                     ),
                                     onPressed:
                                         cashBusy ||
-                                            loading ||
+                                            snapshotRefreshing ||
                                             !foreground ||
                                             previewOpening
                                         ? null
@@ -821,7 +825,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                     ),
                                     onPressed:
                                         cashBusy ||
-                                            loading ||
+                                            snapshotRefreshing ||
                                             !foreground ||
                                             previewOpening
                                         ? null
@@ -843,7 +847,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                     ))
                                   if (order.cashierOrder &&
                                       foreground &&
-                                      !loading &&
+                                      !snapshotRefreshing &&
                                       !cashBusy &&
                                       {
                                         'open',
@@ -867,7 +871,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                       key: ValueKey(
                                         'cash-prepare-${order.reference}',
                                       ),
-                                      onPressed: cashBusy
+                                      onPressed: cashBusy || snapshotRefreshing
                                           ? null
                                           : () => unawaited(prepareCash(order)),
                                       child: Text(t('cashPrepare')),
@@ -899,7 +903,8 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                             key: ValueKey(
                                               'serving-open-${order.reference}-${item.productRef}',
                                             ),
-                                            onPressed: cashBusy
+                                            onPressed:
+                                                cashBusy || snapshotRefreshing
                                                 ? null
                                                 : () => unawaited(
                                                     confirmServing(order, item),
@@ -923,7 +928,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                 spacing: 20,
                 children: [
                   OutlinedButton(
-                    onPressed: loading || cashBusy || page == 0
+                    onPressed: snapshotRefreshing || cashBusy || page == 0
                         ? null
                         : () => unawaited(load(target: page - 1)),
                     child: Text(t('livePrevious')),
@@ -931,7 +936,9 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                   Text('${t('livePage')} ${page + 1}'),
                   OutlinedButton(
                     onPressed:
-                        loading || cashBusy || data?.nextAfterOrder == null
+                        snapshotRefreshing ||
+                            cashBusy ||
+                            data?.nextAfterOrder == null
                         ? null
                         : () {
                             cursors.removeRange(page + 1, cursors.length);
