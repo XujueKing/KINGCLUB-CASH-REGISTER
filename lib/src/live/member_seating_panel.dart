@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
+import '../network/ccsop_client.dart';
 import '../strings.dart';
 import 'member_identity.dart';
 import 'member_identity_panel.dart';
@@ -109,15 +110,21 @@ class _MemberSeatingPanelState extends State<MemberSeatingPanel>
     }
   }
 
-  Future<void> completed(SeatingResult? result, String memberRef) async {
+  Future<void> completed(
+    SeatingResult? result,
+    String memberRef, {
+    String? rejection,
+  }) async {
     if (!mounted || !foreground) return;
     setState(() {
       scanGeneration++;
-      outcome = result == null
-          ? 'seatingUnknown'
-          : result.confirmed
-          ? 'seatingConfirmed'
-          : 'seatingCancelled';
+      outcome =
+          rejection ??
+          (result == null
+              ? 'seatingUnknown'
+              : result.confirmed
+              ? 'seatingConfirmed'
+              : 'seatingCancelled');
     });
     await load();
     if (mounted && foreground && result?.confirmed == true) {
@@ -215,11 +222,11 @@ class _MemberSeatingPanelState extends State<MemberSeatingPanel>
       code: code,
       stillCurrent: current,
       blocked: busy || failed,
-      onFinished: (result) async {
+      onFinished: (result, rejection) async {
         if (mounted &&
             identical(owner, widget.auth.session) &&
             identical(target, widget.orderContext)) {
-          await completed(result, member.memberRef);
+          await completed(result, member.memberRef, rejection: rejection);
         }
       },
     );
@@ -335,7 +342,7 @@ class _SeatingConfirmation extends StatefulWidget {
   final String code;
   final bool Function() stillCurrent;
   final bool blocked;
-  final Future<void> Function(SeatingResult?) onFinished;
+  final Future<void> Function(SeatingResult?, String?) onFinished;
   @override
   State<_SeatingConfirmation> createState() => _SeatingConfirmationState();
 }
@@ -358,6 +365,7 @@ class _SeatingConfirmationState extends State<_SeatingConfirmation> {
         widget.stillCurrent() &&
         identical(session, widget.auth.session);
     SeatingResult? result;
+    String? rejection;
     try {
       final command = PendingSeating.prepare(
         session: session,
@@ -375,11 +383,16 @@ class _SeatingConfirmationState extends State<_SeatingConfirmation> {
         confirmed: true,
         stillCurrent: current,
       );
+    } on CcsopFailure catch (error) {
+      if (!error.deliveryUncertain &&
+          error.code == 'CASHIER_SEATING_MEMBER_ALREADY_ASSIGNED') {
+        rejection = 'seatingAlreadyAssigned';
+      }
     } catch (_) {
       /* Original command remains recoverable if it was admitted. */
     }
     if (identical(session, auth.session)) {
-      await finished(result);
+      await finished(result, rejection);
     }
   }
 

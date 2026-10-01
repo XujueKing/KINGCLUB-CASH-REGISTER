@@ -21,6 +21,7 @@ const copy = <String, String>{
   'seatingKeep': '保留请求|Keep request|保留請求|เก็บคำขอไว้',
   'seatingCancelNotice': '只取消尚未完成的原入座请求；如果服务器已经确认，将恢复原成功结果，不会让会员离座。|Cancel only if the original seating has not completed. If already confirmed, recover that result without removing the member.|只取消尚未完成的原入座請求；若伺服器已確認，將恢復原成功結果，不會讓會員離座。|ยกเลิกได้เฉพาะคำขอเดิมที่ยังไม่สำเร็จ หากยืนยันแล้วจะแสดงผลเดิมโดยไม่ให้สมาชิกออกจากที่นั่ง',
   'seatingUnknown': '入座结果暂未确认，请查询原请求。|Seating result uncertain. Check the original request.|入座結果暫未確認，請查詢原請求。|ยังยืนยันผลไม่ได้ โปรดตรวจคำขอเดิม',
+  'seatingAlreadyAssigned': '该会员已在其他桌台入座，本次未入座。请取消本次未执行请求，返回原桌台继续。|This member is already seated at another table. Cancel this unexecuted request and continue at the original table.|該會員已在其他桌台入座，本次未入座。請取消本次未執行請求，返回原桌台繼續。|สมาชิกนั่งอยู่ที่โต๊ะอื่นแล้ว ยกเลิกคำขอนี้ที่ยังไม่ได้ดำเนินการ แล้วกลับไปที่โต๊ะเดิม',
   'seatingNotObserved': '服务器暂未记录原请求。请继续查询，或明确取消后重新扫码。|No result recorded yet. Check again, or cancel before scanning again.|伺服器暫未記錄原請求。請繼續查詢，或明確取消後重新掃碼。|ยังไม่พบผลบนเซิร์ฟเวอร์ ตรวจอีกครั้งหรือยกเลิกก่อนสแกนใหม่',
   'seatingConfirmed': '服务器已确认原入座结果，正在刷新会员名单。|Seating confirmed. Refreshing the member list.|伺服器已確認原入座結果，正在重新整理會員名單。|ยืนยันผลเข้าที่นั่งแล้ว กำลังโหลดรายชื่อใหม่',
   'seatingCancelled': '原请求已取消，可以重新扫码。|Original request cancelled. You can scan again.|原請求已取消，可以重新掃碼。|ยกเลิกคำขอเดิมแล้ว สแกนใหม่ได้',

@@ -104,6 +104,7 @@ class SeatApi extends a.TestApi {
 class SeatViewAuth extends TableAuth {
   SeatViewAuth() : super(permissions: permissions);
   bool seated = false;
+  CcsopFailure? rejection;
   int confirms = 0, reads = 0;
   final rows = <PendingSeating>[];
   Completer<void>? submissionGate;
@@ -132,6 +133,7 @@ class SeatViewAuth extends TableAuth {
     expect(stillCurrent(), true);
     expect(confirmed, true);
     confirms++;
+    if (rejection != null) throw rejection!;
     if (submissionGate != null) await submissionGate!.future;
     seated = true;
     return SeatingResult.parse(reply(command), command);
@@ -139,6 +141,50 @@ class SeatViewAuth extends TableAuth {
 }
 
 void main() {
+  testWidgets(
+    'assigned member rejection is explicit and never reports seating success',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = SeatViewAuth()
+        ..rejection = const CcsopFailure(
+          'CASHIER_SEATING_MEMBER_ALREADY_ASSIGNED',
+        );
+      var seated = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MemberSeatingPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              orderContext: contextSnapshot(),
+              onSeated: (_) => seated = true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('member-identity-code')),
+        'KC:M:${'A' * 32}',
+      );
+      await tester.tap(find.byKey(const ValueKey('member-identity-scan')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('seating-confirm')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(tr(UiLanguage.zh, 'seatingAlreadyAssigned')),
+        findsOneWidget,
+      );
+      expect(find.text(tr(UiLanguage.zh, 'seatingUnknown')), findsNothing);
+      expect(seated, false);
+      expect(auth.confirms, 1);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   testWidgets(
     'submitted seating can finish after displayed QR expires without requiring a second request',
     (tester) async {
