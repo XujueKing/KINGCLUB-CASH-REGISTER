@@ -51,7 +51,7 @@ class PendingOrder {
   String get storeRef => _params['storeRef'] as String;
   String get tableRef => _params['tableRef'] as String;
   String get sessionRef => _params['sessionRef'] as String;
-  String get memberRef => _params['memberRef'] as String;
+  String? get memberRef => _params['memberRef'] as String?;
   String get requestId => _params['requestId'] as String;
   String get paymentTiming => _params['expectedPaymentTiming'] as String;
   Map<String, dynamic> get params => _params;
@@ -78,7 +78,7 @@ class PendingOrder {
   factory PendingOrder.prepare({
     required StaffSession identity,
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
     required DateTime now,
     CartDraft? cartDraft,
@@ -87,7 +87,11 @@ class PendingOrder {
         !identity.permissions.contains('orders.create') ||
         identity.storeRef != context.storeRef ||
         context.currency != 'CNY' ||
-        !context.members.any((m) => m.reference == memberRef && m.eligible)) {
+        (memberRef == null
+            ? !context.tableOrderAllowed
+            : !context.members.any(
+                (m) => m.reference == memberRef && m.eligible,
+              ))) {
       throw const CcsopFailure('ORDERING_CONTEXT_CHANGED');
     }
     final random = Random.secure(), bytes = List.generate(16, (_) => 0);
@@ -143,7 +147,8 @@ class PendingOrder {
           !RegExp(r'^E[0-9]{11}$').hasMatch(v['employeeRef'] as String) ||
           v['deviceId'] is! String ||
           !uuidPattern.hasMatch(v['deviceId'] as String) ||
-          ![p['storeRef'], p['tableRef'], p['memberRef']].every(_ref) ||
+          ![p['storeRef'], p['tableRef']].every(_ref) ||
+          (p['memberRef'] != null && !_ref(p['memberRef'])) ||
           p['sessionRef'] is! String ||
           !(RegExp(r'^H[0-9]{11}$').hasMatch(p['sessionRef'] as String) ||
               uuidPattern.hasMatch(p['sessionRef'] as String)) ||
@@ -276,7 +281,10 @@ class OrderRequestResult {
           receipt['submissionStatus'] != 'confirmed' ||
           (pending.paymentTiming == 'prepay'
               ? !['unallocated', 'reserved'].contains(receipt['inventoryState'])
-              : !['unallocated', 'issued'].contains(receipt['inventoryState'])) ||
+              : ![
+                  'unallocated',
+                  'issued',
+                ].contains(receipt['inventoryState'])) ||
           receipt['totalCents'] is! int ||
           receipt['totalCents'] != pending.totalCents ||
           receipt['orderRef'] is! String ||

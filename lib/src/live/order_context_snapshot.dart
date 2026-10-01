@@ -43,6 +43,7 @@ class OrderContextSnapshot {
     this.members,
     this.nextAfterMember,
     this.observedAt,
+    this.tableOrderAllowed,
   );
   final String storeRef,
       tableRef,
@@ -54,6 +55,7 @@ class OrderContextSnapshot {
   final List<SeatedOrderMember> members;
   final String? nextAfterMember;
   final DateTime observedAt;
+  final bool tableOrderAllowed;
 
   factory OrderContextSnapshot.parse(
     Object? raw, {
@@ -132,6 +134,7 @@ class OrderContextSnapshot {
         List.unmodifiable(members),
         next,
         observedAt,
+        value['tableOrderAllowed'] == true,
       );
     } catch (_) {
       throw const CcsopFailure('INVALID_ORDER_CONTEXT');

@@ -849,7 +849,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
               focusedTableRef = null;
               orderingTable = table;
             }),
-            child: Text(t('orderMembersTitle')),
+            child: Text(t('tableOrderStart')),
           ),
         if (active &&
             widget.auth.session?.permissions.contains('table.clear') == true)

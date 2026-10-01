@@ -26,7 +26,7 @@ class LiveCartPanel extends StatefulWidget {
   final StaffAuthController auth;
   final UiLanguage language;
   final OrderContextSnapshot orderContext;
-  final String memberRef;
+  final String? memberRef;
   final VoidCallback onBack;
   final int revision;
   @override
@@ -54,6 +54,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   String? message;
   String t(String key) => tr(widget.language, key);
   String get memberName {
+    if (widget.memberRef == null) return t('cartTitle');
     for (final member in currentContext.members) {
       if (member.reference == widget.memberRef) {
         return member.nickname ?? t('orderMemberUnnamed');
@@ -501,7 +502,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           '${widget.orderContext.tableName} · ${t('cartTitle')}',
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        Text(memberName),
+                        if (widget.memberRef != null) Text(memberName),
                         Text(
                           t(
                             currentContext.paymentTiming == 'prepay'
@@ -554,58 +555,82 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           Text(t('cartDraftResave')),
                         if (items.isEmpty) Text(t('cartDraftEmpty')),
                         for (final item in items.values)
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(item.product.name(widget.language)),
-                                  Text(
-                                    item.product.specification(widget.language),
-                                  ),
-                                  Text(
-                                    'CNY ${formatCents(item.product.priceCents)} × ${item.quantity}',
-                                  ),
-                                  Wrap(
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      IconButton(
-                                        key: ValueKey(
-                                          'cart-minus-${item.product.reference}',
+                                      Text(
+                                        item.product.name(widget.language),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                        tooltip: t('cartRemove'),
-                                        onPressed: editable
-                                            ? () => change(item.product, -1)
-                                            : null,
-                                        icon: const Icon(Icons.remove),
                                       ),
-                                      IconButton(
-                                        key: ValueKey(
-                                          'cart-plus-${item.product.reference}',
+                                      Text(
+                                        item.product.specification(
+                                          widget.language,
                                         ),
-                                        tooltip: t('cartAdd'),
-                                        onPressed: editable
-                                            ? () => change(item.product, 1)
-                                            : null,
-                                        icon: const Icon(Icons.add),
+                                        style: const TextStyle(fontSize: 12),
                                       ),
-                                      IconButton(
-                                        key: ValueKey(
-                                          'cart-delete-${item.product.reference}',
-                                        ),
-                                        tooltip: t('cartDelete'),
-                                        onPressed: editable
-                                            ? () => change(
-                                                item.product,
-                                                -item.quantity,
-                                              )
-                                            : null,
-                                        icon: const Icon(Icons.delete_outline),
+                                      Text(
+                                        'CNY ${formatCents(item.product.priceCents)} × ${item.quantity}',
+                                        style: const TextStyle(fontSize: 12),
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
+                                ),
+                                IconButton(
+                                  key: ValueKey(
+                                    'cart-minus-${item.product.reference}',
+                                  ),
+                                  tooltip: t('cartRemove'),
+                                  onPressed: editable
+                                      ? () => change(item.product, -1)
+                                      : null,
+                                  icon: const Icon(Icons.remove, size: 18),
+                                ),
+                                SizedBox(
+                                  width: 26,
+                                  child: Text(
+                                    '${item.quantity}',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                IconButton(
+                                  key: ValueKey(
+                                    'cart-plus-${item.product.reference}',
+                                  ),
+                                  tooltip: t('cartAdd'),
+                                  onPressed: editable
+                                      ? () => change(item.product, 1)
+                                      : null,
+                                  icon: const Icon(Icons.add, size: 18),
+                                ),
+                                SizedBox(
+                                  width: 76,
+                                  child: Text(
+                                    formatCents(
+                                      item.product.priceCents * item.quantity,
+                                    ),
+                                    textAlign: TextAlign.right,
+                                  ),
+                                ),
+                                IconButton(
+                                  key: ValueKey(
+                                    'cart-delete-${item.product.reference}',
+                                  ),
+                                  tooltip: t('cartDelete'),
+                                  onPressed: editable
+                                      ? () =>
+                                            change(item.product, -item.quantity)
+                                      : null,
+                                  icon: const Icon(Icons.close, size: 18),
+                                ),
+                              ],
                             ),
                           ),
                       ],

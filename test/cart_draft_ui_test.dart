@@ -28,7 +28,7 @@ class DraftAuth extends ui.CartAuth {
   @override
   Future<CartDraft> saveCartDraft({
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
     required CartDraft? previous,
   }) async {
@@ -76,7 +76,7 @@ class DraftAuth extends ui.CartAuth {
   @override
   Future<OrderRequestResult> submitOrder({
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
     required bool confirmed,
     CartDraft? cartDraft,

@@ -6,6 +6,7 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'tableOrderStart': '点单|Order|點單|สั่งอาหาร',
   'paymentStockUnavailable': '商品已售罄，未发起扣款，请修改订单。|Item sold out. No charge was initiated. Please change the order.|商品已售罄，未發起扣款，請修改訂單。|สินค้าหมด ยังไม่ได้เรียกเก็บเงิน โปรดแก้ไขคำสั่งซื้อ',
   'cashStockUnavailable': '商品已售罄，未完成结账；如已收现金，请退还后修改订单。|Item sold out; checkout was not completed. Return any cash received before changing the order.|商品已售罄，未完成結帳；如已收現金，請退還後修改訂單。|สินค้าหมด ยังไม่ได้ปิดบิล หากรับเงินสดแล้ว โปรดคืนเงินก่อนแก้ไขคำสั่งซื้อ',
   'seatingTitle': '扫码入座|Scan to seat|掃碼入座|สแกนเพื่อเข้าที่นั่ง',

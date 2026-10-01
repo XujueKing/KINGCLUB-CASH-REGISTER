@@ -30,7 +30,7 @@ class CartAuth extends m.MemberAuth {
   @override
   Future<RestoredCart> refreshCartSelection({
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
   }) async {
     refreshes++;
@@ -76,7 +76,7 @@ class CartAuth extends m.MemberAuth {
   @override
   Future<OrderRequestResult> submitOrder({
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
     required bool confirmed,
     CartDraft? cartDraft,

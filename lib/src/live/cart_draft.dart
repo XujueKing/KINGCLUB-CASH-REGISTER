@@ -26,7 +26,7 @@ class CartDraft {
   String get storeRef => _value['storeRef'] as String;
   String get tableRef => _value['tableRef'] as String;
   String get sessionRef => _value['sessionRef'] as String;
-  String get memberRef => _value['memberRef'] as String;
+  String? get memberRef => _value['memberRef'] as String?;
   DateTime get savedAt => DateTime.parse(_value['savedAt'] as String);
   List<Map<String, dynamic>> get lines =>
       _value['lines'] as List<Map<String, dynamic>>;
@@ -50,7 +50,7 @@ class CartDraft {
   factory CartDraft.capture({
     required StaffSession identity,
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
     required DateTime now,
   }) {
@@ -97,7 +97,8 @@ class CartDraft {
           !RegExp(r'^E[0-9]{11}$').hasMatch(raw['employeeRef'] as String) ||
           raw['deviceId'] is! String ||
           !uuidPattern.hasMatch(raw['deviceId'] as String) ||
-          ![raw['storeRef'], raw['tableRef'], raw['memberRef']].every(_ref) ||
+          ![raw['storeRef'], raw['tableRef']].every(_ref) ||
+          (raw['memberRef'] != null && !_ref(raw['memberRef'])) ||
           raw['sessionRef'] is! String ||
           !(RegExp(r'^H[0-9]{11}$').hasMatch(raw['sessionRef'] as String) ||
               uuidPattern.hasMatch(raw['sessionRef'] as String)) ||
@@ -210,14 +211,18 @@ class CartDraft {
 void _checkContext(
   StaffSession identity,
   OrderContextSnapshot context,
-  String memberRef,
+  String? memberRef,
   DateTime now,
 ) {
   if (!identity.expiresAt.isAfter(now) ||
       !identity.permissions.contains('orders.create') ||
       identity.storeRef != context.storeRef ||
       context.currency != 'CNY' ||
-      !context.members.any((m) => m.reference == memberRef && m.eligible)) {
+      (memberRef == null
+          ? !context.tableOrderAllowed
+          : !context.members.any(
+              (m) => m.reference == memberRef && m.eligible,
+            ))) {
     throw const CcsopFailure('CART_DRAFT_CONTEXT_CHANGED');
   }
 }

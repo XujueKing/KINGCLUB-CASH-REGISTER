@@ -64,7 +64,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     if (oldWidget.auth == widget.auth &&
         oldWidget.tableRef == widget.tableRef &&
         oldWidget.sessionRef == widget.sessionRef &&
-        cart &&
+        (cart || data?.tableOrderAllowed == true) &&
         foreground) {
       // The cart handles refresh hints and owns any submitted request's receipt.
       return;
@@ -181,14 +181,17 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         },
       );
     }
-    if (cart && data != null && selected != null) {
+    if (data != null &&
+        (data!.tableOrderAllowed || (cart && selected != null))) {
       return LiveCartPanel(
         auth: widget.auth,
         language: widget.language,
         orderContext: data!,
-        memberRef: selected!.reference,
+        memberRef: selected?.reference,
         revision: widget.revision,
-        onBack: () => unawaited(load(reset: true)),
+        onBack: data!.tableOrderAllowed
+            ? widget.onBack
+            : () => unawaited(load(reset: true)),
       );
     }
     return Column(

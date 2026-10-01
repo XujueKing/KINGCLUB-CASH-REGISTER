@@ -208,7 +208,7 @@ class _LiveCartDraftsPanelState extends State<LiveCartDraftsPanel>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('${draft.tableRef} · ${draft.sessionRef}'),
-                      Text(draft.memberRef),
+                        if (draft.memberRef != null) Text(draft.memberRef!),
                       Text(
                         '${t('cartDraftSavedAt')}: ${draft.savedAt.toLocal()}',
                       ),

@@ -135,6 +135,18 @@ Future<OrderRequestResult> submit(
 );
 
 void main() {
+  test('table order without member survives persistence and binds its receipt', () {
+    final context = m.parse({...m.contextData(), 'tableOrderAllowed': true});
+    final pending = PendingOrder.prepare(identity: identity, context: context,
+      memberRef: null, items: selection(), now: a.now);
+    final restored = PendingOrder.decode(jsonDecode(jsonEncode(pending.encode())));
+    expect(restored.memberRef, isNull);
+    expect(restored.signature, pending.signature);
+    expect(OrderRequestResult.parse({'result': receipt(restored.params)}, restored,
+      submission: true).state, OrderRequestState.confirmed);
+    expect(() => PendingOrder.prepare(identity: identity, context: m.parse(m.contextData()),
+      memberRef: null, items: selection(), now: a.now), fails('ORDERING_CONTEXT_CHANGED'));
+  });
   test(
     'prepay selection ignores inventory snapshots but retains quantity limits',
     () {

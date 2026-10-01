@@ -2172,7 +2172,7 @@ class StaffAuthController extends ChangeNotifier {
 
   Future<CartDraft> saveCartDraft({
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
     required CartDraft? previous,
   }) => _orderOperation(() async {
@@ -2225,7 +2225,7 @@ class StaffAuthController extends ChangeNotifier {
   /// Revalidate an in-memory selection without persisting or submitting it.
   Future<RestoredCart> refreshCartSelection({
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
   }) => _orderOperation(() async {
     final identity = _orderIdentity(), epoch = _epoch;
@@ -2253,7 +2253,7 @@ class StaffAuthController extends ChangeNotifier {
         sessionRef: draft.sessionRef,
         afterMember: cursor,
       );
-      if (next.members.any((m) => m.reference == draft.memberRef)) {
+      if (draft.memberRef == null ? next.tableOrderAllowed : next.members.any((m) => m.reference == draft.memberRef)) {
         context = next;
         break;
       }
@@ -2294,7 +2294,7 @@ class StaffAuthController extends ChangeNotifier {
 
   Future<OrderRequestResult> submitOrder({
     required OrderContextSnapshot context,
-    required String memberRef,
+    required String? memberRef,
     required List<OrderSelection> items,
     required bool confirmed,
     CartDraft? cartDraft,
@@ -2353,7 +2353,10 @@ class StaffAuthController extends ChangeNotifier {
     }
     final raw = await _api!.call(
       interfaceId,
-      interfaceId == 'K260929001912' ? command.params : command.lookup,
+      interfaceId == 'K260929001912'
+          ? (Map<String, dynamic>.of(command.params)
+            ..removeWhere((key, value) => key == 'memberRef' && value == null))
+          : command.lookup,
     );
     _check(epoch);
     _orderIdentity();
