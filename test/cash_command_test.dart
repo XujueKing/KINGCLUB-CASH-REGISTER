@@ -64,7 +64,10 @@ Map<String, dynamic> closure(PendingCash c) => {
   'currency': 'CNY',
   'channel': 'cash',
   'closedBy': c.employeeRef,
-  'noCashCollectedConfirmed': true,
+  if (c.receivedCents == null)
+    'noCashCollectedConfirmed': true
+  else
+    'cashReturnedConfirmed': true,
   'closureStatus': 'closed',
 };
 Matcher fails(String code) =>

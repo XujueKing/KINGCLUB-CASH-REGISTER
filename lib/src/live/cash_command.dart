@@ -69,14 +69,17 @@ class PendingCash {
   }
 
   Map<String, dynamic> get close {
-    if (intentRef == null || !closeRequested || receivedCents != null) {
+    if (intentRef == null || !closeRequested) {
       throw const CcsopFailure('CASH_DECISION_REQUIRED');
     }
     return Map.unmodifiable({
       ...lookup,
       'intentRef': intentRef,
       'expectedTotalCents': totalCents,
-      'noCashCollectedConfirmed': true,
+      if (receivedCents == null)
+        'noCashCollectedConfirmed': true
+      else
+        'cashReturnedConfirmed': true,
     });
   }
 
@@ -144,8 +147,7 @@ class PendingCash {
                   (v['receivedCents'] as int) <
                       (p['expectedTotalCents'] as int))) ||
           ((v['receivedCents'] != null || v['closeRequested'] == true) &&
-              v['intentRef'] == null) ||
-          (v['closeRequested'] == true && v['receivedCents'] != null)) {
+              v['intentRef'] == null)) {
         throw const FormatException();
       }
       return PendingCash._(
@@ -189,10 +191,15 @@ class PendingCash {
     return PendingCash.decode({...encode(), 'receivedCents': received});
   }
 
-  PendingCash recordClosure({required bool noCashCollectedConfirmed}) {
-    if (!noCashCollectedConfirmed ||
-        intentRef == null ||
-        receivedCents != null) {
+  PendingCash recordClosure({
+    bool noCashCollectedConfirmed = false,
+    bool cashReturnedConfirmed = false,
+  }) {
+    if (intentRef == null ||
+        noCashCollectedConfirmed == cashReturnedConfirmed ||
+        (receivedCents == null
+            ? !noCashCollectedConfirmed
+            : !cashReturnedConfirmed)) {
       throw const CcsopFailure('CASH_DECISION_CONFLICT');
     }
     return PendingCash.decode({...encode(), 'closeRequested': true});
@@ -205,7 +212,8 @@ class PendingCash {
       jsonEncode(params) == jsonEncode(old.params) &&
       (old.intentRef == null || intentRef == old.intentRef) &&
       (old.receivedCents == null || receivedCents == old.receivedCents) &&
-      (!old.closeRequested || closeRequested);
+      (!old.closeRequested ||
+          (closeRequested && receivedCents == old.receivedCents));
 }
 
 enum CashState { notObserved, prepared, needsLookup, confirmed, closed }
@@ -334,10 +342,11 @@ class CashResult {
       if (receipt.length != 10 ||
           receipt['requestId'] != command.requestId ||
           receipt['closedBy'] != command.employeeRef ||
-          receipt['noCashCollectedConfirmed'] != true ||
+          (command.receivedCents == null
+              ? receipt['noCashCollectedConfirmed'] != true
+              : receipt['cashReturnedConfirmed'] != true) ||
           receipt['closureStatus'] != 'closed' ||
-          !command.closeRequested ||
-          command.receivedCents != null) {
+          !command.closeRequested) {
         throw const FormatException();
       }
       return result(CashState.closed);

@@ -71,12 +71,16 @@ class CashAuth extends StaffAuthController {
   @override
   Future<CashResult> closeCash(
     String id, {
-    required bool noCashCollectedConfirmed,
+    bool noCashCollectedConfirmed = false,
+    bool cashReturnedConfirmed = false,
   }) async {
     expect(id, command.requestId);
-    expect(noCashCollectedConfirmed, true);
+    expect(noCashCollectedConfirmed != cashReturnedConfirmed, true);
     closes++;
-    command = command.recordClosure(noCashCollectedConfirmed: true);
+    command = command.recordClosure(
+      noCashCollectedConfirmed: noCashCollectedConfirmed,
+      cashReturnedConfirmed: cashReturnedConfirmed,
+    );
     entries = [];
     return CashResult.parse(
       {'result': c.closure(command)},
@@ -130,6 +134,34 @@ Future<void> tap(WidgetTester tester, String key) async {
 }
 
 void main() {
+  testWidgets(
+    'recorded cash return requires original lookup and explicit return confirmation',
+    (tester) async {
+      final auth = CashAuth();
+      auth.command = auth.command.recordConfirmation(
+        200,
+        cashReceivedConfirmed: true,
+      );
+      auth.entries = [auth.command];
+      await show(tester, auth);
+      final id = auth.command.requestId;
+      expect(
+        tester
+            .widget<OutlinedButton>(find.byKey(ValueKey('cash-return-$id')))
+            .onPressed,
+        isNull,
+      );
+      await tap(tester, 'cash-query-$id');
+      await tap(tester, 'cash-return-$id');
+      expect(auth.closes, 0);
+      expect(find.text(tr(UiLanguage.zh, 'cashReturnNotice')), findsOneWidget);
+      await tap(tester, 'cash-decision-confirm');
+      expect(auth.closes, 1);
+      expect(auth.command.receivedCents, 200);
+      expect(auth.command.closeRequested, isTrue);
+    },
+  );
+
   for (final lang in UiLanguage.values) {
     testWidgets('cash confirmation layout and exact cents ${lang.name}', (
       tester,

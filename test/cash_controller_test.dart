@@ -16,7 +16,8 @@ class Api extends a.TestApi {
   final c.Storage storage;
   final calls = <(String, Map<String, dynamic>)>[];
   Map<String, dynamic>? prepared, paid, closureReceipt;
-  bool failPrepare = false,
+  bool soldOut = false,
+      failPrepare = false,
       failConfirm = false,
       expired = false,
       lookupFails = false;
@@ -62,6 +63,7 @@ class Api extends a.TestApi {
     if (id == 'K260929001916') {
       expect(entry.confirm, params);
       expect(entry.receivedCents, 200);
+      if (soldOut) throw const CcsopFailure('ORDERING_OUT_OF_STOCK');
       paid = c.receipt(entry);
       if (!confirming.isCompleted) confirming.complete();
       if (gate != null) await gate!.future;
@@ -119,6 +121,30 @@ Future<String> prepare(StaffAuthController auth) async {
 }
 
 void main() {
+  test('sold-out cash preserves receipt decision and only closes after explicit cash return', () async {
+    final storage = c.Storage(),
+        api = Api(storage)..soldOut = true,
+        auth = await controller(storage, api);
+    addTearDown(auth.dispose);
+    final id = await prepare(auth);
+    await expectLater(
+      auth.confirmCash(id, receivedCents: 200, cashReceivedConfirmed: true),
+      c.fails('ORDERING_OUT_OF_STOCK'),
+    );
+    expect((await auth.pendingCash()).single.receivedCents, 200);
+    expect(api.paid, isNull);
+    expect(
+      (await auth.closeCash(id, cashReturnedConfirmed: true)).state,
+      CashState.closed,
+    );
+    expect(api.closureReceipt!['cashReturnedConfirmed'], isTrue);
+    expect(
+      api.closureReceipt!.containsKey('noCashCollectedConfirmed'),
+      isFalse,
+    );
+    expect(await auth.pendingCash(), isEmpty);
+  });
+
   test('new controller reloads lost payment decision and only looks up the original request', () async {
     final storage = c.Storage(),
         api = Api(storage)..failConfirm = true,

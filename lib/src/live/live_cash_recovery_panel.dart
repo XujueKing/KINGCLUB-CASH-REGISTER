@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
+import '../network/ccsop_client.dart';
 import 'cash_command.dart';
 import 'table_snapshot.dart';
 
@@ -25,6 +26,7 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
     with WidgetsBindingObserver {
   List<PendingCash> entries = [];
   final allowed = <String, bool>{};
+  final prepared = <String, bool>{};
   bool busy = false, foreground = true, failed = false, confirming = false;
   int epoch = 0;
   String? message;
@@ -61,6 +63,7 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
     setState(() {
       entries = [];
       allowed.clear();
+      prepared.clear();
       message = null;
       failed = false;
     });
@@ -99,6 +102,7 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
       failed = false;
       entries = [];
       allowed.clear();
+      prepared.clear();
     });
     try {
       await read(generation);
@@ -142,6 +146,8 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
                   t(
                     action == 'pay'
                         ? 'cashConfirm'
+                        : action == 'return'
+                        ? 'cashReturnClose'
                         : action == 'close'
                         ? 'cashClose'
                         : 'cashRetry',
@@ -162,6 +168,8 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
                           t(
                             action == 'pay'
                                 ? 'cashReceivedNotice'
+                                : action == 'return'
+                                ? 'cashReturnNotice'
                                 : action == 'close'
                                 ? 'cashCloseNotice'
                                 : 'cashRetryNotice',
@@ -212,6 +220,8 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
                       t(
                         action == 'pay'
                             ? 'cashReceivedConfirm'
+                            : action == 'return'
+                            ? 'cashReturnedConfirm'
                             : action == 'close'
                             ? 'cashNotReceivedConfirm'
                             : 'confirm',
@@ -257,6 +267,8 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
               receivedCents: decision as int,
               cashReceivedConfirmed: true,
             )
+          : action == 'return'
+          ? await auth.closeCash(item.requestId, cashReturnedConfirmed: true)
           : action == 'close'
           ? await auth.closeCash(item.requestId, noCashCollectedConfirmed: true)
           : await auth.recoverCash(
@@ -265,6 +277,7 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
             );
       if (current(generation)) {
         setState(() {
+          prepared[item.requestId] = result.state == CashState.prepared;
           allowed[item.requestId] =
               result.state == CashState.prepared && result.canConfirmCash;
           message = t(switch (result.state) {
@@ -281,10 +294,15 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
           }
         });
       }
-    } catch (_) {
+    } catch (error) {
       if (current(generation)) {
         setState(() {
-          message = t('cashUnconfirmed');
+          prepared[item.requestId] = false;
+          message = t(
+            error is CcsopFailure && error.code == 'ORDERING_OUT_OF_STOCK'
+                ? 'cashStockUnavailable'
+                : 'cashUnconfirmed',
+          );
           allowed[item.requestId] = false;
         });
       }
@@ -366,7 +384,9 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
                       ),
                       Text(
                         t(
-                          item.receivedCents != null
+                          item.closeRequested && item.receivedCents != null
+                              ? 'cashReturnedConfirm'
+                              : item.receivedCents != null
                               ? 'cashDecisionReceived'
                               : item.closeRequested
                               ? 'cashDecisionClose'
@@ -389,6 +409,10 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
                             if (item.intentRef != null && !item.closeRequested)
                               'pay',
                             if (item.intentRef != null &&
+                                item.receivedCents != null &&
+                                !item.closeRequested)
+                              'return',
+                            if (item.intentRef != null &&
                                 item.receivedCents == null)
                               'close',
                           ])
@@ -397,6 +421,8 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
                               onPressed:
                                   busy ||
                                       !foreground ||
+                                      (action == 'return' &&
+                                          prepared[item.requestId] != true) ||
                                       (action == 'pay' &&
                                           allowed[item.requestId] != true)
                                   ? null
@@ -406,6 +432,7 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
                                   'query' => 'openingQuery',
                                   'retry' => 'cashRetry',
                                   'pay' => 'cashConfirm',
+                                  'return' => 'cashReturnClose',
                                   _ => 'cashClose',
                                 }),
                               ),
