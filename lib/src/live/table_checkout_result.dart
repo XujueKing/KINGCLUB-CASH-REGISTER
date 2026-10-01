@@ -12,8 +12,8 @@ Map<String, dynamic> _object(Object? raw, List<String> keys) {
   return raw;
 }
 
-/// Only a complete original settlement is resolved. Payment pending/unknown/
-/// settlement_pending never permits a new collection or journal removal.
+/// A complete original settlement or verified unpaid closure resolves the attempt.
+/// Payment pending/unknown/settlement_pending never permits journal removal.
 class TableCheckoutResult {
   TableCheckoutResult._(
     this.state,
@@ -24,6 +24,8 @@ class TableCheckoutResult {
   final String state, checkoutRef, _command;
   final DateTime? settledAt;
   bool get settled => state == 'settled';
+  bool get closedUnpaid => state == 'closed_unpaid';
+  bool get resolved => settled || closedUnpaid;
   bool matches(TableCheckoutCommand command) =>
       _command == jsonEncode(command.encoded);
   factory TableCheckoutResult.parse(
@@ -42,7 +44,7 @@ class TableCheckoutResult {
       final state = body['state'];
       final row = _object(
         body,
-        state == 'settled'
+        state == 'settled' || state == 'closed_unpaid'
             ? ['state', 'checkoutRef', 'receipt']
             : ['state', 'checkoutRef'],
       );
@@ -54,10 +56,36 @@ class TableCheckoutResult {
             'review_required',
             'settlement_pending',
             'settled',
+            'closed_unpaid',
           ].contains(state) ||
           (['cash', 'member_balance'].contains(command.channel) &&
               ['pending', 'unknown', 'review_required'].contains(state))) {
         throw const FormatException();
+      }
+      if (state == 'closed_unpaid') {
+        final r = _object(row['receipt'], [
+          'version', 'checkoutRef', 'storeRef', 'tableRef', 'sessionRef',
+          'channel', 'expectedTotalCents', 'paymentProfileFingerprint',
+          'employeeRef', 'snapshotFingerprint', 'outTradeNo', 'currency',
+          'closureStatus', 'reason', 'closedAt', 'orderCount',
+        ]);
+        final closedAt = r['closedAt'];
+        if (command.channel != 'wechat' || command.accountType != null ||
+            r['version'] != 1 || r['version'] is! int ||
+            r['checkoutRef'] != checkoutRef || r['storeRef'] != command.storeRef ||
+            r['tableRef'] != command.tableRef || r['sessionRef'] != command.sessionRef ||
+            r['channel'] != command.channel || r['currency'] != 'CNY' ||
+            r['expectedTotalCents'] is! int || r['expectedTotalCents'] != command.totalCents ||
+            r['employeeRef'] != command.employeeRef || r['snapshotFingerprint'] != command.fingerprint ||
+            r['outTradeNo'] != checkoutRef.replaceAll('-', '') ||
+            r['orderCount'] is! int || r['orderCount'] != command.orderCount ||
+            r['closureStatus'] != 'closed_unpaid' || r['reason'] != 'CLOSED' ||
+            r['paymentProfileFingerprint'] is! String ||
+            !RegExp(r'^[0-9a-f]{64}$').hasMatch(r['paymentProfileFingerprint'] as String) ||
+            closedAt is! String || !closedAt.endsWith('Z') || DateTime.tryParse(closedAt) == null) {
+          throw const FormatException();
+        }
+        return TableCheckoutResult._('closed_unpaid', checkoutRef, jsonEncode(command.encoded));
       }
       if (state != 'settled') {
         return TableCheckoutResult._(
@@ -146,6 +174,7 @@ class TableCheckoutResult {
             ![
               'issue_reserved',
               'already_issued',
+              'issue_postpay_remaining',
             ].contains(a['inventoryAction']) ||
             a['updateCashierOrigin'] is! bool ||
             a['orderPaymentRef'] != 'table:$checkoutRef:$order') {

@@ -299,7 +299,10 @@ class _LiveCashRecoveryPanelState extends State<LiveCashRecoveryPanel>
         setState(() {
           prepared[item.requestId] = false;
           message = t(
-            error is CcsopFailure && error.code == 'ORDERING_OUT_OF_STOCK'
+            error is CcsopFailure &&
+                    error.code == 'ORDERING_POSTPAY_OUT_OF_STOCK'
+                ? 'postpayCashStockUnavailable'
+                : error is CcsopFailure && error.code == 'ORDERING_OUT_OF_STOCK'
                 ? 'cashStockUnavailable'
                 : 'cashUnconfirmed',
           );

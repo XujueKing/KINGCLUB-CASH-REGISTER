@@ -6,6 +6,14 @@ import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 import 'table_checkout_command_test.dart' as fixture;
 
 const checkout = '00000000-0000-4000-8000-000000000001';
+Map<String,dynamic> closureFixture(TableCheckoutCommand c) => {'result': {
+  'state':'closed_unpaid','checkoutRef':checkout,'receipt': {
+    'version':1,'checkoutRef':checkout,'storeRef':c.storeRef,'tableRef':c.tableRef,'sessionRef':c.sessionRef,
+    'channel':'wechat','expectedTotalCents':c.totalCents,'paymentProfileFingerprint':'a' * 64,
+    'employeeRef':c.employeeRef,'snapshotFingerprint':c.fingerprint,'outTradeNo':checkout.replaceAll('-', ''),
+    'currency':'CNY','closureStatus':'closed_unpaid','reason':'CLOSED','closedAt':'2026-10-02T01:00:00.000Z','orderCount':c.orderCount,
+  },
+}};
 Map<String, dynamic> settlementFixture(TableCheckoutCommand c) => {
   'result': {
     'state': 'settled',
@@ -44,6 +52,30 @@ Map<String, dynamic> settlementFixture(TableCheckoutCommand c) => {
   },
 };
 void main() {
+  test('only complete original unpaid closure resolves a collection without marking paid', () {
+    final c=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'wechat','accountType':null});
+    final result=TableCheckoutResult.parse(closureFixture(c),c,checkoutRef:checkout);
+    expect(result.closedUnpaid,true);expect(result.resolved,true);expect(result.settled,false);
+    for(final patch in [ {'storeRef':'OTHER'}, {'expectedTotalCents':1}, {'employeeRef':'E00000000009'},
+      {'snapshotFingerprint':'b' * 64}, {'outTradeNo':'OTHER'}, {'reason':'REVOKED'}, {'closedAt':'invalid'}, {'orderCount':999} ]) {
+      final raw=closureFixture(c);(raw['result']['receipt'] as Map).addAll(patch);
+      expect(()=>TableCheckoutResult.parse(raw,c,checkoutRef:checkout),throwsA(isA<CcsopFailure>()));
+    }
+  });
+  test('settlement accepts remaining postpay action without treating it as a second charge', () {
+    final c = fixture.command();
+    final raw = settlementFixture(c);
+    final rows =
+        ((raw['result'] as Map)['receipt'] as Map)['allocations'] as List;
+    for (final row in rows) {
+      row['inventoryAction'] = 'issue_postpay_remaining';
+    }
+    expect(
+      TableCheckoutResult.parse(raw, c, checkoutRef: checkout).settled,
+      true,
+    );
+  });
+
   test(
     'all channels share original settlement validation without account mixing',
     () {

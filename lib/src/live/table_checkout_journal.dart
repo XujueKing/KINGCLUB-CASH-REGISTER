@@ -62,7 +62,7 @@ class TableCheckoutJournal {
     TableCheckoutResult result,
   ) => _serial(() async {
     if (!command.belongsTo(session) ||
-        !result.settled ||
+        !result.resolved ||
         !result.matches(command)) {
       throw const CcsopFailure('TABLE_CHECKOUT_SETTLEMENT_REQUIRED');
     }

@@ -261,6 +261,7 @@ class TableCheckoutQuote {
             ![
               'issue_reserved',
               'already_issued',
+              'issue_postpay_remaining',
             ].contains(a['inventoryAction'])) {
           throw const FormatException();
         }

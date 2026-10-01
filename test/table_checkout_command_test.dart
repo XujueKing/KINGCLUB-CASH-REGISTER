@@ -64,6 +64,17 @@ TableCheckoutCommand command() => TableCheckoutCommand.fromQuote(
   requestId: '00000000-0000-4000-8000-000000000099',
 );
 void main() {
+  test('quote preserves remaining postpay stock action', () {
+    final raw = tableQuoteFixture();
+    final rows = (raw['result'] as Map)['allocations'] as List;
+    for (final row in rows) {
+      row['inventoryAction'] = 'issue_postpay_remaining';
+    }
+    expect(parseQuote(raw).totalCents, 300);
+    rows.first['inventoryAction'] = 'unknown';
+    expect(() => parseQuote(raw), throwsA(isA<CcsopFailure>()));
+  });
+
   test(
     'original localized line snapshots are required and reject control text',
     () {

@@ -313,7 +313,7 @@ class StaffAuthController extends ChangeNotifier {
         command,
         checkoutRef: checkout,
       );
-      if (result.settled) {
+      if (result.resolved) {
         await _tableCheckoutJournal.acknowledge(identity, command, result);
         validate();
       }

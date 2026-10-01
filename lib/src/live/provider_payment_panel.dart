@@ -72,16 +72,17 @@ class _ProviderPaymentPanelState extends State<ProviderPaymentPanel> with Widget
       final result=original==null?await widget.auth.collectProvider(orderRef:widget.orderRef,channel:channel,totalCents:widget.totalCents,
         authCode:payerCode,accountType:channel=='member_balance'?accountType:null,stillCurrent:()=>current(e)):retry?await widget.auth.retryOriginalProvider(original,authCode:payerCode,stillCurrent:()=>current(e)):await widget.auth.queryProvider(original);
       if(current(e)) {
-        setState((){resolved=result.resolved;status=t(result.refunded?'provider_balance_refunded':'provider_${result.state}');
+        setState((){resolved=result.resolved;status=t(result.refunded?'provider_balance_refunded':result.orderRetained?'provider_attempt_closed':'provider_${result.state}');
         retryRequest=original!=null&&['not_sent','not_observed'].contains(result.state)?original.requestId:null;});
       }
       if(current(e)&&result.resolved)widget.onResolved?.call();
       unresolved=['pending','unknown'].contains(result.state);
     } catch(error){
-      final soldOut=error is CcsopFailure&&error.code=='ORDERING_OUT_OF_STOCK';
+      final postpayShortage=error is CcsopFailure&&error.code=='ORDERING_POSTPAY_OUT_OF_STOCK';
+      final soldOut=error is CcsopFailure&&['ORDERING_OUT_OF_STOCK','ORDERING_POSTPAY_OUT_OF_STOCK'].contains(error.code);
       // Show the server's business rejection, but retain journal/recovery on an uncertain response.
       unresolved=!soldOut || error.deliveryUncertain;
-      if(current(e))setState(()=>status=t(soldOut?'paymentStockUnavailable':'provider_review'));
+      if(current(e))setState(()=>status=t(postpayShortage?'postpayStockUnavailable':soldOut?'paymentStockUnavailable':'provider_review'));
     }
     finally {
       if(mounted)setState(()=>busy=false);if(mounted&&foreground)await load();

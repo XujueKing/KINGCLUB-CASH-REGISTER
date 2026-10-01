@@ -486,19 +486,31 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       if (current(e)) {
         setState(() {
           result = next;
+          cancelled = next.closedUnpaid;
           message = t('tableCheckout_${next.state}');
         });
       }
     } catch (error) {
       final soldOut =
-          error is CcsopFailure && error.code == 'ORDERING_OUT_OF_STOCK';
+          error is CcsopFailure &&
+          [
+            'ORDERING_OUT_OF_STOCK',
+            'ORDERING_POSTPAY_OUT_OF_STOCK',
+          ].contains(error.code);
+      final postpayShortage =
+          error is CcsopFailure &&
+          error.code == 'ORDERING_POSTPAY_OUT_OF_STOCK';
       if (current(e)) {
         setState(
           () => message = t(
             soldOut
                 ? (original.channel == 'cash'
-                      ? 'cashStockUnavailable'
-                      : 'paymentStockUnavailable')
+                      ? (postpayShortage
+                            ? 'postpayCashStockUnavailable'
+                            : 'cashStockUnavailable')
+                      : (postpayShortage
+                            ? 'postpayStockUnavailable'
+                            : 'paymentStockUnavailable'))
                 : 'tableCheckoutReview',
           ),
         );
@@ -645,7 +657,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                       : openReceipt,
                                   child: Text(t('tableReceiptTitle')),
                                 ),
-                              if (result?.settled != true)
+                              if (result?.resolved != true)
                                 SelectableText(original.requestId),
                               if (result?.settled != true && !cancelled) ...[
                                 OutlinedButton(

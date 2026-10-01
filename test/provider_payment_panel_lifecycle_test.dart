@@ -22,9 +22,10 @@ class OriginalAuth extends CheckoutDialogAuth {
 }
 
 class SoldOutAuth extends OriginalAuth {
+  String code = 'ORDERING_OUT_OF_STOCK';
   @override
   Future<ProviderPaymentResult> queryProvider(ProviderPayment command) async {
-    throw const CcsopFailure('ORDERING_OUT_OF_STOCK', deliveryUncertain: true);
+    throw CcsopFailure(code, deliveryUncertain: true);
   }
 }
 
@@ -44,20 +45,23 @@ void main() {
         ),
       );
 
-  testWidgets('stock rejection is visible without discarding the original recovery entry', (tester) async {
-    final auth=SoldOutAuth();
+  for(final code in ['ORDERING_OUT_OF_STOCK','ORDERING_POSTPAY_OUT_OF_STOCK']) {
+  testWidgets('stock rejection $code retains the original recovery entry', (tester) async {
+    final auth=SoldOutAuth()..code=code;
     final original=ProviderPayment.create(auth.session,'D00000000001','member_balance',100,accountType:'platform_cash');
     auth.wait=Completer<List<ProviderPayment>>()..complete([original]);
     await mount(tester,auth);
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining(original.requestId));
     await tester.pumpAndSettle();
-    expect(find.text(tr(UiLanguage.en,'paymentStockUnavailable')),findsOneWidget);
+    expect(find.text(tr(UiLanguage.en,code=='ORDERING_POSTPAY_OUT_OF_STOCK'?'postpayStockUnavailable':'paymentStockUnavailable')),findsOneWidget);
     expect(find.textContaining(original.requestId),findsOneWidget);
     expect(auth.collections,0);
     await tester.pumpWidget(const SizedBox());
     auth.dispose();
   });
+
+  }
 
   testWidgets(
     'failed original read provides explicit local retry without collecting',

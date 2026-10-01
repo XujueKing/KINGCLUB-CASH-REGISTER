@@ -188,19 +188,30 @@ void main() {
       );
     }
     final postpay = command();
-    expect(
-      () => OrderRequestResult.parse(
-        {
-          'result': {
-            ...receipt(postpay.params),
-            'inventoryState': 'unallocated',
+    for (final state in ['unallocated', 'issued']) {
+      expect(
+        OrderRequestResult.parse(
+          {
+            'result': {...receipt(postpay.params), 'inventoryState': state},
           },
-        },
-        postpay,
-        submission: true,
-      ),
-      fails('ORDER_RECEIPT_MISMATCH'),
-    );
+          postpay,
+          submission: true,
+        ).state,
+        OrderRequestState.confirmed,
+      );
+    }
+    for (final state in ['partial', 'reserved', 'released']) {
+      expect(
+        () => OrderRequestResult.parse(
+          {
+            'result': {...receipt(postpay.params), 'inventoryState': state},
+          },
+          postpay,
+          submission: true,
+        ),
+        fails('ORDER_RECEIPT_MISMATCH'),
+      );
+    }
   });
   test('command has immutable nested items, stable UUID, exact prices and no authentication material', () {
     final p = command();

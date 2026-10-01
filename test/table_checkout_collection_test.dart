@@ -30,6 +30,7 @@ class CollectionApi implements SessionChannel {
     if (uncertain) {
       throw const CcsopFailure('TRANSPORT_FAILED', deliveryUncertain: true);
     }
+    if(resultState == 'closed_unpaid') return settlement.closureFixture(command);
     return resultState == 'settled'
         ? settlement.settlementFixture(command)
         : {
@@ -80,6 +81,15 @@ void main() {
     return controller;
   }
 
+  test('verified unpaid closure removes only original recovery entry, without another payment', () async {
+    final command=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'wechat','accountType':null});
+    final storage=staff.TestStorage(),api=CollectionApi(command)..status='closed'..resultState='closed_unpaid';
+    final controller=await setup(storage,api);
+    final result=await controller.recoverTableCheckout(command,stillCurrent:()=>true);
+    expect(result.closedUnpaid,true);expect(result.settled,false);
+    expect(api.calls.map((e)=>e.$1),['K260930001939','K260930001941']);
+    expect(await controller.pendingTableCheckouts('wechat'),isEmpty);
+  });
   for (final channel in ['wechat', 'alipay', 'cash', 'member_balance']) {
     test(
       '$channel uses shared original lookup then one confirmation and removes settled record',

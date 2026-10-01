@@ -276,7 +276,7 @@ class OrderRequestResult {
           receipt['submissionStatus'] != 'confirmed' ||
           (pending.paymentTiming == 'prepay'
               ? !['unallocated', 'reserved'].contains(receipt['inventoryState'])
-              : receipt['inventoryState'] != 'issued') ||
+              : !['unallocated', 'issued'].contains(receipt['inventoryState'])) ||
           receipt['totalCents'] is! int ||
           receipt['totalCents'] != pending.totalCents ||
           receipt['orderRef'] is! String ||

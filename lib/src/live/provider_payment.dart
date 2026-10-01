@@ -35,9 +35,10 @@ class ProviderPayment {
 }
 
 class ProviderPaymentResult {
-  ProviderPaymentResult._(this.state, {this.refunded = false});
+  ProviderPaymentResult._(this.state, {this.refunded = false, this.orderRetained = false});
   final String state;
   final bool refunded;
+  final bool orderRetained;
   bool get confirmed => state=='confirmed';
   bool get closedUnpaid => state=='closed_unpaid';
   bool get resolved => confirmed || refunded || closedUnpaid;
@@ -50,8 +51,10 @@ class ProviderPaymentResult {
     }
     if(raw['state']=='closed_unpaid') {
       final r=raw['receipt'],p=command.params;
+      final retained=r is Map && r['orderRetained']==true;
       if(raw.length!=3 || !['wechat','alipay','member_balance'].contains(command.query.channel) ||
-        r is! Map || r.length!=(command.query.channel=='member_balance'?10:9) ||
+        r is! Map || r.length!=(command.query.channel=='member_balance'?10:9)+(retained?1:0) ||
+        (r.containsKey('orderRetained')&&(!retained||command.query.channel!='wechat')) ||
         (command.query.channel=='member_balance'&&r['accountType']!=command.accountType) || r['storeRef']!=p['storeRef'] || r['orderRef']!=p['orderRef'] ||
         r['requestId']!=command.requestId || r['channel']!=p['channel'] || r['currency']!='CNY' ||
         r['totalCents'] is! int || r['totalCents']!=p['expectedTotalCents'] ||
@@ -59,7 +62,7 @@ class ProviderPaymentResult {
         r['intentRef'] is! String || !uuidPattern.hasMatch(r['intentRef'])) {
         throw const CcsopFailure('PROVIDER_RECEIPT_INVALID');
       }
-      return ProviderPaymentResult._('closed_unpaid');
+      return ProviderPaymentResult._('closed_unpaid',orderRetained:retained);
     }
     if(raw['state']=='closed_or_refunded' && command.query.channel=='member_balance') {
       if(raw.length!=4 || raw['intentRef'] is! String || !uuidPattern.hasMatch(raw['intentRef']) ||
