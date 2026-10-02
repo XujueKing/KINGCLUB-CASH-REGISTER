@@ -322,6 +322,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         productRef: target.item.productRef,
         expectedQuantity: target.item.quantity,
         expectedServedQuantity: target.item.servedQuantity!,
+        expectedServingEpoch: target.item.servingEpoch,
         expectedTotalCents: target.order.totalCents,
       );
     } catch (error) {
@@ -372,16 +373,49 @@ class _TableBillPanelState extends State<TableBillPanel>
         (order.status == 'paid' ||
             (snapshot?.paymentTiming == 'postpay' &&
                 order.status == 'pending'));
+    bool canRecall(LiveOrder order, OrderItem item) =>
+        identity?.permissions.contains('orders.serve') == true &&
+        order.refund == null &&
+        item.servingKnown &&
+        item.servedQuantity! > 0 &&
+        item.servingEpoch != null &&
+        item.servingEpoch! < 1000000 &&
+        {'open', 'clearing'}.contains(snapshot?.sessionStatus) &&
+        (order.status == 'paid' ||
+            (snapshot?.paymentTiming == 'postpay' &&
+                order.status == 'pending'));
     final selected = await showDialog<BillDetailAction>(
       context: context,
       builder: (_) => BillDetailsDialog(
         group: group,
         language: widget.language,
         canServe: canServe,
+        canRecall: canRecall,
       ),
     );
     if (!mounted || !current() || selected == null) return;
-    if (selected.action == 'serve' && canServe(selected.order, selected.item)) {
+    final recall = selected.action == 'recall';
+    if (recall && canRecall(selected.order, selected.item)) {
+      final choice = await showDialog<bool>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: Text(t('billRecall')),
+          children: [
+            SimpleDialogOption(
+              key: const ValueKey('bill-recall-wait'),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(t('billRecallWait')),
+            ),
+            ListTile(enabled: false, title: Text(t('billRecallReturn'))),
+          ],
+        ),
+      );
+      if (!mounted || !current() || choice != true) return;
+    }
+    if ((!recall &&
+            selected.action == 'serve' &&
+            canServe(selected.order, selected.item)) ||
+        (recall && canRecall(selected.order, selected.item))) {
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
@@ -393,6 +427,7 @@ class _TableBillPanelState extends State<TableBillPanel>
           order: selected.order,
           item: selected.item,
           isCurrent: current,
+          recall: recall,
         ),
       );
       if (mounted && foreground) await load();

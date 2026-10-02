@@ -34,9 +34,14 @@ Map<String, dynamic> receipt(PendingServing c) => {
   'servedBy': c.employeeRef,
   'servedBefore': c.before,
   'servedAfter': c.after,
-  'deliveredQuantity': c.after - c.before,
+  if (c.recall) ...{
+    'recalledQuantity': c.before - c.after,
+    'servingEpoch': c.servingEpoch + 1,
+    'operation': 'recall',
+  } else
+    'deliveredQuantity': c.after - c.before,
   'remainingQuantity': c.quantity - c.after,
-  'complete': c.after == c.quantity,
+  if (!c.recall) 'complete': c.after == c.quantity,
 };
 Map<String, dynamic> result(PendingServing c) => {
   'result': {
@@ -49,6 +54,36 @@ Matcher fails(String code) =>
     throwsA(isA<CcsopFailure>().having((e) => e.code, 'code', code));
 
 void main() {
+  test('recall persists its epoch and verifies recall-specific receipt', () {
+    final c = PendingServing.prepare(
+      identity: identity,
+      tableRef: 'TEST_TABLE',
+      sessionRef: 'H00000000001',
+      orderRef: 'D00000000001',
+      productRef: 'TEST_PRODUCT',
+      quantity: 4,
+      expectedServedQuantity: 2,
+      targetServedQuantity: 0,
+      expectedServingEpoch: 3,
+      now: a.now,
+      confirmed: true,
+    );
+    expect(c.recall, true);
+    expect(
+      PendingServing.decode(jsonDecode(jsonEncode(c.encode()))).signature,
+      c.signature,
+    );
+    expect(ServingResult.parse(result(c), c).confirmed, true);
+    final bad = result(c);
+    (bad['result']['receipt'] as Map)['servingEpoch'] = 3;
+    expect(
+      () => ServingResult.parse(bad, c),
+      fails('SERVING_RESPONSE_INVALID'),
+    );
+    final old = c.encode();
+    old['params'] = {...c.params}..remove('expectedServingEpoch');
+    expect(() => PendingServing.decode(old), fails('SERVING_COMMAND_INVALID'));
+  });
   test('original command canonical roundtrip immutable, scoped and free of credentials', () {
     final c = command();
     expect(

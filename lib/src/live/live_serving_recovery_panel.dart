@@ -126,10 +126,10 @@ class _LiveServingRecoveryPanelState extends State<LiveServingRecoveryPanel>
           builder: (ctx) {
             dialog = ctx;
             return AlertDialog(
-              title: Text(t('servingRetry')),
+              title: Text(t(entry.recall ? 'billRecallWait' : 'servingRetry')),
               content: SingleChildScrollView(
                 child: Text(
-                  '${entry.orderRef}\n${entry.productRef}\n${entry.before} → ${entry.after}\n\n${t('servingRetryNotice')}',
+                  '${entry.orderRef}\n${entry.productRef}\n${entry.before} → ${entry.after}\n\n${t(entry.recall ? 'billRecallWaitNotice' : 'servingRetryNotice')}',
                 ),
               ),
               actions: [
@@ -156,7 +156,9 @@ class _LiveServingRecoveryPanelState extends State<LiveServingRecoveryPanel>
       );
       if (!current(generation)) return;
       setState(() {
-        message = result.confirmed ? 'servingConfirmed' : 'servingUnresolved';
+        message = result.confirmed
+            ? (entry.recall ? 'billRecallConfirmed' : 'servingConfirmed')
+            : 'servingUnresolved';
         if (result.confirmed) {
           retryable.remove(entry.requestId);
         } else {
@@ -238,7 +240,7 @@ class _LiveServingRecoveryPanelState extends State<LiveServingRecoveryPanel>
                             '${entry.tableRef} · ${entry.orderRef}\n${entry.productRef}',
                           ),
                           Text(
-                            '${entry.before} → ${entry.after} / ${entry.quantity}',
+                            '${entry.recall ? t('billRecall') : t('billServed')} ${entry.before} → ${entry.after} / ${entry.quantity}',
                           ),
                           Wrap(
                             spacing: 16,

@@ -29,14 +29,14 @@ class Api extends a.TestApi {
     final command = PendingServing.decode(
       (jsonDecode(raw!)['entries'] as List).single,
     );
-    if (id == 'K260929001920') {
+    if (id == (command.recall ? 'K261002001968' : 'K260929001920')) {
       expect(params, command.lookup);
       return saved ??
           {
             'result': {'state': 'not_observed', 'requestId': command.requestId},
           };
     }
-    expect(id, 'K260929001919');
+    expect(id, command.recall ? 'K261002001967' : 'K260929001919');
     expect(params, command.params);
     if (!sending.isCompleted) sending.complete();
     if (gate != null) await gate!.future;
@@ -103,6 +103,34 @@ Future<ServingResult> submit(
 );
 
 void main() {
+  test('lost recall response recovers the same durable command without repeating the write', () async {
+    final storage = Storage();
+    final actualApi = Api(storage)..loseResponse = true;
+    final auth = await controller(storage, actualApi);
+    await expectLater(
+      auth.confirmServing(
+        tableRef: 'TEST_TABLE',
+        sessionRef: 'H00000000001',
+        orderRef: 'D00000000001',
+        productRef: 'TEST_PRODUCT',
+        quantity: 4,
+        expectedServedQuantity: 2,
+        targetServedQuantity: 0,
+        expectedServingEpoch: 1,
+        confirmed: true,
+      ),
+      throwsA(isA<CcsopFailure>()),
+    );
+    final pending = (await auth.pendingServing()).single;
+    expect(pending.recall, true);
+    expect((await auth.recoverServing(pending.requestId)).confirmed, true);
+    expect(actualApi.calls.map((c) => c.$1), [
+      'K261002001967',
+      'K261002001968',
+    ]);
+    expect(await auth.pendingServing(), isEmpty);
+    auth.dispose();
+  });
   test(
     'durable original exists before network; verified receipt alone clears it',
     () async {

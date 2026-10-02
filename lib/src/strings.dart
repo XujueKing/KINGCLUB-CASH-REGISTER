@@ -7,6 +7,11 @@ String tr(UiLanguage language, String key) {
 
 const copy = <String, String>{
   'billRecall': '召回|Recall|召回|เรียกคืน',
+  'billRecallWait': '改回未上，等待重上|Recall for redelivery|改回未上，等待重上|เรียกคืนเพื่อเสิร์ฟใหม่',
+  'billRecallReturn': '退库并取消商品|Return stock and cancel item|退庫並取消商品|คืนสต็อกและยกเลิกสินค้า',
+  'billRecallWaitNotice': '保留消费和付款，将所选数量改回未上；不退库、不退款。|Keep the charge and payment; mark the selected quantity as not served. No restock or refund.|保留消費和付款，將所選數量改回未上；不退庫、不退款。|คงรายการและการชำระเงิน เปลี่ยนจำนวนที่เลือกเป็นยังไม่เสิร์ฟ ไม่คืนสต็อกหรือเงิน',
+  'billRecallQuantity': '召回数量|Recall quantity|召回數量|จำนวนที่เรียกคืน',
+  'billRecallConfirmed': '召回已确认，等待重上|Recall confirmed; awaiting redelivery|召回已確認，等待重上|ยืนยันเรียกคืนแล้ว รอเสิร์ฟใหม่',
   'billSingleRefund': '单独退款|Item refund|單獨退款|คืนเงินเฉพาะรายการ',
   'billReductionRefresh': '减量结果待核对，正在刷新账单，请确认数量后再操作。|Refreshing bill to verify the reduction. Check the quantity before continuing.|減量結果待核對，正在重新整理帳單，請確認數量後再操作。|กำลังโหลดบิลเพื่อตรวจสอบการลดจำนวน โปรดตรวจสอบก่อนทำต่อ',
   'billReductionPaymentBusy': '这笔订单已有收款请求，请先确认收款结果再减数量。|Resolve the payment request before reducing items.|這筆訂單已有收款請求，請先確認收款結果再減數量。|โปรดตรวจสอบผลการชำระเงินก่อนลดจำนวน',

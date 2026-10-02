@@ -55,6 +55,7 @@ class ServingAuth extends TableAuth {
     required int quantity,
     required int expectedServedQuantity,
     required int targetServedQuantity,
+    int? expectedServingEpoch,
     required bool confirmed,
   }) async {
     writes++;

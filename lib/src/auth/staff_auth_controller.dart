@@ -1349,6 +1349,7 @@ class StaffAuthController extends ChangeNotifier {
     required String productRef,
     required int expectedQuantity,
     required int expectedServedQuantity,
+    int? expectedServingEpoch,
     required int expectedTotalCents,
   }) async {
     final identity = _session, api = _api, epoch = _epoch;
@@ -1377,6 +1378,7 @@ class StaffAuthController extends ChangeNotifier {
       'requestId': requestId,
       'expectedQuantity': expectedQuantity,
       'expectedServedQuantity': expectedServedQuantity,
+      'expectedServingEpoch': ?expectedServingEpoch,
       'expectedTotalCents': expectedTotalCents,
       'quantity': 1,
     };
@@ -1686,7 +1688,9 @@ class StaffAuthController extends ChangeNotifier {
       throw const CcsopFailure('SERVING_SCOPE_CHANGED');
     }
     final raw = await _api!.call(
-      lookup ? 'K260929001920' : 'K260929001919',
+      command.recall
+          ? (lookup ? 'K261002001968' : 'K261002001967')
+          : (lookup ? 'K260929001920' : 'K260929001919'),
       lookup ? command.lookup : command.params,
     );
     _check(epoch);
@@ -1709,6 +1713,7 @@ class StaffAuthController extends ChangeNotifier {
     required int quantity,
     required int expectedServedQuantity,
     required int targetServedQuantity,
+    int? expectedServingEpoch,
     required bool confirmed,
   }) => _servingOperation(() async {
     final identity = _servingIdentity(), epoch = _epoch;
@@ -1721,6 +1726,7 @@ class StaffAuthController extends ChangeNotifier {
       quantity: quantity,
       expectedServedQuantity: expectedServedQuantity,
       targetServedQuantity: targetServedQuantity,
+      expectedServingEpoch: expectedServingEpoch,
       now: _now(),
       confirmed: confirmed,
     );
@@ -2313,7 +2319,9 @@ class StaffAuthController extends ChangeNotifier {
         sessionRef: draft.sessionRef,
         afterMember: cursor,
       );
-      if (draft.memberRef == null ? next.tableOrderAllowed : next.members.any((m) => m.reference == draft.memberRef)) {
+      if (draft.memberRef == null
+          ? next.tableOrderAllowed
+          : next.members.any((m) => m.reference == draft.memberRef)) {
         context = next;
         break;
       }
@@ -2414,8 +2422,9 @@ class StaffAuthController extends ChangeNotifier {
     final raw = await _api!.call(
       interfaceId,
       interfaceId == 'K260929001912'
-          ? (Map<String, dynamic>.of(command.params)
-            ..removeWhere((key, value) => key == 'memberRef' && value == null))
+          ? (Map<String, dynamic>.of(
+              command.params,
+            )..removeWhere((key, value) => key == 'memberRef' && value == null))
           : command.lookup,
     );
     _check(epoch);

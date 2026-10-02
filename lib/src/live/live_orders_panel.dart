@@ -410,6 +410,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
         quantity: item.quantity,
         expectedServedQuantity: item.servedQuantity!,
         targetServedQuantity: item.servedQuantity! + delivered,
+        expectedServingEpoch: item.servingEpoch,
         confirmed: true,
       );
       if (current()) {

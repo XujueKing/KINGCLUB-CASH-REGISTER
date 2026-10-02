@@ -56,6 +56,9 @@ class OrderItem {
       subtotalCents = _positive(value['subtotalCents']),
       servedQuantity = _servingCount(value, 'servedQuantity'),
       remainingQuantity = _servingCount(value, 'remainingQuantity'),
+      servingEpoch = value['servingEpoch'] == null
+          ? null
+          : _epoch(value['servingEpoch']),
       names = _localized(_map(value['snapshot'])['names']),
       specifications = _localized(_map(value['snapshot'])['specifications']) {
     _positive(_map(value['snapshot'])['revision']);
@@ -71,10 +74,18 @@ class OrderItem {
   final int quantity, priceCents, subtotalCents;
   // Both absent means an older server did not provide delivery progress, never zero delivered.
   final int? servedQuantity, remainingQuantity;
+  final int? servingEpoch;
   bool get servingKnown => servedQuantity != null;
   final List<String> names, specifications;
   String name(UiLanguage language) => names[language.index];
   String specification(UiLanguage language) => specifications[language.index];
+}
+
+int _epoch(Object? value) {
+  if (value is! int || value < 0 || value > 1000000) {
+    throw const FormatException();
+  }
+  return value;
 }
 
 int? _servingCount(Map<String, dynamic> value, String key) {

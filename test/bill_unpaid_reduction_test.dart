@@ -62,6 +62,7 @@ class ReductionAuth extends TableAuth {
     required String productRef,
     required int expectedQuantity,
     required int expectedServedQuantity,
+    int? expectedServingEpoch,
     required int expectedTotalCents,
   }) async {
     calls++;

@@ -16,6 +16,7 @@ class BillServingDialog extends StatefulWidget {
     required this.order,
     required this.item,
     required this.isCurrent,
+    this.recall = false,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -23,6 +24,7 @@ class BillServingDialog extends StatefulWidget {
   final LiveOrder order;
   final OrderItem item;
   final bool Function() isCurrent;
+  final bool recall;
   @override
   State<BillServingDialog> createState() => _BillServingDialogState();
 }
@@ -35,7 +37,11 @@ class _BillServingDialogState extends State<BillServingDialog> {
     final value = int.tryParse(quantity.text);
     return RegExp(r'^[1-9][0-9]{0,3}$').hasMatch(quantity.text) &&
             value != null &&
-            value <= (widget.item.remainingQuantity ?? 0)
+            value <=
+                ((widget.recall
+                        ? widget.item.servedQuantity
+                        : widget.item.remainingQuantity) ??
+                    0)
         ? value
         : null;
   }
@@ -81,7 +87,10 @@ class _BillServingDialogState extends State<BillServingDialog> {
         productRef: widget.item.productRef,
         quantity: widget.item.quantity,
         expectedServedQuantity: widget.item.servedQuantity!,
-        targetServedQuantity: widget.item.servedQuantity! + delivered,
+        targetServedQuantity:
+            widget.item.servedQuantity! +
+            (widget.recall ? -delivered : delivered),
+        expectedServingEpoch: widget.item.servingEpoch,
         confirmed: true,
       );
       if (!mounted) return;
@@ -118,7 +127,7 @@ class _BillServingDialogState extends State<BillServingDialog> {
             ),
           )
         : AlertDialog(
-            title: Text(t('servingConfirm')),
+            title: Text(t(widget.recall ? 'billRecallWait' : 'servingConfirm')),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -128,7 +137,13 @@ class _BillServingDialogState extends State<BillServingDialog> {
                   Text(
                     '${t('servingDelivered')}: ${widget.item.servedQuantity} · ${t('servingRemaining')}: ${widget.item.remainingQuantity}',
                   ),
-                  Text(t('servingConfirmNotice')),
+                  Text(
+                    t(
+                      widget.recall
+                          ? 'billRecallWaitNotice'
+                          : 'servingConfirmNotice',
+                    ),
+                  ),
                   if (failed) Text(t('liveReadFailed')),
                   TextField(
                     key: const ValueKey('bill-serving-quantity'),
@@ -137,7 +152,11 @@ class _BillServingDialogState extends State<BillServingDialog> {
                     keyboardType: TextInputType.number,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      labelText: t('servingThisQuantity'),
+                      labelText: t(
+                        widget.recall
+                            ? 'billRecallQuantity'
+                            : 'servingThisQuantity',
+                      ),
                     ),
                   ),
                 ],
@@ -151,7 +170,9 @@ class _BillServingDialogState extends State<BillServingDialog> {
               FilledButton(
                 key: const ValueKey('bill-serving-submit'),
                 onPressed: busy || count == null ? null : submit,
-                child: Text(t('servingConfirm')),
+                child: Text(
+                  t(widget.recall ? 'billRecallWait' : 'servingConfirm'),
+                ),
               ),
             ],
           ),

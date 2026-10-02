@@ -38,6 +38,8 @@ class PendingServing {
   String get requestId => params['requestId'] as String;
   int get before => params['expectedServedQuantity'] as int;
   int get after => params['targetServedQuantity'] as int;
+  bool get recall => after < before;
+  int get servingEpoch => params['expectedServingEpoch'] as int? ?? 0;
   Map<String, dynamic> get lookup => Map.unmodifiable({
     'storeRef': storeRef,
     'tableRef': tableRef,
@@ -71,6 +73,7 @@ class PendingServing {
     required int quantity,
     required int expectedServedQuantity,
     required int targetServedQuantity,
+    int? expectedServingEpoch,
     required DateTime now,
     required bool confirmed,
   }) {
@@ -100,6 +103,9 @@ class PendingServing {
         'requestId': id,
         'expectedServedQuantity': expectedServedQuantity,
         'targetServedQuantity': targetServedQuantity,
+        'expectedServingEpoch': ?expectedServingEpoch,
+        if (targetServedQuantity < expectedServedQuantity)
+          'expectedQuantity': quantity,
       },
     });
   }
@@ -110,7 +116,12 @@ class PendingServing {
           ? Uri.tryParse(value['base'] as String)
           : null;
       if (value.length != 5 ||
-          params.length != 8 ||
+          params.length !=
+              8 +
+                  (params.containsKey('expectedServingEpoch') ? 1 : 0) +
+                  (params.containsKey('expectedQuantity') ? 1 : 0) ||
+          (params.containsKey('expectedServingEpoch') &&
+              !_count(params['expectedServingEpoch'], 0, 1000000)) ||
           uri == null ||
           uri.scheme != 'https' ||
           uri.host.isEmpty ||
@@ -131,14 +142,25 @@ class PendingServing {
           params['requestId'] is! String ||
           !uuidPattern.hasMatch(params['requestId'] as String) ||
           !_count(value['quantity'], 1, 1000) ||
-          !_count(params['expectedServedQuantity'], 0, 999) ||
-          !_count(params['targetServedQuantity'], 1, 1000)) {
+          !_count(params['expectedServedQuantity'], 0, 1000) ||
+          !_count(params['targetServedQuantity'], 0, 1000)) {
         throw const FormatException();
       }
       final before = params['expectedServedQuantity'] as int,
           after = params['targetServedQuantity'] as int,
           quantity = value['quantity'] as int;
-      if (after <= before || after > quantity) throw const FormatException();
+      if (after == before ||
+          before > quantity ||
+          after > quantity ||
+          (after < before &&
+              (!params.containsKey('expectedServingEpoch') ||
+                  params['expectedServingEpoch'] >= 1000000))) {
+        throw const FormatException();
+      }
+      if ((after < before && params['expectedQuantity'] != quantity) ||
+          (after > before && params.containsKey('expectedQuantity'))) {
+        throw const FormatException();
+      }
       return PendingServing._(
         uri.toString(),
         value['employeeRef'] as String,
@@ -153,6 +175,9 @@ class PendingServing {
           'requestId': params['requestId'],
           'expectedServedQuantity': before,
           'targetServedQuantity': after,
+          if (params.containsKey('expectedServingEpoch'))
+            'expectedServingEpoch': params['expectedServingEpoch'],
+          if (after < before) 'expectedQuantity': quantity,
         }),
       );
     } catch (_) {
@@ -178,19 +203,28 @@ class ServingResult {
         throw const FormatException();
       }
       final receipt = _map(value['receipt']);
-      if (receipt.length != 12 ||
+      if (receipt.length != (command.recall ? 13 : 12) ||
           command.lookup.entries.any((e) => receipt[e.key] != e.value) ||
           receipt['servedBy'] != command.employeeRef ||
           receipt['servedBefore'] is! int ||
           receipt['servedAfter'] is! int ||
-          receipt['deliveredQuantity'] is! int ||
           receipt['remainingQuantity'] is! int ||
-          receipt['complete'] is! bool ||
           receipt['servedBefore'] != command.before ||
           receipt['servedAfter'] != command.after ||
-          receipt['deliveredQuantity'] != command.after - command.before ||
           receipt['remainingQuantity'] != command.quantity - command.after ||
-          receipt['complete'] != (command.after == command.quantity)) {
+          (command.recall
+              ? receipt['operation'] != 'recall' ||
+                    receipt['recalledQuantity'] is! int ||
+                    receipt['servingEpoch'] is! int ||
+                    receipt['recalledQuantity'] !=
+                        command.before - command.after ||
+                    receipt['servingEpoch'] != command.servingEpoch + 1
+              : receipt['deliveredQuantity'] is! int ||
+                    receipt['deliveredQuantity'] !=
+                        command.after - command.before ||
+                    receipt['complete'] is! bool ||
+                    receipt['complete'] !=
+                        (command.after == command.quantity))) {
         throw const FormatException();
       }
       return ServingResult._(true, command.signature);
