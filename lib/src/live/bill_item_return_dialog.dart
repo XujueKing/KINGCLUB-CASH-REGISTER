@@ -15,6 +15,7 @@ class BillItemReturnDialog extends StatefulWidget {
     required this.order,
     required this.item,
     required this.isCurrent,
+    this.served = true,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -22,6 +23,7 @@ class BillItemReturnDialog extends StatefulWidget {
   final LiveOrder order;
   final OrderItem item;
   final bool Function() isCurrent;
+  final bool served;
   @override
   State<BillItemReturnDialog> createState() => _BillItemReturnDialogState();
 }
@@ -34,7 +36,10 @@ class _BillItemReturnDialogState extends State<BillItemReturnDialog> {
     final n = int.tryParse(quantity.text);
     return RegExp(r'^[1-9][0-9]{0,3}$').hasMatch(quantity.text) &&
             n != null &&
-            n <= (widget.item.servedQuantity ?? 0)
+            n <=
+                (widget.served
+                    ? (widget.item.servedQuantity ?? 0)
+                    : (widget.item.returnableUnservedQuantity ?? 0))
         ? n
         : null;
   }
@@ -75,7 +80,7 @@ class _BillItemReturnDialogState extends State<BillItemReturnDialog> {
           'expectedServingEpoch': widget.item.servingEpoch,
           'expectedTotalCents': widget.order.totalCents,
           'quantity': n,
-          'returnedServedQuantity': n,
+          'returnedServedQuantity': widget.served ? n : 0,
           'physicalReturnConfirmed': true,
         },
       );

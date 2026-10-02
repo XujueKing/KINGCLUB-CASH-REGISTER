@@ -12,6 +12,28 @@ OrderSnapshot parse(Object? raw, {String? after}) => OrderSnapshot.parse(
   afterOrder: after,
 );
 void main() {
+  test('physical return hint cannot include never issued quantities', () {
+    for (final value in [0, 1, 2, -1, '1', null]) {
+      final raw = orderFixture();
+      final item =
+          (((raw['result'] as Map)['orders'] as List).first['items'] as List)
+                  .first
+              as Map;
+      item.addAll(<String, dynamic>{
+        'servedQuantity': 1,
+        'remainingQuantity': 1,
+        'returnableUnservedQuantity': value,
+      });
+      if (value == 0 || value == 1) {
+        expect(
+          parse(raw).orders.single.items.single.returnableUnservedQuantity,
+          value,
+        );
+      } else {
+        expect(() => parse(raw), throwsFormatException);
+      }
+    }
+  });
   test('table receipt navigation accepts only a paid original UUID', () {
     const checkout = '00000000-0000-4000-8000-000000000001';
     for (final value in [checkout, null, '', 'wrong', true, 123]) {
@@ -28,7 +50,9 @@ void main() {
       }
     }
     final raw = orderFixture();
-    (((raw['result'] as Map)['orders'] as List).first as Map)['tableCheckoutRef'] = checkout;
+    (((raw['result'] as Map)['orders'] as List).first
+            as Map)['tableCheckoutRef'] =
+        checkout;
     expect(() => parse(raw), throwsFormatException);
   });
   Map<String, dynamic> line(Map<String, dynamic> raw) =>

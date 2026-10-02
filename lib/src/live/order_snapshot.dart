@@ -56,6 +56,10 @@ class OrderItem {
       subtotalCents = _positive(value['subtotalCents']),
       servedQuantity = _servingCount(value, 'servedQuantity'),
       remainingQuantity = _servingCount(value, 'remainingQuantity'),
+      returnableUnservedQuantity = _servingCount(
+        value,
+        'returnableUnservedQuantity',
+      ),
       servingEpoch = value['servingEpoch'] == null
           ? null
           : _epoch(value['servingEpoch']),
@@ -63,6 +67,11 @@ class OrderItem {
       specifications = _localized(_map(value['snapshot'])['specifications']) {
     _positive(_map(value['snapshot'])['revision']);
     if (quantity * priceCents != subtotalCents) throw const FormatException();
+    if (returnableUnservedQuantity != null &&
+        (remainingQuantity == null ||
+            returnableUnservedQuantity! > remainingQuantity!)) {
+      throw const FormatException();
+    }
     if ((servedQuantity == null) != (remainingQuantity == null) ||
         (servedQuantity != null &&
             servedQuantity! + remainingQuantity! != quantity)) {
@@ -74,6 +83,8 @@ class OrderItem {
   final int quantity, priceCents, subtotalCents;
   // Both absent means an older server did not provide delivery progress, never zero delivered.
   final int? servedQuantity, remainingQuantity;
+  // Display hint only; the server revalidates physical stock and original receipts.
+  final int? returnableUnservedQuantity;
   final int? servingEpoch;
   bool get servingKnown => servedQuantity != null;
   final List<String> names, specifications;

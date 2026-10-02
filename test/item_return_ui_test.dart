@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/auth/staff_auth_controller.dart';
 import 'package:kingclub_cash_register/src/live/item_return_command.dart';
 import 'package:kingclub_cash_register/src/live/bill_item_return_dialog.dart';
+import 'package:kingclub_cash_register/src/live/bill_details_dialog.dart';
+import 'package:kingclub_cash_register/src/live/bill_product_group.dart';
 import 'package:kingclub_cash_register/src/live/item_return_recovery.dart';
 import 'package:kingclub_cash_register/src/live/order_snapshot.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
@@ -18,6 +20,7 @@ class UiAuth extends StaffAuthController {
   final calls = <String>[];
   List<PendingItemReturn> pending = [];
   bool lose = false;
+  Map<String, dynamic>? sent;
   @override
   Future<List<PendingItemReturn>> pendingItemReturns() async =>
       List.unmodifiable(pending);
@@ -26,6 +29,7 @@ class UiAuth extends StaffAuthController {
     required Map<String, dynamic> fields,
     required int unitPriceCents,
   }) async {
+    sent = Map.of(fields);
     final c = PendingItemReturn.prepare(
       identity: r.identity,
       fields: fields,
@@ -37,7 +41,10 @@ class UiAuth extends StaffAuthController {
       pending = [c];
       throw const CcsopFailure('TRANSPORT_FAILED', deliveryUncertain: true);
     }
-    return ItemReturnResult.parse(r.result(c), c);
+    final receipt = r.result(c);
+    (receipt['result'] as Map)['remainingServedQuantity'] =
+        fields['expectedServedQuantity'] - fields['returnedServedQuantity'];
+    return ItemReturnResult.parse(receipt, c);
   }
 
   @override
@@ -53,7 +60,7 @@ class UiAuth extends StaffAuthController {
   }
 }
 
-LiveOrder order() => LiveOrder({
+LiveOrder order({int? returnable}) => LiveOrder({
   'orderRef': 'D00000000001',
   'status': 'pending',
   'currency': 'CNY',
@@ -68,6 +75,7 @@ LiveOrder order() => LiveOrder({
       'servedQuantity': 2,
       'remainingQuantity': 1,
       'servingEpoch': 1,
+      if (returnable != null) 'returnableUnservedQuantity': returnable,
       'snapshot': {
         'revision': 1,
         'names': {
@@ -81,7 +89,92 @@ LiveOrder order() => LiveOrder({
   ],
 });
 void main() {
+  testWidgets('return recalled unit preserves other served units', (
+    tester,
+  ) async {
+    final auth = UiAuth(), value = order(returnable: 1);
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BillItemReturnDialog(
+            auth: auth,
+            language: UiLanguage.values.first,
+            tableRef: 'TEST_TABLE',
+            sessionRef: 'H00000000001',
+            order: value,
+            item: value.items.single,
+            isCurrent: () => true,
+            served: false,
+          ),
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('item-return-quantity')),
+      '2',
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('item-return-submit')),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('item-return-quantity')),
+      '1',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('item-return-submit')));
+    await tester.pumpAndSettle();
+    expect(auth.sent?['quantity'], 1);
+    expect(auth.sent?['returnedServedQuantity'], 0);
+    expect(auth.sent?['expectedServedQuantity'], 2);
+  });
   for (final language in UiLanguage.values) {
+    testWidgets(
+      'recalled return entry retains original line ${language.name}',
+      (tester) async {
+        BillDetailAction? selected;
+        final value = order(returnable: 1);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () async {
+                    selected = await showDialog<BillDetailAction>(
+                      context: context,
+                      builder: (_) => BillDetailsDialog(
+                        group: groupBillProducts([value]).single,
+                        language: language,
+                        canServe: (_, __) => true,
+                        canReturnUnserved: (_, item) =>
+                            (item.returnableUnservedQuantity ?? 0) > 0,
+                      ),
+                    );
+                  },
+                  child: const Text('OPEN'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('OPEN'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.tap(
+          find.byKey(const ValueKey('bill-return-unserved-D00000000001')),
+        );
+        await tester.pumpAndSettle();
+        expect(selected?.action, 'return');
+        expect(selected?.served, false);
+        expect(identical(selected?.order, value), true);
+      },
+    );
     testWidgets(
       'return quantity and one physical confirmation ${language.name}',
       (tester) async {

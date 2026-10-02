@@ -21,11 +21,13 @@ class BillDetailsDialog extends StatelessWidget {
     required this.canServe,
     this.canRecall,
     this.canRefund,
+    this.canReturnUnserved,
   });
   final BillProductGroup group;
   final UiLanguage language;
   final bool Function(LiveOrder order, OrderItem item) canServe;
   final bool Function(LiveOrder order, OrderItem item)? canRecall, canRefund;
+  final bool Function(LiveOrder order, OrderItem item)? canReturnUnserved;
   String t(String key) => tr(language, key);
   @override
   Widget build(BuildContext context) => AlertDialog(
@@ -168,6 +170,13 @@ class BillDetailsDialog extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (state == 'unserved' &&
+                    canReturnUnserved?.call(order, item) == true)
+                  OutlinedButton(
+                    key: ValueKey('bill-return-unserved-${order.reference}'),
+                    onPressed: () => select('return'),
+                    child: Text(t('billRecallReturn')),
+                  ),
                 if (state == 'unserved' && canServe(order, item))
                   FilledButton(
                     key: ValueKey('bill-serve-${order.reference}'),

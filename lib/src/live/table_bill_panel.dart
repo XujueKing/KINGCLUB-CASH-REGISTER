@@ -385,6 +385,17 @@ class _TableBillPanelState extends State<TableBillPanel>
         (order.status == 'paid' ||
             (snapshot?.paymentTiming == 'postpay' &&
                 order.status == 'pending'));
+    bool canReturnUnserved(LiveOrder order, OrderItem item) =>
+        identity?.permissions.contains('orders.serve') == true &&
+        identity?.permissions.contains('orders.create') == true &&
+        order.refund == null &&
+        order.status == 'pending' &&
+        snapshot?.paymentTiming == 'postpay' &&
+        snapshot?.sessionStatus == 'open' &&
+        item.servingKnown &&
+        item.servingEpoch != null &&
+        item.servingEpoch! < 1000000 &&
+        (item.returnableUnservedQuantity ?? 0) > 0;
     final selected = await showDialog<BillDetailAction>(
       context: context,
       builder: (_) => BillDetailsDialog(
@@ -392,9 +403,30 @@ class _TableBillPanelState extends State<TableBillPanel>
         language: widget.language,
         canServe: canServe,
         canRecall: canRecall,
+        canReturnUnserved: canReturnUnserved,
       ),
     );
     if (!mounted || !current() || selected == null) return;
+    if (selected.action == 'return' &&
+        !selected.served &&
+        canReturnUnserved(selected.order, selected.item)) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => BillItemReturnDialog(
+          auth: widget.auth,
+          language: widget.language,
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          order: selected.order,
+          item: selected.item,
+          isCurrent: current,
+          served: false,
+        ),
+      );
+      if (mounted && foreground) await load();
+      return;
+    }
     final recall = selected.action == 'recall';
     if (recall && canRecall(selected.order, selected.item)) {
       final choice = await showDialog<bool>(
