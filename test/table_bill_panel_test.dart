@@ -16,7 +16,8 @@ class BillAuth extends TableAuth {
   Completer<Object?>? ordersGate;
   bool cancelled = false;
   bool failRead = false;
-  bool postpay = false, progressKnown = true;
+  bool postpay = false, progressKnown = true, paid = false;
+  int served = 0;
   @override
   Future<Object?> readOrders({
     required String tableRef,
@@ -28,6 +29,9 @@ class BillAuth extends TableAuth {
     final raw = orderFixture(), data = raw['result'] as Map;
     data['session']['paymentTiming'] = postpay ? 'postpay' : 'prepay';
     (data['orders'] as List).first['cashierOrder'] = postpay;
+    final progress = (data['orders'] as List).first['items'][0];
+    progress['servedQuantity'] = served;
+    progress['remainingQuantity'] = 2 - served;
     if (!progressKnown) {
       final item = (data['orders'] as List).first['items'][0] as Map;
       item.remove('servedQuantity');
@@ -35,13 +39,18 @@ class BillAuth extends TableAuth {
     }
     (data['orders'] as List).first['status'] = cancelled
         ? 'expired'
+        : paid
+        ? 'paid'
         : 'pending';
     data['sessionSummary'] = {
       'currency': 'CNY',
-      'paid': {'orderCount': 0, 'totalCents': 0},
+      'paid': {
+        'orderCount': paid && !cancelled ? 1 : 0,
+        'totalCents': paid && !cancelled ? 1200 : 0,
+      },
       'pending': {
-        'orderCount': cancelled ? 0 : 1,
-        'totalCents': cancelled ? 0 : 1200,
+        'orderCount': cancelled || paid ? 0 : 1,
+        'totalCents': cancelled || paid ? 0 : 1200,
       },
       'expired': {
         'orderCount': cancelled ? 1 : 0,
@@ -97,41 +106,105 @@ void main() {
       },
     );
   }
-  Widget page(BillAuth auth, int revision, {bool checkoutAllowed = true}) =>
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TableBillPanel(
-              auth: auth,
-              language: UiLanguage.en,
-              tableRef: 'test-000',
-              sessionRef: 'session-0',
-              revision: revision,
-              checkoutAllowed: checkoutAllowed,
-            ),
-          ),
+  Widget page(
+    BillAuth auth,
+    int revision, {
+    bool checkoutAllowed = true,
+    int draftCents = 0,
+  }) => MaterialApp(
+    home: Scaffold(
+      body: SingleChildScrollView(
+        child: TableBillPanel(
+          auth: auth,
+          language: UiLanguage.en,
+          tableRef: 'test-000',
+          sessionRef: 'session-0',
+          revision: revision,
+          checkoutAllowed: checkoutAllowed,
+          draftCents: draftCents,
         ),
-      );
-  testWidgets(
-    'receipt shows delivery progress without implying unpaid prepay can be served',
-    (tester) async {
-      final auth = BillAuth();
-      await tester.pumpWidget(page(auth, 0));
-      await tester.pumpAndSettle();
-      expect(find.text('Delivered: 0'), findsOneWidget);
-      expect(find.textContaining('Remaining:'), findsNothing);
-      auth.postpay = true;
-      await tester.pumpWidget(page(auth, 1));
-      await tester.pumpAndSettle();
-      expect(find.text('Delivered: 0 · Remaining: 2'), findsOneWidget);
-      auth.progressKnown = false;
-      await tester.pumpWidget(page(auth, 2));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Delivered:'), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-      auth.dispose();
-    },
+      ),
+    ),
   );
+  testWidgets('new draft reveals unpaid tab and contributes to preview totals', (
+    tester,
+  ) async {
+    final auth = BillAuth()..paid = true;
+    await tester.pumpWidget(page(auth, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('bill-filter-paid')));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      page(auth, 0, checkoutAllowed: false, draftCents: 300),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ChoiceChip>(find.byKey(const ValueKey('bill-filter-pending')))
+          .selected,
+      isTrue,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('table-bill-total')),
+        matching: find.text('CNY 15.00'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('table-bill-pending')),
+        matching: find.text('CNY 3.00'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('table-bill-paid')),
+        matching: find.text('CNY 12.00'),
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
+  testWidgets('paid partial delivery and filters retain whole-table totals', (
+    tester,
+  ) async {
+    final auth = BillAuth()
+      ..paid = true
+      ..served = 1;
+    await tester.pumpWidget(page(auth, 0));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Not served'), findsOneWidget);
+    expect(find.textContaining('Served'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('bill-filter-pending')));
+    await tester.pumpAndSettle();
+    expect(find.text('Test product'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('table-bill-total')),
+        matching: find.text('CNY 12.00'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('table-bill-paid')),
+        matching: find.text('CNY 12.00'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('bill-filter-paid')));
+    await tester.pumpAndSettle();
+    expect(find.text('Test product'), findsOneWidget);
+    auth.progressKnown = false;
+    await tester.pumpWidget(page(auth, 1));
+    await tester.pumpAndSettle();
+    expect(find.text('Delivery unconfirmed'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
   testWidgets(
     'unsent cart prevents checkout; failed refresh keeps lines but disables payment',
     (tester) async {
@@ -159,12 +232,24 @@ void main() {
       await tester.pumpWidget(page(auth, 0));
       await tester.pumpAndSettle();
       expect(find.textContaining('Test product'), findsOneWidget);
-      expect(find.text('Unpaid  CNY 12.00'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('table-bill-pending')),
+          matching: find.text('CNY 12.00'),
+        ),
+        findsOneWidget,
+      );
       auth.cancelled = true;
       await tester.pumpWidget(page(auth, 1));
       await tester.pumpAndSettle();
       expect(find.textContaining('Test product'), findsNothing);
-      expect(find.text('Unpaid  CNY 0.00'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('table-bill-pending')),
+          matching: find.text('CNY 0.00'),
+        ),
+        findsOneWidget,
+      );
       await tester.pumpWidget(const SizedBox());
       auth.dispose();
     },

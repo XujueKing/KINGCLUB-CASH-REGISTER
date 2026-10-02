@@ -1,4 +1,4 @@
-import 'product_thumbnail.dart';
+import 'bill_product_card.dart';
 
 import 'dart:async';
 
@@ -505,7 +505,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     return Row(
       children: [
         Expanded(
-          flex: 3,
+          flex: 2,
           child: widget.tablePanel != null && !menuOpen
               ? widget.tablePanel!
               : AbsorbPointer(
@@ -524,7 +524,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         ),
         const VerticalDivider(width: 1),
         Expanded(
-          flex: 2,
+          flex: 1,
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
@@ -554,6 +554,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                   ),
                 Expanded(
                   child: TableBillPanel(
+                    draftCents: total,
                     auth: widget.auth,
                     language: widget.language,
                     tableRef: widget.orderContext.tableRef,
@@ -634,36 +635,23 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                         if (items.isEmpty && widget.tablePanel == null)
                           Text(t('cartDraftEmpty')),
                         for (final item in items.values)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(
+                          BillProductCard(
+                            language: widget.language,
+                            name: item.product.name(widget.language),
+                            specification: item.product.specification(
+                              widget.language,
+                            ),
+                            quantity: item.quantity,
+                            priceCents: item.product.priceCents,
+                            totalCents: item.quantity * item.product.priceCents,
+                            base: widget.auth.session?.base,
+                            thumbnailPath: item.product.thumbnailPath,
+                            footer: Row(
                               children: [
-                                ProductThumbnail(
-                                  path: item.product.thumbnailPath,
-                                  base: widget.auth.session?.base,
-                                ),
                                 Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.product.name(widget.language),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      Text(
-                                        item.product.specification(
-                                          widget.language,
-                                        ),
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      Text(
-                                        'CNY ${formatCents(item.product.priceCents)} × ${item.quantity}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ],
+                                  child: Text(
+                                    t('billDraft'),
+                                    style: const TextStyle(fontSize: 12),
                                   ),
                                 ),
                                 IconButton(
@@ -676,13 +664,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                                       : null,
                                   icon: const Icon(Icons.remove, size: 18),
                                 ),
-                                SizedBox(
-                                  width: 26,
-                                  child: Text(
-                                    '${item.quantity}',
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
+                                Text('${item.quantity}'),
                                 IconButton(
                                   key: ValueKey(
                                     'cart-plus-${item.product.reference}',
@@ -692,15 +674,6 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                                       ? () => change(item.product, 1)
                                       : null,
                                   icon: const Icon(Icons.add, size: 18),
-                                ),
-                                SizedBox(
-                                  width: 76,
-                                  child: Text(
-                                    formatCents(
-                                      item.product.priceCents * item.quantity,
-                                    ),
-                                    textAlign: TextAlign.right,
-                                  ),
                                 ),
                                 IconButton(
                                   key: ValueKey(
@@ -720,7 +693,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     ),
                   ),
                 ),
-                if (widget.tablePanel == null || items.isNotEmpty)
+                if (widget.tablePanel == null)
                   Text(
                     'CNY ${formatCents(total)}',
                     key: const ValueKey('cart-total'),

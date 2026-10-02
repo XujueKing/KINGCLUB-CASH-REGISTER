@@ -1,0 +1,92 @@
+import 'package:flutter/material.dart';
+
+import '../strings.dart';
+import 'product_thumbnail.dart';
+import 'table_snapshot.dart';
+
+class BillProductCard extends StatelessWidget {
+  const BillProductCard({
+    super.key,
+    required this.language,
+    required this.name,
+    required this.specification,
+    required this.quantity,
+    required this.priceCents,
+    required this.totalCents,
+    required this.base,
+    this.thumbnailPath,
+    this.footer,
+  });
+  final UiLanguage language;
+  final String name, specification;
+  final int quantity, priceCents, totalCents;
+  final Uri? base;
+  final String? thumbnailPath;
+  final Widget? footer;
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 5),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: const Color(0xffd7e2dc)),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            ProductThumbnail(path: thumbnailPath, base: base),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xff203d32),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    specification,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xff63756b),
+                    ),
+                  ),
+                  Text(
+                    '${tr(language, 'billUnitPrice')} ¥${formatCents(priceCents)}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('× $quantity', style: const TextStyle(fontSize: 13)),
+                Text(
+                  '¥${formatCents(totalCents)}',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        if (footer != null) ...[const SizedBox(height: 6), footer!],
+      ],
+    ),
+  );
+}

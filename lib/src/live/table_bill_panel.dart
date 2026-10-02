@@ -1,4 +1,4 @@
-import 'product_thumbnail.dart';
+import 'bill_product_card.dart';
 
 import 'dart:async';
 
@@ -22,6 +22,7 @@ class TableBillPanel extends StatefulWidget {
     this.checkoutAllowed = true,
     this.fillHeight = false,
     this.leading,
+    this.draftCents = 0,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -29,6 +30,7 @@ class TableBillPanel extends StatefulWidget {
   final int revision;
   final bool checkoutAllowed, fillHeight;
   final Widget? leading;
+  final int draftCents;
   @override
   State<TableBillPanel> createState() => _TableBillPanelState();
 }
@@ -36,6 +38,7 @@ class TableBillPanel extends StatefulWidget {
 class _TableBillPanelState extends State<TableBillPanel>
     with WidgetsBindingObserver {
   List<LiveOrder> orders = [];
+  String filter = 'all';
   OrderSnapshot? snapshot;
   bool loading = false, failed = false, foreground = true, checkout = false;
   int epoch = 0;
@@ -69,6 +72,9 @@ class _TableBillPanelState extends State<TableBillPanel>
   @override
   void didUpdateWidget(covariant TableBillPanel old) {
     super.didUpdateWidget(old);
+    if (widget.draftCents > old.draftCents && filter == 'paid') {
+      filter = 'pending';
+    }
     if (old.auth != widget.auth) {
       old.auth.removeListener(reset);
       widget.auth.addListener(reset);
@@ -192,9 +198,42 @@ class _TableBillPanelState extends State<TableBillPanel>
     super.dispose();
   }
 
+  Widget status(String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
+    ),
+  );
+  Widget amount(String label, int cents, String key) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      key: ValueKey(key),
+      children: [
+        Expanded(child: Text(t(label))),
+        Text(
+          'CNY ${formatCents(cents)}',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final pending = snapshot?.sessionSummary?.buckets['pending'];
+    final summary = snapshot?.sessionSummary;
+    final paid = summary?.buckets['netPaid'] ?? summary?.buckets['paid'];
+    final visible = orders
+        .where(
+          (o) =>
+              o.status != 'expired' && (filter == 'all' || o.status == filter),
+        )
+        .toList();
     final canPay = [
       'payment.cash',
       'payment.wechat',
@@ -204,7 +243,7 @@ class _TableBillPanelState extends State<TableBillPanel>
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.leading != null) widget.leading!,
+        if (widget.leading != null && filter != 'paid') widget.leading!,
         if (canRead) ...[
           const Divider(),
           Text(
@@ -217,74 +256,60 @@ class _TableBillPanelState extends State<TableBillPanel>
               onPressed: () => unawaited(load()),
               child: Text(t('tableBillRetry')),
             ),
-          for (final order in orders.where((o) => o.status != 'expired')) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                t(order.status == 'paid' ? 'tableBillPaid' : 'tableBillUnpaid'),
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
+          if (!loading && !failed && visible.isEmpty) Text(t('billNoItems')),
+          for (final order in visible) ...[
             for (final item in order.items)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
+              BillProductCard(
+                key: ValueKey(
+                  'bill-card-${order.reference}-${item.productRef}',
+                ),
+                language: widget.language,
+                name: item.name(widget.language),
+                specification: item.specification(widget.language),
+                quantity: item.quantity,
+                priceCents: item.priceCents,
+                totalCents: item.subtotalCents,
+                thumbnailPath: item.thumbnailPath,
+                base: widget.auth.session?.base,
+                footer: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
-                    ProductThumbnail(
-                      path: item.thumbnailPath,
-                      base: widget.auth.session?.base,
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.name(widget.language),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            item.specification(widget.language),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xff66756e),
-                            ),
-                          ),
-                          if (item.servingKnown)
-                            Text(
-                              '${t('servingDelivered')}: ${item.servedQuantity}'
-                              '${order.refund == null && (order.status == 'paid' || (snapshot?.paymentTiming == 'postpay' && order.cashierOrder)) ? ' · ${t('servingRemaining')}: ${item.remainingQuantity}' : ''}',
-                              key: ValueKey(
-                                'bill-serving-${order.reference}-${item.productRef}',
-                              ),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xff526c5f),
-                              ),
-                            ),
-                        ],
+                    status(
+                      t(
+                        order.status == 'paid'
+                            ? 'tableBillPaid'
+                            : 'tableBillUnpaid',
                       ),
+                      order.status == 'paid'
+                          ? const Color(0xff216344)
+                          : const Color(0xff994a16),
                     ),
-                    SizedBox(
-                      width: 42,
-                      child: Text(
-                        '×${item.quantity}',
-                        textAlign: TextAlign.center,
+                    if (order.refund != null)
+                      status(t('tableBillRefunded'), const Color(0xff666666))
+                    else if (order.status == 'paid') ...[
+                      if (!item.servingKnown)
+                        status(
+                          t('billProgressUnknown'),
+                          const Color(0xff666666),
+                        ),
+                      if (item.servingKnown && item.remainingQuantity! > 0)
+                        status(
+                          '${t('billNotServed')} × ${item.remainingQuantity}',
+                          const Color(0xff994a16),
+                        ),
+                      if (item.servingKnown && item.servedQuantity! > 0)
+                        status(
+                          '${t('billServed')} × ${item.servedQuantity}',
+                          const Color(0xff216344),
+                        ),
+                    ] else if (item.servingKnown &&
+                        snapshot?.paymentTiming == 'postpay' &&
+                        order.cashierOrder)
+                      status(
+                        '${t('billServed')} × ${item.servedQuantity} / ${item.quantity}',
+                        const Color(0xff526c5f),
                       ),
-                    ),
-                    SizedBox(
-                      width: 80,
-                      child: Text(
-                        formatCents(item.subtotalCents),
-                        textAlign: TextAlign.right,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -304,19 +329,47 @@ class _TableBillPanelState extends State<TableBillPanel>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (canRead)
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final entry in {
+                'all': 'all',
+                'pending': 'tableBillUnpaid',
+                'paid': 'tableBillPaid',
+              }.entries)
+                ChoiceChip(
+                  key: ValueKey('bill-filter-${entry.key}'),
+                  label: Text(t(entry.value)),
+                  selected: filter == entry.key,
+                  onSelected: (_) => setState(() => filter = entry.key),
+                ),
+            ],
+          ),
         if (widget.fillHeight)
           Expanded(child: SingleChildScrollView(child: content))
         else
           content,
-        if (canRead && pending != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              '${t('tableBillUnpaid')}  ${snapshot!.sessionSummary!.currency} ${formatCents(pending.totalCents)}',
-              key: const ValueKey('table-bill-pending'),
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
+        if (canRead && pending != null && paid != null) ...[
+          const Divider(height: 12),
+          amount(
+            'billTotal',
+            paid.totalCents + pending.totalCents + widget.draftCents,
+            'table-bill-total',
           ),
+          amount('billPaidAmount', paid.totalCents, 'table-bill-paid'),
+          amount(
+            'billUnpaidAmount',
+            pending.totalCents + widget.draftCents,
+            'table-bill-pending',
+          ),
+          if ((summary?.buckets['refunded']?.totalCents ?? 0) > 0)
+            amount(
+              'tableBillRefunded',
+              summary!.buckets['refunded']!.totalCents,
+              'table-bill-refunded',
+            ),
+        ],
         if (canRead && canPay)
           FilledButton(
             key: const ValueKey('table-bill-checkout'),

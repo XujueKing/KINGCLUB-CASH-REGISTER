@@ -6,9 +6,19 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'billUnitPrice': '单价|Unit price|單價|ราคาต่อหน่วย',
+  'billTotal': '总金额|Total|總金額|ยอดรวม',
+  'billPaidAmount': '已付|Paid|已付|ชำระแล้ว',
+  'billUnpaidAmount': '未付|Unpaid|未付|ยังไม่ชำระ',
+  'billNotServed': '未上|Not served|未上|ยังไม่เสิร์ฟ',
+  'billServed': '已上|Served|已上|เสิร์ฟแล้ว',
+  'billProgressUnknown':
+      '出酒进度待确认|Delivery unconfirmed|出酒進度待確認|รอยืนยันการเสิร์ฟ',
+  'billNoItems': '暂无此类商品|No matching items|暫無此類商品|ไม่มีรายการในหมวดนี้',
+  'billDraft': '待下单|Not submitted|待下單|ยังไม่ส่งรายการ',
   'tableBillSubmitted': '本桌已点|Table orders|本桌已點|รายการที่สั่งแล้ว',
   'tableBillPaid': '已付款|Paid|已付款|ชำระแล้ว',
-  'tableBillUnpaid': '待付款|Unpaid|待付款|ยังไม่ชำระ',
+  'tableBillUnpaid': '未付款|Unpaid|未付款|ยังไม่ชำระ',
   'tableBillRefunded': '已退款|Refunded|已退款|คืนเงินแล้ว',
   'tableBillMore': '更多已点商品|More table orders|更多已點商品|ดูรายการเพิ่ม',
   'tableBillRetry': '账单读取失败，点击重试|Bill unavailable. Retry|帳單讀取失敗，點擊重試|โหลดบิลไม่สำเร็จ ลองใหม่',

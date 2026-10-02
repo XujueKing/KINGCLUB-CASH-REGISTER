@@ -213,12 +213,12 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
       return Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 2,
             child: selectingMember ? selector : widget.tablePanel!,
           ),
           const VerticalDivider(width: 1),
           Expanded(
-            flex: 2,
+            flex: 1,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: TableBillPanel(

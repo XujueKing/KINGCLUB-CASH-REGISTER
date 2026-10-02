@@ -465,7 +465,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         .clamp(1.0, 2.0);
                     final detailWidth = focused == null
                         ? 0.0
-                        : box.maxWidth * 0.4;
+                        : box.maxWidth / 3;
                     final columns =
                         ((box.maxWidth - detailWidth - 24) /
                                 ((focused == null ? 190 : 160) * scale))
@@ -550,9 +550,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                       }
                       return Row(
                         children: [
-                          Expanded(flex: 3, child: grid),
+                          Expanded(flex: 2, child: grid),
                           Expanded(
-                            flex: 2,
+                            flex: 1,
                             child: Padding(
                               padding: const EdgeInsets.all(12),
                               child: TableBillPanel(

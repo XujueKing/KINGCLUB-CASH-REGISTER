@@ -182,12 +182,12 @@ void main() {
       expect(find.text('TABLE GRID'), findsNothing);
       await tap(tester, 'catalog-add-p001');
       final total = tester
-          .widget<Text>(find.byKey(const ValueKey('cart-total')))
-          .data;
+          .widget<TableBillPanel>(find.byType(TableBillPanel))
+          .draftCents;
       await tap(tester, 'workspace-toggle-menu');
       expect(find.text('TABLE GRID'), findsOneWidget);
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('cart-total'))).data,
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
         total,
       );
       expect(
@@ -229,13 +229,13 @@ void main() {
       await tap(tester, 'order-member-member-000');
       await tap(tester, 'catalog-add-p001');
       final total = tester
-          .widget<Text>(find.byKey(const ValueKey('cart-total')))
-          .data;
+          .widget<TableBillPanel>(find.byType(TableBillPanel))
+          .draftCents;
       revision.value++;
       await tester.pumpAndSettle();
       expect(enabled(tester), true);
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('cart-total'))).data,
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
         total,
       );
       auth.failRefresh = true;
@@ -244,7 +244,7 @@ void main() {
       expect(enabled(tester), false);
       expect(find.byKey(const ValueKey('cart-delete-p001')), findsOneWidget);
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('cart-total'))).data,
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
         total,
       );
       auth.failRefresh = false;
@@ -272,7 +272,7 @@ void main() {
       expect(auth.refreshes, reads + 1);
       expect(enabled(tester), true);
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('cart-total'))).data,
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
         total,
       );
       auth.refreshGate = Completer<RestoredCart>();
