@@ -46,7 +46,7 @@ void main() {
       await tester.pumpAndSettle();
       await open(tester);
       expect(
-        find.byKey(const ValueKey('bill-serve-product')),
+        find.byKey(const ValueKey('bill-serve-D00000000001')),
         timing == 'postpay' ? findsOneWidget : findsNothing,
       );
       expect(auth.writes, 0);
@@ -63,7 +63,7 @@ void main() {
     await tester.pumpWidget(page(auth));
     await tester.pumpAndSettle();
     await open(tester);
-    await tester.tap(find.byKey(const ValueKey('bill-serve-product')));
+    await tester.tap(find.byKey(const ValueKey('bill-serve-D00000000001')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('bill-serving-quantity')),
@@ -98,7 +98,7 @@ void main() {
       await tester.pumpWidget(page(auth));
       await tester.pumpAndSettle();
       await open(tester);
-      await tester.tap(find.byKey(const ValueKey('bill-serve-product')));
+      await tester.tap(find.byKey(const ValueKey('bill-serve-D00000000001')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('bill-serving-submit')));
       await tester.pumpAndSettle();
@@ -118,7 +118,7 @@ void main() {
     await tester.pumpWidget(page(auth));
     await tester.pumpAndSettle();
     await open(tester);
-    await tester.tap(find.byKey(const ValueKey('bill-serve-product')));
+    await tester.tap(find.byKey(const ValueKey('bill-serve-D00000000001')));
     await tester.pumpAndSettle();
     await tester.pumpWidget(page(auth, revision: 1));
     await tester.pumpAndSettle();

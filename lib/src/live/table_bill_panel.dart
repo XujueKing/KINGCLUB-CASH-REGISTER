@@ -1,7 +1,7 @@
 import 'bill_product_group.dart';
 import 'workspace_read_cache.dart';
 import 'bill_product_card.dart';
-import 'balance_refund_dialog.dart';
+import 'bill_details_dialog.dart';
 import 'bill_serving_dialog.dart';
 import 'catalog_snapshot.dart';
 
@@ -354,59 +354,16 @@ class _TableBillPanelState extends State<TableBillPanel>
   }
 
   Future<void> openGroup(BillProductGroup group) async {
-    if (loading || failed || !foreground) return;
+    if (loading || failed || !foreground || reducing || checkout) return;
     final generation = epoch, identity = widget.auth.session;
-    if (group.lines.length == 1) {
-      return openItem(group.lines.single.order, group.lines.single.item);
-    }
-    final selected = await showDialog<int>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: Text(t('billChooseOriginal')),
-        children: [
-          if (widget.onAddProduct != null)
-            SimpleDialogOption(
-              key: const ValueKey('bill-add-product'),
-              onPressed: () => Navigator.pop(context, -1),
-              child: Text(t('billAddOrder')),
-            ),
-          for (var i = 0; i < group.lines.length; i++)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, i),
-              child: Text(
-                '${group.lines[i].item.quantity} × ${formatCents(group.lines[i].item.priceCents)} · '
-                '${t(group.lines[i].order.refund != null
-                    ? 'tableBillRefunded'
-                    : group.lines[i].order.status == 'paid'
-                    ? 'tableBillPaid'
-                    : 'tableBillUnpaid')} · '
-                '${group.lines[i].order.createdAt.toLocal()}',
-              ),
-            ),
-        ],
-      ),
-    );
-    if (!mounted ||
-        !foreground ||
-        generation != epoch ||
-        !identical(identity, widget.auth.session) ||
-        loading ||
-        failed) {
-      return;
-    }
-    if (selected == -1) {
-      await widget.onAddProduct?.call(group.productRef);
-      return;
-    }
-    if (selected != null) {
-      await openItem(group.lines[selected].order, group.lines[selected].item);
-    }
-  }
-
-  Future<void> openItem(LiveOrder order, OrderItem item) async {
-    if (loading || failed || !foreground) return;
-    final generation = epoch, identity = widget.auth.session;
-    final canServe =
+    bool current() =>
+        mounted &&
+        foreground &&
+        generation == epoch &&
+        identical(identity, widget.auth.session) &&
+        !loading &&
+        !failed;
+    bool canServe(LiveOrder order, OrderItem item) =>
         identity?.permissions.contains('orders.serve') == true &&
         order.refund == null &&
         item.servingKnown &&
@@ -414,71 +371,17 @@ class _TableBillPanelState extends State<TableBillPanel>
         {'open', 'clearing'}.contains(snapshot?.sessionStatus) &&
         (order.status == 'paid' ||
             (snapshot?.paymentTiming == 'postpay' &&
-                order.status == 'pending' &&
-                order.cashierOrder));
-    final canRefund =
-        const bool.fromEnvironment('CASHIER_BALANCE_REFUND') &&
-        widget.auth.session?.permissions.contains('payment.refund') == true &&
-        order.cashierOrder &&
-        order.status == 'paid' &&
-        order.refund == null;
-    final action = await showDialog<String>(
+                order.status == 'pending'));
+    final selected = await showDialog<BillDetailAction>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(item.name(widget.language)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${t('billItemQuantity')}: ${item.quantity}'),
-            if (item.servingKnown)
-              Text('${t('billServed')}: ${item.servedQuantity}'),
-            const SizedBox(height: 12),
-            Text(t('billSubmittedQuantityUnavailable')),
-            if (!item.servingKnown) Text(t('billProgressUnknown')),
-            if ((item.servedQuantity ?? 0) > 0) Text(t('billServedReturnOnly')),
-            if (!canRefund) Text(t('billReturnUnavailable')),
-            if (canRefund) Text(t('billReturnOrderScope')),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(t('staffCancelSelection')),
-          ),
-          if (canServe)
-            FilledButton(
-              key: const ValueKey('bill-serve-product'),
-              onPressed: () => Navigator.pop(context, 'serve'),
-              child: Text(t('servingConfirm')),
-            ),
-          if (widget.onAddProduct != null)
-            FilledButton(
-              key: const ValueKey('bill-add-product'),
-              onPressed: () => Navigator.pop(context, 'add'),
-              child: Text(t('billAddOrder')),
-            ),
-          if (canRefund)
-            FilledButton(
-              onPressed: () => Navigator.pop(context, 'refund'),
-              child: Text(t('billReturnAction')),
-            ),
-        ],
+      builder: (_) => BillDetailsDialog(
+        group: group,
+        language: widget.language,
+        canServe: canServe,
       ),
     );
-    if (!mounted ||
-        !foreground ||
-        generation != epoch ||
-        !identical(identity, widget.auth.session) ||
-        loading ||
-        failed) {
-      return;
-    }
-    if (action == 'add') {
-      await widget.onAddProduct?.call(item.productRef);
-      return;
-    }
-    if (action == 'serve') {
+    if (!mounted || !current() || selected == null) return;
+    if (selected.action == 'serve' && canServe(selected.order, selected.item)) {
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
@@ -487,31 +390,13 @@ class _TableBillPanelState extends State<TableBillPanel>
           language: widget.language,
           tableRef: widget.tableRef,
           sessionRef: widget.sessionRef,
-          order: order,
-          item: item,
-          isCurrent: () =>
-              mounted &&
-              foreground &&
-              generation == epoch &&
-              identical(identity, widget.auth.session) &&
-              !loading &&
-              !failed,
+          order: selected.order,
+          item: selected.item,
+          isCurrent: current,
         ),
       );
       if (mounted && foreground) await load();
-      return;
     }
-    if (action != 'refund') return;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => BalanceRefundDialog(
-        auth: widget.auth,
-        orderRef: order.reference,
-        language: widget.language,
-      ),
-    );
-    if (mounted && foreground) await load();
   }
 
   Widget status(String label, Color color) => Container(

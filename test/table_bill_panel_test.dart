@@ -182,7 +182,7 @@ void main() {
   );
   for (final switchTable in [false, true]) {
     testWidgets(
-      'old product dialog cannot add after ${switchTable ? 'switching tables' : 'a bill update'}',
+      'product details never duplicate quantity controls after ${switchTable ? 'switching tables' : 'a bill update'}',
       (tester) async {
         final auth = BillAuth();
         var additions = 0;
@@ -196,7 +196,7 @@ void main() {
           find.byKey(const ValueKey('bill-group-CNY-test-product')),
         );
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('bill-add-product')), findsOneWidget);
+        expect(find.byKey(const ValueKey('bill-add-product')), findsNothing);
         await tester.pumpWidget(
           page(
             auth,
@@ -206,7 +206,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('bill-add-product')));
+        await tester.tap(find.byKey(const ValueKey('bill-details-close')));
         await tester.pumpAndSettle();
         expect(additions, 0);
         // A newly opened card uses the refreshed scope normally.
@@ -214,9 +214,9 @@ void main() {
           find.byKey(const ValueKey('bill-group-CNY-test-product')),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('bill-add-product')));
+        await tester.tap(find.byKey(const ValueKey('bill-details-close')));
         await tester.pumpAndSettle();
-        expect(additions, 1);
+        expect(additions, 0);
         await tester.pumpWidget(const SizedBox());
         auth.dispose();
       },
@@ -350,12 +350,10 @@ void main() {
     expect(find.text('Served 1 / Not served 1'), findsOneWidget);
     await tester.tap(find.text('Test product'));
     await tester.pumpAndSettle();
-    expect(
-      find.text(
-        'Served items require a return; quantity cannot be reduced directly.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Served × 1'), findsOneWidget);
+    expect(find.text('Not served × 1'), findsOneWidget);
+    expect(find.text('Item refund'), findsNWidgets(2));
+    expect(find.text('Recall'), findsOneWidget);
     expect(
       tester
           .widget<IconButton>(
