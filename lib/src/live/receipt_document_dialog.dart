@@ -106,7 +106,7 @@ class _ReceiptDocumentDialogState extends State<ReceiptDocumentDialog> with Widg
             crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text('${data.storeRef} · ${data.tableRef} · ${data.sessionRef}'),
               Text(data.orderRef),
-              Text(t(data.refunded ? 'liveRefunded' : 'order_paid')),
+              Text(t(data.partiallyRefunded ? 'receiptPartialRefund' : data.refunded ? 'liveRefunded' : 'order_paid')),
               Text('${t('receiptConfirmedAt')}: ${data.confirmedAt.toLocal()}'),
               Text('${t('liveObserved')}: ${data.observedAt.toLocal()}'),
               const Divider(),
@@ -127,7 +127,14 @@ class _ReceiptDocumentDialogState extends State<ReceiptDocumentDialog> with Widg
               ],
               amount(t('receiptRefundedAmount'), data.refundedCents),
               amount(t('receiptNetAmount'), data.netPaidCents),
-              if (data.refunded) ...[
+              for (final refund in data.refunds) ...[
+                Text('${t('liveRefunded')}: ${data.items.singleWhere((item) => item.productRef == refund.productRef).name(widget.language)} x ${refund.quantity}'),
+                Text('${refund.reference} / ${refund.refundedAt.toLocal()}'),
+                amount(t('receiptRefundedAmount'), refund.totalCents),
+                amount(t('refundPrincipal'), refund.principalCents),
+                amount(t('refundGift'), refund.giftCents),
+              ],
+              if (data.refundRef != null) ...[
                 Text('${t('liveRefunded')}: ${data.refundedAt!.toLocal()}'),
                 Text(data.refundRef!),
                 amount(t('refundPrincipal'), data.principalCents!), amount(t('refundGift'), data.giftCents!),

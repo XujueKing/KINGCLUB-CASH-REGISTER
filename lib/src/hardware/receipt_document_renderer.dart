@@ -47,7 +47,13 @@ class ReceiptRasterPlan {
       'KINGCLUB POS',
       t('receiptDocumentTitle'),
       document.orderRef,
-      t(document.refunded ? 'liveRefunded' : 'order_paid'),
+      t(
+        document.partiallyRefunded
+            ? 'receiptPartialRefund'
+            : document.refunded
+            ? 'liveRefunded'
+            : 'order_paid',
+      ),
     ];
     final blocks = <String>[
       '${document.storeRef} / ${document.tableRef}',
@@ -74,7 +80,14 @@ class ReceiptRasterPlan {
       ],
       amount('receiptRefundedAmount', document.refundedCents),
       amount('receiptNetAmount', document.netPaidCents),
-      if (document.refunded) ...[
+      for (final refund in document.refunds) ...[
+        '${t('liveRefunded')}: ${document.items.singleWhere((item) => item.productRef == refund.productRef).name(language)} x ${refund.quantity}',
+        '${refund.reference} / UTC ${refund.refundedAt.toIso8601String()}',
+        amount('receiptRefundedAmount', refund.totalCents),
+        amount('refundPrincipal', refund.principalCents),
+        amount('refundGift', refund.giftCents),
+      ],
+      if (document.refundRef != null) ...[
         '${t('liveRefunded')}: UTC ${document.refundedAt!.toIso8601String()}',
         document.refundRef!,
         amount('refundPrincipal', document.principalCents!),

@@ -217,7 +217,8 @@ class TableReceiptDocument {
           'items',
         ]);
         final orderRef = _ref(order['orderRef']);
-        if (!RegExp(r'^D[0-9]{11}$').hasMatch(orderRef) || !seen.add(orderRef)) {
+        if (!RegExp(r'^D[0-9]{11}$').hasMatch(orderRef) ||
+            !seen.add(orderRef)) {
           throw const FormatException();
         }
         final allocated = _number(order['allocatedCents'], min: 1),
@@ -272,6 +273,20 @@ class TableReceiptDocument {
   }
 }
 
+class ReceiptItemRefund {
+  ReceiptItemRefund._(Map<String, dynamic> row)
+    : reference = row['refundRef'] as String,
+      productRef = _ref(row['productRef']),
+      quantity = _number(row['quantity'], min: 1, max: 1000),
+      totalCents = _number(row['totalCents'], min: 1),
+      principalCents = _number(row['principalCents']),
+      giftCents = _number(row['giftCents']),
+      refundedAt = _date(row['refundedAt']);
+  final String reference, productRef;
+  final int quantity, totalCents, principalCents, giftCents;
+  final DateTime refundedAt;
+}
+
 /// Memory-only server projection. Never payment authority, a retry instruction,
 /// or proof of physical printing. No raw envelope/customer identity is retained.
 class ReceiptDocument {
@@ -292,6 +307,7 @@ class ReceiptDocument {
     required this.giftCents,
     required this.receivedCents,
     required this.changeCents,
+    required this.refunds,
     required this.refundRef,
     required this.refundedAt,
     required this.items,
@@ -303,7 +319,9 @@ class ReceiptDocument {
   final int totalCents, refundedCents, netPaidCents;
   final int? principalCents, giftCents, receivedCents, changeCents;
   final List<ReceiptLine> items;
-  bool get refunded => refundRef != null;
+  final List<ReceiptItemRefund> refunds;
+  bool get refunded => refundedCents == totalCents;
+  bool get partiallyRefunded => refundedCents > 0 && !refunded;
 
   factory ReceiptDocument.parse(
     Object? raw, {
@@ -330,6 +348,7 @@ class ReceiptDocument {
         'tender',
         'items',
         'refund',
+        if ((root['result'] as Map).containsKey('refunds')) 'refunds',
       ]);
       if (row['version'] is! int ||
           row['version'] != 1 ||
@@ -338,7 +357,7 @@ class ReceiptDocument {
           row['orderRef'] != orderRef ||
           !RegExp(r'^D[0-9]{11}$').hasMatch(orderRef) ||
           row['currency'] != 'CNY' ||
-          !['paid', 'refunded'].contains(row['status'])) {
+          !['paid', 'refunded', 'partially_refunded'].contains(row['status'])) {
         throw const FormatException();
       }
       final total = _number(row['totalCents'], min: 1),
@@ -385,7 +404,60 @@ class ReceiptDocument {
           change = tender.changeCents;
       String? refundRef;
       DateTime? refundedAt;
-      if (row['status'] == 'refunded') {
+      final refunds = <ReceiptItemRefund>[];
+      if (row.containsKey('refunds')) {
+        final rawRefunds = row['refunds'];
+        if (channel != 'member_balance' ||
+            row['refund'] != null ||
+            rawRefunds is! List ||
+            rawRefunds.isEmpty ||
+            rawRefunds.length > 50000) {
+          throw const FormatException();
+        }
+        final seen = <String>{}, quantities = <String, int>{};
+        var sum = 0, principalReturned = 0, giftReturned = 0;
+        for (final value in rawRefunds) {
+          final entry = _object(value, [
+            'refundRef',
+            'refundedAt',
+            'accountType',
+            'principalCents',
+            'giftCents',
+            'totalCents',
+            'productRef',
+            'quantity',
+          ]);
+          if (entry['accountType'] != account ||
+              entry['refundRef'] is! String ||
+              !uuidPattern.hasMatch(entry['refundRef'])) {
+            throw const FormatException();
+          }
+          final saved = ReceiptItemRefund._(entry);
+          final item = items.singleWhere(
+            (item) => item.productRef == saved.productRef,
+          );
+          final quantity = (quantities[saved.productRef] ?? 0) + saved.quantity;
+          if (!seen.add(saved.reference) ||
+              quantity > item.quantity ||
+              saved.totalCents != saved.quantity * item.priceCents ||
+              saved.principalCents + saved.giftCents != saved.totalCents ||
+              saved.refundedAt.isBefore(confirmed) ||
+              saved.refundedAt.isAfter(observed)) {
+            throw const FormatException();
+          }
+          quantities[saved.productRef] = quantity;
+          sum += saved.totalCents;
+          principalReturned += saved.principalCents;
+          giftReturned += saved.giftCents;
+          refunds.add(saved);
+        }
+        if (sum != refunded ||
+            principalReturned > principal! ||
+            giftReturned > gift! ||
+            row['status'] != (net == 0 ? 'refunded' : 'partially_refunded')) {
+          throw const FormatException();
+        }
+      } else if (row['status'] == 'refunded') {
         final refund = _object(row['refund'], [
           'refundRef',
           'refundedAt',
@@ -408,7 +480,10 @@ class ReceiptDocument {
         if (refundedAt.isBefore(confirmed) || refundedAt.isAfter(observed)) {
           throw const FormatException();
         }
-      } else if (row['refund'] != null || refunded != 0 || net != total) {
+      } else if (row['status'] != 'paid' ||
+          row['refund'] != null ||
+          refunded != 0 ||
+          net != total) {
         throw const FormatException();
       }
       return ReceiptDocument._(
@@ -428,6 +503,7 @@ class ReceiptDocument {
         giftCents: gift,
         receivedCents: received,
         changeCents: change,
+        refunds: List.unmodifiable(refunds),
         refundRef: refundRef,
         refundedAt: refundedAt,
         items: List.unmodifiable(items),

@@ -277,6 +277,7 @@ const copy = <String, String>{
   'receiptPrincipal': '原扣本金|Original principal debit|原扣本金|เงินต้นที่หักเดิม',
   'receiptGift': '原扣赠送|Original gift debit|原扣贈送|ยอดของแถมที่หักเดิม',
   'receiptRefundedAmount': '已退款金额|Refunded amount|已退款金額|ยอดคืนเงินแล้ว',
+  'receiptPartialRefund': '部分退款|Partially refunded|部分退款|คืนเงินบางส่วน',
   'receiptNetAmount':
       '退款后净收款|Net payment after refund|退款後淨收款|ยอดรับสุทธิหลังคืนเงิน',
   'receiptCash': '现金收款|Cash payment|現金收款|รับชำระเงินสด',
