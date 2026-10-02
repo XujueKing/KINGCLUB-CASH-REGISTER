@@ -15,6 +15,8 @@ import '../live/cash_command.dart';
 import '../live/cash_journal.dart';
 import '../live/serving_command.dart';
 import '../live/serving_journal.dart';
+import '../live/item_return_command.dart';
+import '../live/item_return_journal.dart';
 import '../live/table_clear_command.dart';
 import '../live/table_clear_journal.dart';
 import '../live/table_checkout_command.dart';
@@ -55,6 +57,7 @@ class StaffAuthController extends ChangeNotifier {
     ProviderPaymentJournal? providerJournal,
     RechargeJournal? rechargeJournal,
     ServingJournal? servingJournal,
+    ItemReturnJournal? itemReturnJournal,
     SeatingJournal? seatingJournal,
     TableClearJournal? tableClearJournal,
     TableCheckoutJournal? tableCheckoutJournal,
@@ -73,12 +76,14 @@ class StaffAuthController extends ChangeNotifier {
        _providerJournal = providerJournal ?? ProviderPaymentJournal(),
        _rechargeJournal = rechargeJournal ?? RechargeJournal(),
        _servingJournal = servingJournal ?? ServingJournal(),
+       _itemReturnJournal = itemReturnJournal ?? ItemReturnJournal(),
        _seatingJournal = seatingJournal ?? SeatingJournal(),
        _tableClearJournal = tableClearJournal ?? TableClearJournal(),
        _tableCheckoutJournal = tableCheckoutJournal ?? TableCheckoutJournal(),
        _balanceRefundJournal = balanceRefundJournal ?? BalanceRefundJournal(),
        _cartDraftStore = cartDraftStore ?? CartDraftStore();
   final CartDraftStore _cartDraftStore;
+  final ItemReturnJournal _itemReturnJournal;
   final SeatingJournal _seatingJournal;
   bool _seatingBusy = false;
   final RechargeJournal _rechargeJournal;
@@ -248,8 +253,15 @@ class StaffAuthController extends ChangeNotifier {
     stillCurrent: stillCurrent,
   );
 
-  Future<TableCheckoutResult> closeTableProvider(TableCheckoutCommand command,{required bool Function() stillCurrent}) =>
-    _resolveTableCollection(command,collect:false,closeUnpaid:true,stillCurrent:stillCurrent);
+  Future<TableCheckoutResult> closeTableProvider(
+    TableCheckoutCommand command, {
+    required bool Function() stillCurrent,
+  }) => _resolveTableCollection(
+    command,
+    collect: false,
+    closeUnpaid: true,
+    stillCurrent: stillCurrent,
+  );
 
   Future<TableCheckoutResult> _resolveTableCollection(
     TableCheckoutCommand command, {
@@ -273,7 +285,8 @@ class StaffAuthController extends ChangeNotifier {
       }
 
       validate();
-      if(closeUnpaid&&(collect||command.channel!='alipay'))throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_CHANGED');
+      if (closeUnpaid && (collect || command.channel != 'alipay'))
+        throw const CcsopFailure('TABLE_CHECKOUT_SCOPE_CHANGED');
       // Lookup requires the identical durable request and validates the original
       // parent scope. Admission alone is never a settled result.
       final admission = await lookupTableCheckout(command);
@@ -300,7 +313,11 @@ class StaffAuthController extends ChangeNotifier {
         params['accountType'] = command.accountType;
         if (firstSend) params['paymentCode'] = payerCode;
       } else {
-        interfaceId = closeUnpaid ? 'K261002001963' : firstSend ? 'K260930001940' : 'K260930001941';
+        interfaceId = closeUnpaid
+            ? 'K261002001963'
+            : firstSend
+            ? 'K260930001940'
+            : 'K260930001941';
         params['channel'] = command.channel;
         if (firstSend) params['authCode'] = payerCode;
       }
@@ -804,12 +821,20 @@ class StaffAuthController extends ChangeNotifier {
     }
   }
 
-  Future<ProviderPaymentResult> queryProvider(ProviderPayment command) => _recoverProvider(command);
+  Future<ProviderPaymentResult> queryProvider(ProviderPayment command) =>
+      _recoverProvider(command);
 
-  Future<ProviderPaymentResult> closeProvider(ProviderPayment command, {required bool Function() stillCurrent}) =>
-    _recoverProvider(command, closeUnpaid: true, stillCurrent: stillCurrent);
+  Future<ProviderPaymentResult> closeProvider(
+    ProviderPayment command, {
+    required bool Function() stillCurrent,
+  }) =>
+      _recoverProvider(command, closeUnpaid: true, stillCurrent: stillCurrent);
 
-  Future<ProviderPaymentResult> _recoverProvider(ProviderPayment command, {bool closeUnpaid=false, bool Function()? stillCurrent}) async {
+  Future<ProviderPaymentResult> _recoverProvider(
+    ProviderPayment command, {
+    bool closeUnpaid = false,
+    bool Function()? stillCurrent,
+  }) async {
     if (_providerBusy) throw const CcsopFailure('PAYMENT_IN_PROGRESS');
     _providerBusy = true;
     try {
@@ -827,7 +852,12 @@ class StaffAuthController extends ChangeNotifier {
         throw const CcsopFailure('PROVIDER_ORIGINAL_REQUEST_REQUIRED');
       }
       _providerIdentity(command.query.channel);
-      final raw = await _paymentCall(command, epoch, closeUnpaid: closeUnpaid, stillCurrent: stillCurrent);
+      final raw = await _paymentCall(
+        command,
+        epoch,
+        closeUnpaid: closeUnpaid,
+        stillCurrent: stillCurrent,
+      );
       _check(epoch);
       _providerIdentity(command.query.channel);
       final result = ProviderPaymentResult.parse(raw, command);
@@ -921,7 +951,8 @@ class StaffAuthController extends ChangeNotifier {
 
     check();
     if (closeUnpaid) {
-      if(command.query.channel!='alipay'||authCode!=null)throw const CcsopFailure('PROVIDER_SCOPE_CHANGED');
+      if (command.query.channel != 'alipay' || authCode != null)
+        throw const CcsopFailure('PROVIDER_SCOPE_CHANGED');
       checkSend();
       return _api!.call('K261002001962', command.params);
     }
@@ -1194,12 +1225,18 @@ class StaffAuthController extends ChangeNotifier {
       // Only a transport-proven unsent refresh may retain the old credential.
       // Ambiguous delivery can rotate the token server-side and must not replay.
       final retrySaved = saved;
-      if (_current(epoch) && refreshAttempted && retrySaved != null &&
-          error is CcsopFailure && error.code == 'TRANSPORT_FAILED' &&
-          !error.deliveryUncertain && retrySaved.canRefresh(_now())) {
+      if (_current(epoch) &&
+          refreshAttempted &&
+          retrySaved != null &&
+          error is CcsopFailure &&
+          error.code == 'TRANSPORT_FAILED' &&
+          !error.deliveryUncertain &&
+          retrySaved.canRefresh(_now())) {
         try {
-          final retained = await _vault.saveIfCurrent(retrySaved,
-            () => _current(epoch) && retrySaved.canRefresh(_now()));
+          final retained = await _vault.saveIfCurrent(
+            retrySaved,
+            () => _current(epoch) && retrySaved.canRefresh(_now()),
+          );
           if (_current(epoch)) _canRetryRestore = retained;
         } catch (_) {
           if (_current(epoch)) _error = 'SECURE_STORAGE_FAILED';
@@ -1675,6 +1712,92 @@ class StaffAuthController extends ChangeNotifier {
     _servingIdentity();
     return entries;
   }
+
+  Future<List<PendingItemReturn>> pendingItemReturns() async {
+    final identity = _servingIdentity(), epoch = _epoch;
+    final entries = await _itemReturnJournal.load(identity);
+    _check(epoch);
+    _servingIdentity();
+    return entries;
+  }
+
+  Future<ItemReturnResult> _itemReturnCall(
+    PendingItemReturn command,
+    StaffSession identity,
+    int epoch, {
+    required bool lookup,
+  }) async {
+    _check(epoch);
+    _servingIdentity();
+    if (!command.belongsTo(identity)) {
+      throw const CcsopFailure('ITEM_RETURN_SCOPE_CHANGED');
+    }
+    final raw = await _api!.call(
+      lookup ? 'K261002001970' : 'K261002001969',
+      command.params,
+    );
+    _check(epoch);
+    _servingIdentity();
+    final result = ItemReturnResult.parse(raw, command);
+    if (!lookup && !result.confirmed) {
+      throw const CcsopFailure('ITEM_RETURN_RESPONSE_INVALID');
+    }
+    if (result.confirmed) {
+      await _itemReturnJournal.acknowledge(identity, result);
+    }
+    _check(epoch);
+    _servingIdentity();
+    return result;
+  }
+
+  Future<ItemReturnResult> confirmItemReturn({
+    required Map<String, dynamic> fields,
+    required int unitPriceCents,
+  }) => _servingOperation(() async {
+    final identity = _servingIdentity(), epoch = _epoch;
+    final command = PendingItemReturn.prepare(
+      identity: identity,
+      fields: fields,
+      unitPriceCents: unitPriceCents,
+      now: _now(),
+    );
+    final serving = await _servingJournal.load(identity);
+    _check(epoch);
+    if (serving.any((entry) => entry.lineKey == command.lineKey)) {
+      throw const CcsopFailure('SERVING_ALREADY_PENDING');
+    }
+    await _itemReturnJournal.save(command, identity);
+    _check(epoch);
+    return _itemReturnCall(command, identity, epoch, lookup: false);
+  });
+
+  /// A query never repeats the mutation. Resending requires an explicit action
+  /// and always uses the exact persisted original request.
+  Future<ItemReturnResult> recoverItemReturn(
+    String requestId, {
+    bool retryOriginal = false,
+  }) => _servingOperation(() async {
+    final identity = _servingIdentity(), epoch = _epoch;
+    final entries = await _itemReturnJournal.load(identity);
+    _check(epoch);
+    final matches = entries
+        .where((entry) => entry.requestId == requestId)
+        .toList();
+    if (matches.length != 1) {
+      throw const CcsopFailure('ITEM_RETURN_PENDING_NOT_FOUND');
+    }
+    final command = matches.single;
+    final result = await _itemReturnCall(
+      command,
+      identity,
+      epoch,
+      lookup: true,
+    );
+    if (!result.confirmed && retryOriginal) {
+      return _itemReturnCall(command, identity, epoch, lookup: false);
+    }
+    return result;
+  });
 
   Future<ServingResult> _servingCall(
     PendingServing command,
