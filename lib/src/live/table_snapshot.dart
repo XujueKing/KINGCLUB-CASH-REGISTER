@@ -56,6 +56,9 @@ class TableSessionSnapshot {
           ? null
           : _number(value['partySize']),
       partyRevision = _number(value['partyRevision']),
+      openedAt = value['openedAt'] == null
+          ? null
+          : DateTime.parse(_text(value['openedAt'])),
       elapsedMinutes = _number(value['elapsedMinutes']),
       paidCents = _number(value['paidCents']),
       pendingCents = _number(value['pendingCents']),
@@ -82,6 +85,7 @@ class TableSessionSnapshot {
   }
   final String reference, status, paymentTiming, businessDate;
   final bool temporaryHold;
+  final DateTime? openedAt;
   final int? partySize;
   final int partyRevision,
       elapsedMinutes,

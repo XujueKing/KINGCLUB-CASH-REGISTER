@@ -6,6 +6,11 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'tableToday': '今日|Today|今日|วันนี้',
+  'tableYesterday': '昨日|Yesterday|昨日|เมื่อวาน',
+  'tableMinutes': '分|min|分|นาที',
+  'tableHours': '小时|h|小時|ชม.',
+  'tableDays': '天|d|天|วัน',
   'itemReturnPending':
       '退库取消待确认|Pending item returns|退庫取消待確認|รายการคืนสต็อกรอยืนยัน',
   'itemReturnNotice': '商品实物退回后，取消所选数量并减少未付金额。|Return the physical goods to cancel this quantity and reduce the amount due.|商品實物退回後，取消所選數量並減少未付金額。|รับสินค้าคืนแล้วจึงยกเลิกจำนวนที่เลือกและลดยอดค้างชำระ',

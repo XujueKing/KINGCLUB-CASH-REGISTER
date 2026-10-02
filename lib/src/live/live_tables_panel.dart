@@ -842,33 +842,105 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  table.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 23,
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              table.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 23,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              t(table.stateLabel),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (session != null && session.pendingCents > 0)
+                              Text(
+                                '$currency ${formatCents(session.pendingCents)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        width: 52,
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, bounds) {
+                                  final visible = table.maximumSeats.clamp(
+                                    0,
+                                    12,
+                                  );
+                                  final rows = (visible / 3).ceil().clamp(1, 4);
+                                  final size = (bounds.maxHeight / rows).clamp(
+                                    6.0,
+                                    16.0,
+                                  );
+                                  return Wrap(
+                                    spacing: 1,
+                                    runSpacing: 0,
+                                    children: [
+                                      for (var i = 0; i < visible; i++)
+                                        SizedBox(
+                                          width: 16,
+                                          height: size,
+                                          child: Icon(
+                                            i < (session?.partySize ?? 0)
+                                                ? Icons.person
+                                                : Icons.person_outline,
+                                            size: size,
+                                            color: i < (session?.partySize ?? 0)
+                                                ? textColor
+                                                : textColor.withValues(
+                                                    alpha: 0.28,
+                                                  ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                            Text(
+                              '${session == null ? 0 : session.partySize ?? '?'}/${table.maximumSeats}',
+                              style: const TextStyle(fontSize: 11),
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '${session?.partySize ?? '—'} / ${table.maximumSeats}${session == null ? '' : ' · ${session.elapsedMinutes} min'}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const Spacer(),
-                Text(
-                  t(table.stateLabel),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                if (session != null && session.pendingCents > 0)
+                if (session != null)
                   Text(
-                    '$currency ${formatCents(session.pendingCents)}',
+                    tableOpeningLabel(
+                      session,
+                      widget.language,
+                      snapshot?.observedAt ?? DateTime.now(),
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11),
                   ),
               ],
             ),
@@ -996,4 +1068,34 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       ),
     );
   }
+}
+
+String tableOpeningLabel(
+  TableSessionSnapshot session,
+  UiLanguage language,
+  DateTime observedAt,
+) {
+  String t(String key) => tr(language, key);
+  final minutes = session.elapsedMinutes;
+  final elapsed = minutes < 60
+      ? '$minutes${t('tableMinutes')}'
+      : minutes < 1440
+      ? '${minutes ~/ 60}${t('tableHours')}'
+      : '${minutes ~/ 1440}${t('tableDays')}';
+  final opened = session.openedAt?.toLocal();
+  if (opened == null) return '($elapsed)';
+  final now = observedAt.toLocal();
+  final days = DateTime.utc(
+    now.year,
+    now.month,
+    now.day,
+  ).difference(DateTime.utc(opened.year, opened.month, opened.day)).inDays;
+  final day = days == 0
+      ? t('tableToday')
+      : days == 1
+      ? t('tableYesterday')
+      : '${opened.year == now.year ? '' : '${opened.year}/'}${opened.month}/${opened.day}';
+  final time =
+      '${opened.hour.toString().padLeft(2, '0')}:${opened.minute.toString().padLeft(2, '0')}';
+  return '$day $time ($elapsed)';
 }
