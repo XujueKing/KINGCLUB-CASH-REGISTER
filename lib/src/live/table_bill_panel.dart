@@ -1,3 +1,5 @@
+import 'bill_product_group.dart';
+import 'workspace_read_cache.dart';
 import 'bill_product_card.dart';
 import 'balance_refund_dialog.dart';
 
@@ -56,6 +58,19 @@ class _TableBillPanelState extends State<TableBillPanel>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     widget.auth.addListener(reset);
+    if (foreground && canRead) {
+      final cached =
+          WorkspaceReadCache.read<
+            ({OrderSnapshot snapshot, List<LiveOrder> orders})
+          >(
+            widget.auth.session,
+            'bill/${widget.tableRef}/${widget.sessionRef}',
+          );
+      if (cached != null) {
+        snapshot = cached.snapshot;
+        orders = List.of(cached.orders);
+      }
+    }
     unawaited(load());
   }
 
@@ -112,26 +127,38 @@ class _TableBillPanelState extends State<TableBillPanel>
       failed = false;
     });
     try {
-      final raw = await widget.auth.readOrders(
-        tableRef: widget.tableRef,
-        sessionRef: widget.sessionRef,
-        afterOrder: cursor,
-      );
-      if (!mounted ||
-          ticket != epoch ||
-          !foreground ||
-          !identical(identity, widget.auth.session)) {
-        return;
-      }
-      final next = OrderSnapshot.parse(
-        raw,
-        storeRef: identity!.storeRef,
-        tableRef: widget.tableRef,
-        sessionRef: widget.sessionRef,
-        afterOrder: cursor,
+      var after = cursor;
+      final collected = List<LiveOrder>.of(previous);
+      OrderSnapshot? next;
+      do {
+        final raw = await widget.auth.readOrders(
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          afterOrder: after,
+        );
+        if (!mounted ||
+            ticket != epoch ||
+            !foreground ||
+            !identical(identity, widget.auth.session)) {
+          return;
+        }
+        next = OrderSnapshot.parse(
+          raw,
+          storeRef: identity!.storeRef,
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          afterOrder: after,
+        );
+        collected.addAll(next.orders);
+        after = next.nextAfterOrder;
+      } while (after != null);
+      WorkspaceReadCache.put(
+        identity,
+        'bill/${widget.tableRef}/${widget.sessionRef}',
+        (snapshot: next, orders: List<LiveOrder>.unmodifiable(collected)),
       );
       setState(() {
-        orders = [...previous, ...next.orders];
+        orders = collected;
         snapshot = next;
         loading = false;
       });
@@ -199,6 +226,37 @@ class _TableBillPanelState extends State<TableBillPanel>
     widget.auth.removeListener(reset);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> openGroup(BillProductGroup group) async {
+    if (loading || failed || !foreground) return;
+    if (group.lines.length == 1) {
+      return openItem(group.lines.single.order, group.lines.single.item);
+    }
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(t('billChooseOriginal')),
+        children: [
+          for (var i = 0; i < group.lines.length; i++)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, i),
+              child: Text(
+                '${group.lines[i].item.quantity} × ${formatCents(group.lines[i].item.priceCents)} · '
+                '${t(group.lines[i].order.refund != null
+                    ? 'tableBillRefunded'
+                    : group.lines[i].order.status == 'paid'
+                    ? 'tableBillPaid'
+                    : 'tableBillUnpaid')} · '
+                '${group.lines[i].order.createdAt.toLocal()}',
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selected != null && mounted && foreground) {
+      await openItem(group.lines[selected].order, group.lines[selected].item);
+    }
   }
 
   Future<void> openItem(LiveOrder order, OrderItem item) async {
@@ -322,7 +380,9 @@ class _TableBillPanelState extends State<TableBillPanel>
         if (widget.leading != null && (filter == 'all' || filter == 'pending'))
           widget.leading!,
         if (canRead) ...[
-          if (loading) const LinearProgressIndicator(),
+          if (loading && snapshot == null) Text(t('billFirstSync')),
+          if (loading && snapshot != null)
+            Text(t('billSyncing'), style: const TextStyle(fontSize: 10)),
           if (failed)
             TextButton(
               onPressed: () => unawaited(load()),
@@ -332,48 +392,49 @@ class _TableBillPanelState extends State<TableBillPanel>
             Text(t('billSourceUnavailable'))
           else if (!loading && !failed && visible.isEmpty)
             Text(t('billNoItems')),
-          for (final order in visible) ...[
-            for (final item in order.items)
-              BillProductCard(
-                key: ValueKey(
-                  'bill-card-${order.reference}-${item.productRef}',
-                ),
-                language: widget.language,
-                name: item.name(widget.language),
-                specification: item.specification(widget.language),
-                quantity: item.quantity,
-                priceCents: item.priceCents,
-                totalCents: item.subtotalCents,
-                thumbnailPath: item.thumbnailPath,
-                base: widget.auth.session?.base,
-                onTap: () => openItem(order, item),
-                badges: order.status == 'paid'
-                    ? status(t('tableBillPaid'), const Color(0xff216344))
-                    : null,
-                leadingBadge: order.refund != null
-                    ? status(t('tableBillRefunded'), const Color(0xff666666))
-                    : order.status != 'paid'
-                    ? null
-                    : !item.servingKnown
-                    ? status(t('billProgressUnknown'), const Color(0xff666666))
-                    : status(
-                        t(
-                          item.remainingQuantity == 0
-                              ? 'billServed'
-                              : item.servedQuantity == 0
-                              ? 'billAllUnserved'
-                              : 'billPartUnserved',
-                        ),
-                        item.remainingQuantity == 0
-                            ? const Color(0xff216344)
-                            : const Color(0xff994a16),
-                      ),
-              ),
-            if (order.refund != null)
-              Text(
-                '${t('tableBillRefunded')} ${formatCents(order.refund!.totalCents)}',
-              ),
-          ],
+          for (final group in groupBillProducts(visible))
+            BillProductCard(
+              key: ValueKey('bill-group-${group.currency}-${group.productRef}'),
+              language: widget.language,
+              name: group.item.name(widget.language),
+              specification: group.item.specification(widget.language),
+              quantity: group.quantity,
+              priceCents: group.item.priceCents,
+              priceLabel: group.mixedPrices ? t('billMixedPrices') : null,
+              totalCents: group.totalCents,
+              thumbnailPath: group.item.thumbnailPath,
+              base: widget.auth.session?.base,
+              onTap: () => openGroup(group),
+              badges: group.paidQuantity == 0
+                  ? null
+                  : status(
+                      '${t('tableBillPaid')}${group.unpaidQuantity > 0 ? ' ${group.paidQuantity}' : ''}',
+                      const Color(0xff216344),
+                    ),
+              leadingBadge: group.quantity == 0
+                  ? null
+                  : !group.servingKnown
+                  ? status(t('billProgressUnknown'), const Color(0xff666666))
+                  : status(
+                      '${t('billServed')} ${group.served} / ${t('billNotServed')} ${group.remaining}',
+                      group.remaining == 0
+                          ? const Color(0xff216344)
+                          : const Color(0xff994a16),
+                    ),
+              footer:
+                  group.unpaidQuantity > 0 && group.paidQuantity > 0 ||
+                      group.returned > 0
+                  ? Text(
+                      [
+                        if (group.unpaidQuantity > 0)
+                          '${t('tableBillUnpaid')} ${group.unpaidQuantity}',
+                        if (group.returned > 0)
+                          '${t('tableBillRefunded')} ${group.returned}',
+                      ].join(' · '),
+                      style: const TextStyle(fontSize: 11),
+                    )
+                  : null,
+            ),
           if (snapshot?.nextAfterOrder != null)
             TextButton(
               onPressed: loading ? null : () => unawaited(load(more: true)),

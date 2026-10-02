@@ -30,6 +30,7 @@ class LiveCartPanel extends StatefulWidget {
     this.tablePanel,
     this.menuHeader,
     this.liveTable,
+    this.contextVerified = true,
     this.tableActions,
   });
   final bool? menuVisible;
@@ -42,6 +43,7 @@ class LiveCartPanel extends StatefulWidget {
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
   final LiveTable? liveTable;
+  final bool contextVerified;
   @override
   State<LiveCartPanel> createState() => _LiveCartPanelState();
 }
@@ -87,7 +89,8 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     return t('orderMemberUnnamed');
   }
 
-  bool get draftAction => ready && !busy && !stale && !attempted;
+  bool get draftAction =>
+      widget.contextVerified && ready && !busy && !stale && !attempted;
   bool get editable => draftAction && (savedDraft == null || draftLoaded);
   bool get canSubmit =>
       editable && items.isNotEmpty && (savedDraft == null || !dirty);
@@ -695,6 +698,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     sessionRef: widget.orderContext.sessionRef,
                     revision: widget.revision + billRevision,
                     checkoutAllowed:
+                        widget.contextVerified &&
                         !busy &&
                         items.isEmpty &&
                         (!attempted ||
@@ -772,7 +776,9 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           Text(t('cartDraftEmpty')),
                         for (final item in items.values)
                           BillProductCard(
-                            key: ValueKey('draft-card-${item.product.reference}'),
+                            key: ValueKey(
+                              'draft-card-${item.product.reference}',
+                            ),
                             onTap: editable
                                 ? () => editDraftItem(item.product)
                                 : null,

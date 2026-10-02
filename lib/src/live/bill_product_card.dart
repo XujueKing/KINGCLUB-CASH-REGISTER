@@ -19,6 +19,7 @@ class BillProductCard extends StatelessWidget {
     this.badges,
     this.leadingBadge,
     this.onTap,
+    this.priceLabel,
   });
   final UiLanguage language;
   final String name, specification;
@@ -29,6 +30,7 @@ class BillProductCard extends StatelessWidget {
   final Widget? badges;
   final Widget? leadingBadge;
   final VoidCallback? onTap;
+  final String? priceLabel;
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.symmetric(vertical: 7),
@@ -79,7 +81,7 @@ class BillProductCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '${tr(language, 'billUnitPrice')} ¥${formatCents(priceCents)}',
+                          priceLabel ?? '${tr(language, 'billUnitPrice')} ¥${formatCents(priceCents)}',
                           style: const TextStyle(fontSize: 12),
                         ),
                       ],

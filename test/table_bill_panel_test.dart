@@ -126,6 +126,22 @@ void main() {
       ),
     ),
   );
+  testWidgets('returning table paints cached bill before read completes but cannot pay', (tester) async {
+    final auth = BillAuth();
+    await tester.pumpWidget(page(auth, 0));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    auth.ordersGate = Completer<Object?>();
+    await tester.pumpWidget(page(auth, 0));
+    await tester.pump();
+    expect(find.text('Test product'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('table-bill-checkout'))).onPressed, isNull);
+    auth.ordersGate!.complete(orderFixture());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
   testWidgets('new draft reveals unpaid tab and contributes to preview totals', (
     tester,
   ) async {
@@ -178,7 +194,7 @@ void main() {
       ..served = 1;
     await tester.pumpWidget(page(auth, 0));
     await tester.pumpAndSettle();
-    expect(find.text('Part served'), findsOneWidget);
+    expect(find.text('Served 1 / Not served 1'), findsOneWidget);
     await tester.tap(find.text('Test product'));
     await tester.pumpAndSettle();
     expect(find.text('Served items require a return; quantity cannot be reduced directly.'), findsOneWidget);

@@ -1,3 +1,4 @@
+import 'workspace_read_cache.dart';
 import 'table_snapshot.dart';
 import 'table_bill_panel.dart';
 
@@ -57,6 +58,10 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.auth.addListener(identityChanged);
+    data = WorkspaceReadCache.read<OrderContextSnapshot>(
+      widget.auth.session,
+      'context/${widget.tableRef}/${widget.sessionRef}',
+    );
     unawaited(load());
   }
 
@@ -123,7 +128,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     }
     final requestedPage = target ?? page;
     setState(() {
-      data = null;
+      if (reset || target != null) data = null;
       selected = null;
       loading = true;
       cart = false;
@@ -143,6 +148,13 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
       if (value.nextAfterMember != null &&
           cursors.take(requestedPage + 1).contains(value.nextAfterMember)) {
         throw const FormatException();
+      }
+      if (requestedPage == 0) {
+        WorkspaceReadCache.put(
+          identity,
+          'context/${widget.tableRef}/${widget.sessionRef}',
+          value,
+        );
       }
       setState(() {
         data = value;
@@ -201,6 +213,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         auth: widget.auth,
         language: widget.language,
         orderContext: data!,
+        contextVerified: !loading && !failed,
         menuVisible: widget.menuVisible,
         onMenuChanged: widget.onMenuChanged,
         tablePanel: widget.tablePanel,
