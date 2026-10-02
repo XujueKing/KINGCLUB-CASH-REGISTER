@@ -368,6 +368,10 @@ void main() {
       await tester.pump();
       expect(find.byType(LiveCartPanel), findsOneWidget);
       expect(auth.submits, 1);
+      final bill = tester.widget<TableBillPanel>(find.byType(TableBillPanel));
+      expect(bill.draftCents, 0);
+      expect(bill.draftCards, isEmpty);
+      expect(bill.checkoutAllowed, false);
       final command = o.command();
       auth.submitGate!.complete(
         OrderRequestResult.parse(

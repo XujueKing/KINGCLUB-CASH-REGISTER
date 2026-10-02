@@ -735,9 +735,12 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                 Expanded(
                   child: TableBillPanel(
                     onAddProduct: editable ? addExistingProduct : null,
-                    draftCents: total,
+                    // Once sent, only server orders contribute to consumption.
+                    // The outbox owns an uncertain command, not a second draft.
+                    draftCents: attempted ? 0 : total,
                     draftCards: {
-                      for (final item in items.values)
+                      for (final item
+                          in attempted ? <OrderSelection>[] : items.values)
                         item.product.reference: BillProductCard(
                           key: ValueKey('draft-card-${item.product.reference}'),
                           onTap: editable
