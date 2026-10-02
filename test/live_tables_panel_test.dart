@@ -103,22 +103,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('table card shows occupied and empty seats with readable opening time', (tester) async {
-    final auth = TableAuth(), data = tableFixture();
-    data['result']['tables'][0]['maximumSeats'] = 10;
-    final session = data['result']['tables'][0]['session'];
-    session['partySize'] = 5;
-    session['openedAt'] = '2026-09-29T07:35:00.000Z';
-    session['elapsedMinutes'] = 25;
-    auth.reply = data;
-    await show(tester, auth, language: UiLanguage.en);
-    expect(find.byIcon(Icons.person), findsNWidgets(5));
-    expect(find.byIcon(Icons.person_outline), findsNWidgets(5));
-    expect(find.text('5/10'), findsOneWidget);
-    expect(find.textContaining('Today'), findsOneWidget);
-    expect(find.textContaining('(25min)'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'table card shows occupied and empty seats with readable opening time',
+    (tester) async {
+      final auth = TableAuth(), data = tableFixture();
+      data['result']['tables'][0]['maximumSeats'] = 10;
+      final session = data['result']['tables'][0]['session'];
+      session['partySize'] = 5;
+      session['openedAt'] = '2026-09-29T07:35:00.000Z';
+      session['elapsedMinutes'] = 25;
+      auth.reply = data;
+      await show(tester, auth, language: UiLanguage.en);
+      for (var i = 0; i < 10; i++) {
+        final cell = tester.widget<Container>(
+          find.byKey(ValueKey('table-seat-test-000-$i')),
+        );
+        expect(cell.constraints!.maxWidth, cell.constraints!.maxHeight);
+        expect(cell.color!.a, closeTo(i < 5 ? 0.9 : 0.18, 0.01));
+      }
+      expect(find.byIcon(Icons.person), findsNothing);
+      expect(find.text('5/10'), findsOneWidget);
+      expect(find.textContaining('Today'), findsOneWidget);
+      expect(find.textContaining('(25min)'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Temporary hold stays distinct until server releases the table', (
     tester,

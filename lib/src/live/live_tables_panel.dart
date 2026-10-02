@@ -890,29 +890,26 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                     12,
                                   );
                                   final rows = (visible / 3).ceil().clamp(1, 4);
-                                  final size = (bounds.maxHeight / rows).clamp(
-                                    6.0,
-                                    16.0,
-                                  );
+                                  final size =
+                                      ((bounds.maxHeight - (rows - 1) * 2) /
+                                              rows)
+                                          .clamp(4.0, 16.0);
                                   return Wrap(
-                                    spacing: 1,
-                                    runSpacing: 0,
+                                    spacing: 2,
+                                    runSpacing: 2,
                                     children: [
                                       for (var i = 0; i < visible; i++)
-                                        SizedBox(
-                                          width: 16,
-                                          height: size,
-                                          child: Icon(
-                                            i < (session?.partySize ?? 0)
-                                                ? Icons.person
-                                                : Icons.person_outline,
-                                            size: size,
-                                            color: i < (session?.partySize ?? 0)
-                                                ? textColor
-                                                : textColor.withValues(
-                                                    alpha: 0.28,
-                                                  ),
+                                        Container(
+                                          key: ValueKey(
+                                            'table-seat-${table.reference}-$i',
                                           ),
+                                          width: size,
+                                          height: size,
+                                          color: i < (session?.partySize ?? 0)
+                                              ? textColor.withValues(alpha: 0.9)
+                                              : textColor.withValues(
+                                                  alpha: 0.18,
+                                                ),
                                         ),
                                     ],
                                   );
@@ -920,7 +917,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                               ),
                             ),
                             Text(
-                              '${session == null ? 0 : session.partySize ?? '?'}/${table.maximumSeats}',
+                              '${session == null ? 0 : session.partySize ?? '—'}/${table.maximumSeats}',
                               style: const TextStyle(fontSize: 11),
                               maxLines: 1,
                             ),
