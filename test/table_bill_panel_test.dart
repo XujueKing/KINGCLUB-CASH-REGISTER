@@ -179,6 +179,12 @@ void main() {
     await tester.pumpWidget(page(auth, 0));
     await tester.pumpAndSettle();
     expect(find.text('Part served'), findsOneWidget);
+    await tester.tap(find.text('Test product'));
+    await tester.pumpAndSettle();
+    expect(find.text('Served items require a return; quantity cannot be reduced directly.'), findsOneWidget);
+    expect(find.byIcon(Icons.remove), findsNothing);
+    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bill-filter')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Unpaid').last);

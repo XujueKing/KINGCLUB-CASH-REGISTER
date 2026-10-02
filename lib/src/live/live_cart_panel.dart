@@ -488,6 +488,56 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     }
   }
 
+  Future<void> editDraftItem(CatalogProduct product) async {
+    if (!editable) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, redraw) {
+          final quantity = items[product.reference]?.quantity ?? 0;
+          return AlertDialog(
+            title: Text(product.name(widget.language)),
+            content: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  key: const ValueKey('draft-dialog-minus'),
+                  onPressed: editable && quantity > 0
+                      ? () {
+                          change(product, -1);
+                          redraw(() {});
+                        }
+                      : null,
+                  icon: const Icon(Icons.remove),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text('$quantity'),
+                ),
+                IconButton(
+                  key: const ValueKey('draft-dialog-plus'),
+                  onPressed: editable
+                      ? () {
+                          change(product, 1);
+                          redraw(() {});
+                        }
+                      : null,
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(t('billDone')),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget billHeader(Widget filter) {
     final table = widget.liveTable;
     final session = table?.session;
@@ -722,6 +772,10 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           Text(t('cartDraftEmpty')),
                         for (final item in items.values)
                           BillProductCard(
+                            key: ValueKey('draft-card-${item.product.reference}'),
+                            onTap: editable
+                                ? () => editDraftItem(item.product)
+                                : null,
                             language: widget.language,
                             name: item.product.name(widget.language),
                             specification: item.product.specification(

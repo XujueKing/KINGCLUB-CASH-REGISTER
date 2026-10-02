@@ -1,4 +1,5 @@
 import 'bill_product_card.dart';
+import 'balance_refund_dialog.dart';
 
 import 'dart:async';
 
@@ -200,6 +201,59 @@ class _TableBillPanelState extends State<TableBillPanel>
     super.dispose();
   }
 
+  Future<void> openItem(LiveOrder order, OrderItem item) async {
+    if (loading || failed || !foreground) return;
+    final canRefund =
+        const bool.fromEnvironment('CASHIER_BALANCE_REFUND') &&
+        widget.auth.session?.permissions.contains('payment.refund') == true &&
+        order.cashierOrder &&
+        order.status == 'paid' &&
+        order.refund == null;
+    final refund = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(item.name(widget.language)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${t('billItemQuantity')}: ${item.quantity}'),
+            if (item.servingKnown)
+              Text('${t('billServed')}: ${item.servedQuantity}'),
+            const SizedBox(height: 12),
+            Text(t('billSubmittedQuantityUnavailable')),
+            if (!item.servingKnown) Text(t('billProgressUnknown')),
+            if ((item.servedQuantity ?? 0) > 0) Text(t('billServedReturnOnly')),
+            if (!canRefund) Text(t('billReturnUnavailable')),
+            if (canRefund) Text(t('billReturnOrderScope')),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(t('staffCancelSelection')),
+          ),
+          if (canRefund)
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(t('billReturnAction')),
+            ),
+        ],
+      ),
+    );
+    if (refund != true || !mounted || !foreground) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => BalanceRefundDialog(
+        auth: widget.auth,
+        orderRef: order.reference,
+        language: widget.language,
+      ),
+    );
+    if (mounted && foreground) await load();
+  }
+
   Widget status(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
     decoration: BoxDecoration(
@@ -292,39 +346,28 @@ class _TableBillPanelState extends State<TableBillPanel>
                 totalCents: item.subtotalCents,
                 thumbnailPath: item.thumbnailPath,
                 base: widget.auth.session?.base,
+                onTap: () => openItem(order, item),
                 badges: order.status == 'paid'
-                    ? Wrap(
-                        spacing: 3,
-                        runSpacing: 2,
-                        alignment: WrapAlignment.end,
-                        children: [
-                          status(t('tableBillPaid'), const Color(0xff216344)),
-                          if (order.refund != null)
-                            status(
-                              t('tableBillRefunded'),
-                              const Color(0xff666666),
-                            )
-                          else if (!item.servingKnown)
-                            status(
-                              t('billProgressUnknown'),
-                              const Color(0xff666666),
-                            )
-                          else
-                            status(
-                              t(
-                                item.remainingQuantity == 0
-                                    ? 'billServed'
-                                    : item.servedQuantity == 0
-                                    ? 'billAllUnserved'
-                                    : 'billPartUnserved',
-                              ),
-                              item.remainingQuantity == 0
-                                  ? const Color(0xff216344)
-                                  : const Color(0xff994a16),
-                            ),
-                        ],
-                      )
+                    ? status(t('tableBillPaid'), const Color(0xff216344))
                     : null,
+                leadingBadge: order.refund != null
+                    ? status(t('tableBillRefunded'), const Color(0xff666666))
+                    : order.status != 'paid'
+                    ? null
+                    : !item.servingKnown
+                    ? status(t('billProgressUnknown'), const Color(0xff666666))
+                    : status(
+                        t(
+                          item.remainingQuantity == 0
+                              ? 'billServed'
+                              : item.servedQuantity == 0
+                              ? 'billAllUnserved'
+                              : 'billPartUnserved',
+                        ),
+                        item.remainingQuantity == 0
+                            ? const Color(0xff216344)
+                            : const Color(0xff994a16),
+                      ),
               ),
             if (order.refund != null)
               Text(
@@ -343,16 +386,18 @@ class _TableBillPanelState extends State<TableBillPanel>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (canRead || widget.headerBuilder != null) ...[
-          widget.headerBuilder?.call(canRead ? filterDropdown() : const SizedBox()) ??
+          widget.headerBuilder?.call(
+                canRead ? filterDropdown() : const SizedBox(),
+              ) ??
               Align(alignment: Alignment.centerRight, child: filterDropdown()),
-          const Divider(height: 14),
+          const Divider(height: 14, thickness: 1, color: Color(0xffd7e2dc)),
         ],
         if (widget.fillHeight)
           Expanded(child: SingleChildScrollView(child: content))
         else
           content,
         if (canRead && pending != null && paid != null) ...[
-          const Divider(height: 12),
+          const Divider(height: 12, thickness: 1, color: Color(0xffd7e2dc)),
           amount(
             'billTotal',
             paid.totalCents + pending.totalCents + widget.draftCents,

@@ -196,6 +196,13 @@ void main() {
       );
       await tap(tester, 'workspace-toggle-menu');
       expect(find.byKey(const ValueKey('cart-minus-p001')), findsOneWidget);
+      await tap(tester, 'draft-card-p001');
+      await tap(tester, 'draft-dialog-plus');
+      expect(tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents, total * 2);
+      await tap(tester, 'draft-dialog-minus');
+      expect(tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents, total);
+      Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+      await tester.pumpAndSettle();
       expect(auth.submits, 0);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();
