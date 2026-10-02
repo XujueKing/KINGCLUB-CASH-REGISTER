@@ -132,7 +132,9 @@ void main() {
     final auth = BillAuth()..paid = true;
     await tester.pumpWidget(page(auth, 0));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('bill-filter-paid')));
+    await tester.tap(find.byKey(const ValueKey('bill-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Paid').last);
     await tester.pumpAndSettle();
     await tester.pumpWidget(
       page(auth, 0, checkoutAllowed: false, draftCents: 300),
@@ -140,9 +142,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       tester
-          .widget<ChoiceChip>(find.byKey(const ValueKey('bill-filter-pending')))
-          .selected,
-      isTrue,
+          .widget<DropdownButton<String>>(find.byKey(const ValueKey('bill-filter')))
+          .value,
+      'pending',
     );
     expect(
       find.descendant(
@@ -176,9 +178,10 @@ void main() {
       ..served = 1;
     await tester.pumpWidget(page(auth, 0));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Not served'), findsOneWidget);
-    expect(find.textContaining('Served'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('bill-filter-pending')));
+    expect(find.text('Part served'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('bill-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unpaid').last);
     await tester.pumpAndSettle();
     expect(find.text('Test product'), findsNothing);
     expect(
@@ -195,7 +198,9 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('bill-filter-paid')));
+    await tester.tap(find.byKey(const ValueKey('bill-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Paid').last);
     await tester.pumpAndSettle();
     expect(find.text('Test product'), findsOneWidget);
     auth.progressKnown = false;

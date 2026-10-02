@@ -504,6 +504,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                           menuVisible: widget.menuVisible,
                           onMenuChanged: widget.onMenuChanged,
                           tablePanel: grid,
+                          liveTable: table,
                           menuHeader: workspaceHeader(),
                           tableActions: actions,
                           onBack: () => setState(() => focusedTableRef = null),

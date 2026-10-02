@@ -23,6 +23,7 @@ class TableBillPanel extends StatefulWidget {
     this.fillHeight = false,
     this.leading,
     this.draftCents = 0,
+    this.headerBuilder,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -31,6 +32,7 @@ class TableBillPanel extends StatefulWidget {
   final bool checkoutAllowed, fillHeight;
   final Widget? leading;
   final int draftCents;
+  final Widget Function(Widget filter)? headerBuilder;
   @override
   State<TableBillPanel> createState() => _TableBillPanelState();
 }
@@ -206,9 +208,29 @@ class _TableBillPanelState extends State<TableBillPanel>
     ),
     child: Text(
       label,
-      style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
+      style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600),
     ),
   );
+  Widget filterDropdown() => DropdownButton<String>(
+    key: const ValueKey('bill-filter'),
+    value: filter,
+    underline: const SizedBox(),
+    style: const TextStyle(fontSize: 12, color: Color(0xff203d32)),
+    items: [
+      for (final entry in {
+        'all': 'billAllConsumption',
+        'pending': 'tableBillUnpaid',
+        'paid': 'tableBillPaid',
+        'voucher': 'billVoucher',
+        'gift': 'billGift',
+      }.entries)
+        DropdownMenuItem(value: entry.key, child: Text(t(entry.value))),
+    ],
+    onChanged: (value) {
+      if (value != null) setState(() => filter = value);
+    },
+  );
+
   Widget amount(String label, int cents, String key) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(
@@ -243,20 +265,19 @@ class _TableBillPanelState extends State<TableBillPanel>
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.leading != null && filter != 'paid') widget.leading!,
+        if (widget.leading != null && (filter == 'all' || filter == 'pending'))
+          widget.leading!,
         if (canRead) ...[
-          const Divider(),
-          Text(
-            t('tableBillSubmitted'),
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
           if (loading) const LinearProgressIndicator(),
           if (failed)
             TextButton(
               onPressed: () => unawaited(load()),
               child: Text(t('tableBillRetry')),
             ),
-          if (!loading && !failed && visible.isEmpty) Text(t('billNoItems')),
+          if (filter == 'voucher' || filter == 'gift')
+            Text(t('billSourceUnavailable'))
+          else if (!loading && !failed && visible.isEmpty)
+            Text(t('billNoItems')),
           for (final order in visible) ...[
             for (final item in order.items)
               BillProductCard(
@@ -271,47 +292,39 @@ class _TableBillPanelState extends State<TableBillPanel>
                 totalCents: item.subtotalCents,
                 thumbnailPath: item.thumbnailPath,
                 base: widget.auth.session?.base,
-                footer: Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    status(
-                      t(
-                        order.status == 'paid'
-                            ? 'tableBillPaid'
-                            : 'tableBillUnpaid',
-                      ),
-                      order.status == 'paid'
-                          ? const Color(0xff216344)
-                          : const Color(0xff994a16),
-                    ),
-                    if (order.refund != null)
-                      status(t('tableBillRefunded'), const Color(0xff666666))
-                    else if (order.status == 'paid') ...[
-                      if (!item.servingKnown)
-                        status(
-                          t('billProgressUnknown'),
-                          const Color(0xff666666),
-                        ),
-                      if (item.servingKnown && item.remainingQuantity! > 0)
-                        status(
-                          '${t('billNotServed')} × ${item.remainingQuantity}',
-                          const Color(0xff994a16),
-                        ),
-                      if (item.servingKnown && item.servedQuantity! > 0)
-                        status(
-                          '${t('billServed')} × ${item.servedQuantity}',
-                          const Color(0xff216344),
-                        ),
-                    ] else if (item.servingKnown &&
-                        snapshot?.paymentTiming == 'postpay' &&
-                        order.cashierOrder)
-                      status(
-                        '${t('billServed')} × ${item.servedQuantity} / ${item.quantity}',
-                        const Color(0xff526c5f),
-                      ),
-                  ],
-                ),
+                badges: order.status == 'paid'
+                    ? Wrap(
+                        spacing: 3,
+                        runSpacing: 2,
+                        alignment: WrapAlignment.end,
+                        children: [
+                          status(t('tableBillPaid'), const Color(0xff216344)),
+                          if (order.refund != null)
+                            status(
+                              t('tableBillRefunded'),
+                              const Color(0xff666666),
+                            )
+                          else if (!item.servingKnown)
+                            status(
+                              t('billProgressUnknown'),
+                              const Color(0xff666666),
+                            )
+                          else
+                            status(
+                              t(
+                                item.remainingQuantity == 0
+                                    ? 'billServed'
+                                    : item.servedQuantity == 0
+                                    ? 'billAllUnserved'
+                                    : 'billPartUnserved',
+                              ),
+                              item.remainingQuantity == 0
+                                  ? const Color(0xff216344)
+                                  : const Color(0xff994a16),
+                            ),
+                        ],
+                      )
+                    : null,
               ),
             if (order.refund != null)
               Text(
@@ -329,23 +342,11 @@ class _TableBillPanelState extends State<TableBillPanel>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (canRead)
-          Wrap(
-            spacing: 6,
-            children: [
-              for (final entry in {
-                'all': 'all',
-                'pending': 'tableBillUnpaid',
-                'paid': 'tableBillPaid',
-              }.entries)
-                ChoiceChip(
-                  key: ValueKey('bill-filter-${entry.key}'),
-                  label: Text(t(entry.value)),
-                  selected: filter == entry.key,
-                  onSelected: (_) => setState(() => filter = entry.key),
-                ),
-            ],
-          ),
+        if (canRead || widget.headerBuilder != null) ...[
+          widget.headerBuilder?.call(canRead ? filterDropdown() : const SizedBox()) ??
+              Align(alignment: Alignment.centerRight, child: filterDropdown()),
+          const Divider(height: 14),
+        ],
         if (widget.fillHeight)
           Expanded(child: SingleChildScrollView(child: content))
         else

@@ -8,7 +8,7 @@ String? productThumbnail(Object? raw, String storeRef) {
       raw['files'] is! Map) {
     return null;
   }
-  final link = raw['files']['thumbnail'];
+  final link = raw['files']['image'] ?? raw['files']['thumbnail'];
   if (link is! String) return null;
   final uri = Uri.tryParse(link);
   if (uri == null ||
@@ -39,17 +39,12 @@ class ProductThumbnail extends StatelessWidget {
       width: 48,
       height: 56,
       margin: const EdgeInsets.only(right: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xfff2f5f2),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      clipBehavior: Clip.antiAlias,
       child: path == null || base == null || base!.scheme != 'https'
           ? fallback
           : Image.network(
               productThumbnailUri(base!, path!).toString(),
               fit: BoxFit.contain,
-              cacheWidth: 96,
+              filterQuality: FilterQuality.high,
               errorBuilder: (_, _, _) => fallback,
             ),
     );

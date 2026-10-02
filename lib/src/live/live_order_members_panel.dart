@@ -1,3 +1,4 @@
+import 'table_snapshot.dart';
 import 'table_bill_panel.dart';
 
 import 'dart:async';
@@ -23,6 +24,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
     this.revision = 0,
     this.tablePanel,
     this.menuHeader,
+    this.liveTable,
     this.tableActions,
   });
   final bool? menuVisible;
@@ -33,6 +35,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
   final VoidCallback onBack;
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
+  final LiveTable? liveTable;
   @override
   State<LiveOrderMembersPanel> createState() => _LiveOrderMembersPanelState();
 }
@@ -202,6 +205,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         onMenuChanged: widget.onMenuChanged,
         tablePanel: widget.tablePanel,
         menuHeader: widget.menuHeader,
+        liveTable: widget.liveTable,
         tableActions: widget.tableActions,
         memberRef: selected?.reference,
         revision: widget.revision,

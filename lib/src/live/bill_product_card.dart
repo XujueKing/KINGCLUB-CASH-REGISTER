@@ -16,6 +16,7 @@ class BillProductCard extends StatelessWidget {
     required this.base,
     this.thumbnailPath,
     this.footer,
+    this.badges,
   });
   final UiLanguage language;
   final String name, specification;
@@ -23,10 +24,11 @@ class BillProductCard extends StatelessWidget {
   final Uri? base;
   final String? thumbnailPath;
   final Widget? footer;
+  final Widget? badges;
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.symmetric(vertical: 5),
-    padding: const EdgeInsets.all(10),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
     decoration: BoxDecoration(
       color: Colors.white,
       border: Border.all(color: const Color(0xffd7e2dc)),
@@ -73,6 +75,7 @@ class BillProductCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                if (badges != null) badges!,
                 Text('× $quantity', style: const TextStyle(fontSize: 13)),
                 Text(
                   '¥${formatCents(totalCents)}',

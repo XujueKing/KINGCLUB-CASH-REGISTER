@@ -29,6 +29,7 @@ class LiveCartPanel extends StatefulWidget {
     this.revision = 0,
     this.tablePanel,
     this.menuHeader,
+    this.liveTable,
     this.tableActions,
   });
   final bool? menuVisible;
@@ -40,6 +41,7 @@ class LiveCartPanel extends StatefulWidget {
   final VoidCallback onBack;
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
+  final LiveTable? liveTable;
   @override
   State<LiveCartPanel> createState() => _LiveCartPanelState();
 }
@@ -486,6 +488,105 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     }
   }
 
+  Widget billHeader(Widget filter) {
+    final table = widget.liveTable;
+    final session = table?.session;
+    final color = session?.status == 'clearing'
+        ? const Color(0xff1d4ed8)
+        : session?.temporaryHold == true || (session?.pendingCents ?? 0) > 0
+        ? const Color(0xffb45309)
+        : const Color(0xff15803d);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              constraints: const BoxConstraints(minWidth: 52, maxWidth: 82),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                widget.orderContext.tableName,
+                maxLines: 2,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            InkWell(
+              key: const ValueKey('bill-party-size'),
+              onTap: () => showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(t('guests')),
+                  content: Text(t('billPartyUnavailable')),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(t('staffCancelSelection')),
+                    ),
+                  ],
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  '${t('guests')}: ${session?.partySize ?? currentContext.partySize ?? '—'}/${table?.maximumSeats ?? '—'}',
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: TextButton(
+            key: const ValueKey('workspace-toggle-menu'),
+            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+            onPressed: busy ? null : () => setMenu(!menuOpen),
+            child: Text(
+              t('ordersDetails'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+        TextButton(
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            minimumSize: const Size(0, 40),
+          ),
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(t('billOpeningAttribute')),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(t('billRuleUnavailable')),
+                  if (widget.tableActions != null) widget.tableActions!,
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(t('staffCancelSelection')),
+                ),
+              ],
+            ),
+          ),
+          child: Text(t('tableOpen'), style: const TextStyle(fontSize: 11)),
+        ),
+        filter,
+      ],
+    );
+  }
+
   @override
   void dispose() {
     ++epoch;
@@ -532,31 +633,12 @@ class _LiveCartPanelState extends State<LiveCartPanel>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (widget.tablePanel != null)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.orderContext.tableName,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      TextButton.icon(
-                        key: const ValueKey('workspace-toggle-menu'),
-                        onPressed: busy ? null : () => setMenu(!menuOpen),
-                        icon: Icon(
-                          menuOpen
-                              ? Icons.table_restaurant
-                              : Icons.restaurant_menu,
-                        ),
-                        label: Text(t(menuOpen ? 'tables' : 'tableOrderStart')),
-                      ),
-                      if (widget.tableActions != null) widget.tableActions!,
-                    ],
-                  ),
                 Expanded(
                   child: TableBillPanel(
                     draftCents: total,
+                    headerBuilder: widget.tablePanel == null
+                        ? null
+                        : billHeader,
                     auth: widget.auth,
                     language: widget.language,
                     tableRef: widget.orderContext.tableRef,
@@ -573,20 +655,22 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     leading: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          widget.tablePanel == null
-                              ? '${widget.orderContext.tableName} · ${t('ordersDetails')}'
-                              : t('ordersDetails'),
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        if (widget.memberRef != null) Text(memberName),
-                        Text(
-                          t(
-                            currentContext.paymentTiming == 'prepay'
-                                ? 'livePrepay'
-                                : 'livePostpay',
+                        if (widget.tablePanel == null)
+                          Text(
+                            widget.tablePanel == null
+                                ? '${widget.orderContext.tableName} · ${t('ordersDetails')}'
+                                : t('ordersDetails'),
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
-                        ),
+                        if (widget.memberRef != null) Text(memberName),
+                        if (widget.tablePanel == null)
+                          Text(
+                            t(
+                              currentContext.paymentTiming == 'prepay'
+                                  ? 'livePrepay'
+                                  : 'livePostpay',
+                            ),
+                          ),
                         if (message != null)
                           Text(
                             t(message!),
