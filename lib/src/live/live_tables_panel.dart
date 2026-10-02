@@ -19,6 +19,7 @@ import '../auth/staff_session.dart';
 import '../network/cashier_realtime_client.dart';
 import '../strings.dart';
 import 'table_snapshot.dart';
+import 'table_status_color.dart';
 import 'table_bill_panel.dart';
 import 'live_orders_panel.dart';
 import 'table_checkout_recovery_panel.dart';
@@ -409,7 +410,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
               auth: widget.auth,
               language: widget.language,
               date: selectedDate!,
-                revision: realtimeRevision,
+              revision: realtimeRevision,
             ),
           ),
         ],
@@ -873,15 +874,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       ),
   ];
 
-  Color tableColor(LiveTable table) => table.status != 'active'
-      ? const Color(0xFF64748B)
-      : table.session == null
-      ? (table.reservation == null ? Colors.white : const Color(0xFFFACC15))
-      : table.session!.status == 'clearing'
-      ? const Color(0xFF15803D)
-      : table.session!.temporaryHold || table.session!.pendingCents > 0
-      ? const Color(0xFFDC2626)
-      : const Color(0xFF1D4ED8);
+  Color tableColor(LiveTable table) => tableStatusColor(table);
 
   Widget tableCard(LiveTable table, String currency) {
     final session = table.session;

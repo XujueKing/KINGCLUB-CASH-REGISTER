@@ -13,6 +13,7 @@ import 'live_order_recovery_panel.dart';
 import 'order_command.dart';
 import 'order_context_snapshot.dart';
 import 'table_snapshot.dart';
+import 'table_status_color.dart';
 import 'table_bill_panel.dart';
 
 /// Explicit local draft save/restore; submission remains a separately confirmed command.
@@ -590,11 +591,9 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   Widget billHeader(Widget filter) {
     final table = widget.liveTable;
     final session = table?.session;
-    final color = session?.status == 'clearing'
+    final color = table == null
         ? const Color(0xff1d4ed8)
-        : session?.temporaryHold == true || (session?.pendingCents ?? 0) > 0
-        ? const Color(0xffb45309)
-        : const Color(0xff15803d);
+        : tableStatusColor(table);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -602,14 +601,16 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
+              key: const ValueKey('bill-table-badge'),
               constraints: const BoxConstraints(minWidth: 52, maxWidth: 82),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 widget.orderContext.tableName,
+                textAlign: TextAlign.center,
                 maxLines: 2,
                 style: const TextStyle(
                   color: Colors.white,
@@ -645,11 +646,10 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: TextButton(
-            key: const ValueKey('workspace-toggle-menu'),
-            style: TextButton.styleFrom(padding: EdgeInsets.zero),
-            onPressed: busy ? null : () => setMenu(!menuOpen),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 10),
             child: Text(
+              key: const ValueKey('bill-heading'),
               t('ordersDetails'),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             ),
@@ -811,6 +811,38 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     headerBuilder: widget.tablePanel == null
                         ? null
                         : billHeader,
+                    orderAction: widget.tablePanel == null
+                        ? null
+                        : OutlinedButton(
+                            key: const ValueKey('workspace-toggle-menu'),
+                            onPressed: busy ? null : () => setMenu(!menuOpen),
+                            child: Text(
+                              t(menuOpen ? 'ordersBack' : 'tableOrderStart'),
+                            ),
+                          ),
+                    beforeActions: widget.tablePanel == null
+                        ? null
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (items.isNotEmpty || busy)
+                                FilledButton(
+                                  key: const ValueKey('cart-submit'),
+                                  onPressed: canSubmit
+                                      ? () => unawaited(submit())
+                                      : null,
+                                  child: Text(t('cartSubmit')),
+                                ),
+                              if (attempted)
+                                OutlinedButton(
+                                  key: const ValueKey('cart-recovery'),
+                                  onPressed: busy
+                                      ? null
+                                      : () => setState(() => recovery = true),
+                                  child: Text(t('orderRecoveryTitle')),
+                                ),
+                            ],
+                          ),
                     auth: widget.auth,
                     language: widget.language,
                     tableRef: widget.orderContext.tableRef,
@@ -901,13 +933,13 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     'CNY ${formatCents(total)}',
                     key: const ValueKey('cart-total'),
                   ),
-                if (widget.tablePanel == null || items.isNotEmpty || busy)
+                if (widget.tablePanel == null)
                   FilledButton(
                     key: const ValueKey('cart-submit'),
                     onPressed: canSubmit ? () => unawaited(submit()) : null,
                     child: Text(t('cartSubmit')),
                   ),
-                if (widget.tablePanel == null || attempted)
+                if (widget.tablePanel == null)
                   OutlinedButton(
                     key: const ValueKey('cart-recovery'),
                     onPressed: busy

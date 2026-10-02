@@ -35,6 +35,8 @@ class TableBillPanel extends StatefulWidget {
     this.onAddProduct,
     this.draftCards = const {},
     this.onQuickAddProduct,
+    this.orderAction,
+    this.beforeActions,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -43,6 +45,7 @@ class TableBillPanel extends StatefulWidget {
   final bool checkoutAllowed, fillHeight;
   final bool changesAllowed;
   final Widget? leading;
+  final Widget? orderAction, beforeActions;
   final int draftCents;
   final Widget Function(Widget filter)? headerBuilder;
   final Future<void> Function(String productRef)? onAddProduct;
@@ -705,20 +708,34 @@ class _TableBillPanelState extends State<TableBillPanel>
               'table-bill-refunded',
             ),
         ],
-        if (canRead && canPay)
-          FilledButton(
-            key: const ValueKey('table-bill-checkout'),
-            onPressed:
-                !loading &&
-                    !failed &&
-                    !checkout &&
-                    widget.checkoutAllowed &&
-                    !reducing &&
-                    pending != null &&
-                    pending.orderCount > 0
-                ? pay
-                : null,
-            child: Text(t('tableCheckoutTitle')),
+        if (widget.beforeActions != null) widget.beforeActions!,
+        if (widget.orderAction != null || (canRead && canPay))
+          Row(
+            children: [
+              if (widget.orderAction != null)
+                Expanded(child: widget.orderAction!),
+              if (widget.orderAction != null && canRead && canPay)
+                const SizedBox(width: 10),
+              if (canRead && canPay)
+                Expanded(
+                  child: FilledButton(
+                    key: const ValueKey('table-bill-checkout'),
+                    onPressed:
+                        !loading &&
+                            !failed &&
+                            !checkout &&
+                            widget.checkoutAllowed &&
+                            !reducing &&
+                            pending != null &&
+                            pending.orderCount > 0
+                        ? pay
+                        : null,
+                    child: Text(
+                      '${t('tableCheckoutTitle')}${pending != null && pending.totalCents > 0 ? ' ¥${formatCents(pending.totalCents)}' : ''}',
+                    ),
+                  ),
+                ),
+            ],
           ),
       ],
     );
