@@ -256,6 +256,18 @@ class _TableBillPanelState extends State<TableBillPanel>
                               color: Color(0xff66756e),
                             ),
                           ),
+                          if (item.servingKnown)
+                            Text(
+                              '${t('servingDelivered')}: ${item.servedQuantity}'
+                              '${order.refund == null && (order.status == 'paid' || (snapshot?.paymentTiming == 'postpay' && order.cashierOrder)) ? ' · ${t('servingRemaining')}: ${item.remainingQuantity}' : ''}',
+                              key: ValueKey(
+                                'bill-serving-${order.reference}-${item.productRef}',
+                              ),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xff526c5f),
+                              ),
+                            ),
                         ],
                       ),
                     ),

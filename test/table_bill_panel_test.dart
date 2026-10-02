@@ -16,6 +16,7 @@ class BillAuth extends TableAuth {
   Completer<Object?>? ordersGate;
   bool cancelled = false;
   bool failRead = false;
+  bool postpay = false, progressKnown = true;
   @override
   Future<Object?> readOrders({
     required String tableRef,
@@ -25,6 +26,13 @@ class BillAuth extends TableAuth {
     if (failRead) throw StateError('read failed');
     if (ordersGate != null) return ordersGate!.future;
     final raw = orderFixture(), data = raw['result'] as Map;
+    data['session']['paymentTiming'] = postpay ? 'postpay' : 'prepay';
+    (data['orders'] as List).first['cashierOrder'] = postpay;
+    if (!progressKnown) {
+      final item = (data['orders'] as List).first['items'][0] as Map;
+      item.remove('servedQuantity');
+      item.remove('remainingQuantity');
+    }
     (data['orders'] as List).first['status'] = cancelled
         ? 'expired'
         : 'pending';
@@ -104,6 +112,26 @@ void main() {
           ),
         ),
       );
+  testWidgets(
+    'receipt shows delivery progress without implying unpaid prepay can be served',
+    (tester) async {
+      final auth = BillAuth();
+      await tester.pumpWidget(page(auth, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Delivered: 0'), findsOneWidget);
+      expect(find.textContaining('Remaining:'), findsNothing);
+      auth.postpay = true;
+      await tester.pumpWidget(page(auth, 1));
+      await tester.pumpAndSettle();
+      expect(find.text('Delivered: 0 · Remaining: 2'), findsOneWidget);
+      auth.progressKnown = false;
+      await tester.pumpWidget(page(auth, 2));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Delivered:'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   testWidgets(
     'unsent cart prevents checkout; failed refresh keeps lines but disables payment',
     (tester) async {

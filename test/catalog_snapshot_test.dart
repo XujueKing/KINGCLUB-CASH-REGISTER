@@ -117,9 +117,25 @@ void main() {
         tester.widget<IconButton>(button).onPressed,
         timing == 'prepay' ? isNotNull : isNull,
       );
-      if (timing == 'prepay') await tester.tap(button);
+      final card = find.byKey(const ValueKey('catalog-select-p001'));
+      expect(
+        tester.widget<InkWell>(card).onTap,
+        timing == 'prepay' ? isNotNull : isNull,
+      );
+      await tester.tap(card);
+      if (timing == 'prepay') {
+        expect(selections, 1);
+        await tester.tap(button);
+        expect(
+          selections,
+          2,
+          reason: 'the plus button must not bubble to the card',
+        );
+      } else {
+        expect(selections, 0);
+      }
     }
-    expect(selections, 1);
+    expect(selections, 2);
     await tester.pumpWidget(const SizedBox());
   });
 

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'catalog_snapshot.dart';
+import 'product_thumbnail.dart';
 import 'table_snapshot.dart';
 
 class LiveCatalogPanel extends StatefulWidget {
@@ -285,6 +286,11 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
 
   Widget productCard(CatalogProduct p) {
     final available = p.inventoryKnown && p.available > 0;
+    final canSelect =
+        widget.onSelect != null &&
+        foreground &&
+        !loading &&
+        (widget.paymentTiming == 'prepay' || available);
     final stockColor = !p.inventoryKnown
         ? const Color(0xff986500)
         : available
@@ -299,78 +305,96 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
           color: available ? const Color(0xffb2c6ba) : const Color(0xffd2d2cd),
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Tooltip(
-              message: p.name(widget.language),
-              child: Text(
-                p.name(widget.language),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 3),
-            Tooltip(
-              message: p.specification(widget.language),
-              child: Text(
-                p.specification(widget.language),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, color: Color(0xff616c65)),
-              ),
-            ),
-            const Spacer(),
-            Text(
-              !p.inventoryKnown
-                  ? t('catalogUnknown')
-                  : !available
-                  ? t('catalogSoldOut')
-                  : '${t('catalogAvailable')}: ${p.available}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                color: stockColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${data!.currency} ${formatCents(p.priceCents)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+      child: InkWell(
+        key: ValueKey('catalog-select-${p.reference}'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: canSelect ? () => widget.onSelect!(p) : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  ProductThumbnail(
+                    path: p.thumbnailPath,
+                    base: widget.auth.session?.base,
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Tooltip(
+                          message: p.name(widget.language),
+                          child: Text(
+                            p.name(widget.language),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Tooltip(
+                          message: p.specification(widget.language),
+                          child: Text(
+                            p.specification(widget.language),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xff616c65),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                !p.inventoryKnown
+                    ? t('catalogUnknown')
+                    : !available
+                    ? t('catalogSoldOut')
+                    : '${t('catalogAvailable')}: ${p.available}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: stockColor,
+                  fontWeight: FontWeight.w600,
                 ),
-                if (widget.onSelect != null)
-                  IconButton.filledTonal(
-                    key: ValueKey('catalog-add-${p.reference}'),
-                    tooltip: t('cartAdd'),
-                    onPressed:
-                        foreground &&
-                            !loading &&
-                            (widget.paymentTiming == 'prepay' || available)
-                        ? () => widget.onSelect!(p)
-                        : null,
-                    icon: const Icon(Icons.add),
-                  )
-                else
-                  const SizedBox(height: 42),
-              ],
-            ),
-          ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${data!.currency} ${formatCents(p.priceCents)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (widget.onSelect != null)
+                    IconButton.filledTonal(
+                      key: ValueKey('catalog-add-${p.reference}'),
+                      tooltip: t('cartAdd'),
+                      onPressed: canSelect ? () => widget.onSelect!(p) : null,
+                      icon: const Icon(Icons.add),
+                    )
+                  else
+                    const SizedBox(height: 42),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
