@@ -859,21 +859,19 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const Spacer(),
-                            Text(
-                              t(table.stateLabel),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (session != null && session.pendingCents > 0)
+                            if (session != null) ...[
+                              const SizedBox(height: 4),
                               Text(
-                                '$currency ${formatCents(session.pendingCents)}',
+                                tableOpeningLabel(
+                                  session,
+                                  widget.language,
+                                  snapshot?.observedAt ?? DateTime.now(),
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11),
                               ),
+                            ],
                           ],
                         ),
                       ),
@@ -916,29 +914,54 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                 },
                               ),
                             ),
-                            Text(
-                              '${session == null ? 0 : session.partySize ?? '—'}/${table.maximumSeats}',
-                              style: const TextStyle(fontSize: 11),
-                              maxLines: 1,
-                            ),
                           ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                if (session != null)
-                  Text(
-                    tableOpeningLabel(
-                      session,
-                      widget.language,
-                      snapshot?.observedAt ?? DateTime.now(),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              t(table.stateLabel),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (table.tableMode != null)
+                            Flexible(
+                              child: Text(
+                                ' (${t('tableKind_${table.tableMode}')})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11),
-                  ),
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: t('tableConsumptionTotal'),
+                      child: Text(
+                        '${currency == 'CNY' ? '\u00a5' : currency} ${formatCents((session?.paidCents ?? 0) + (session?.pendingCents ?? 0))}',
+                        key: ValueKey('table-total-${table.reference}'),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

@@ -6,6 +6,11 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'tableKind_manual': '空降台|Walk-in|空降檯|โต๊ะวอล์กอิน',
+  'tableKind_aa': 'AA台|AA|AA檯|โต๊ะแชร์จ่าย',
+  'tableKind_minimum_spend': '抵消台|Min. spend|抵消檯|โต๊ะขั้นต่ำ',
+  'tableKind_minimum_people': '限人数台|Min. guests|限人數檯|โต๊ะขั้นต่ำคน',
+  'tableConsumptionTotal': '消费总额|Total consumption|消費總額|ยอดใช้จ่ายรวม',
   'tableToday': '今日|Today|今日|วันนี้',
   'tableYesterday': '昨日|Yesterday|昨日|เมื่อวาน',
   'tableMinutes': '分|min|分|นาที',

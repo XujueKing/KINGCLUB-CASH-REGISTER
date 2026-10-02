@@ -101,6 +101,7 @@ class LiveTable {
   LiveTable(Map<String, dynamic> value)
     : reference = _ref(value['tableRef']),
       name = _text(value['tableName']),
+      tableMode = value['tableMode'] == null ? null : _text(value['tableMode']),
       status = _text(value['tableStatus']),
       minimumSeats = value['minimumSeats'] == null
           ? null
@@ -109,7 +110,14 @@ class LiveTable {
       session = value['session'] == null
           ? null
           : TableSessionSnapshot(_object(value['session'])) {
-    if (!value.containsKey('session') ||
+    if ((tableMode != null &&
+            !{
+              'manual',
+              'aa',
+              'minimum_spend',
+              'minimum_people',
+            }.contains(tableMode)) ||
+        !value.containsKey('session') ||
         !value.containsKey('minimumSeats') ||
         (minimumSeats != null && minimumSeats! > maximumSeats) ||
         !{'active', 'disabled'}.contains(status)) {
@@ -117,6 +125,7 @@ class LiveTable {
     }
   }
   final String reference, name, status;
+  final String? tableMode;
   final int? minimumSeats;
   final int maximumSeats;
   final TableSessionSnapshot? session;
