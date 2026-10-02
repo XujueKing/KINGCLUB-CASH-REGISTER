@@ -877,7 +877,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                       ),
                       const SizedBox(width: 4),
                       SizedBox(
-                        width: 52,
+                        width: 46,
                         child: Column(
                           children: [
                             Expanded(
@@ -891,7 +891,8 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                   final size =
                                       ((bounds.maxHeight - (rows - 1) * 2) /
                                               rows)
-                                          .clamp(4.0, 16.0);
+                                          .clamp(4.0, 16.0) *
+                                      0.875;
                                   return Wrap(
                                     spacing: 2,
                                     runSpacing: 2,
@@ -936,7 +937,8 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                               ),
                             ),
                           ),
-                          if (table.tableMode != null)
+                          if (table.tableMode != null &&
+                              table.tableMode != 'manual')
                             Flexible(
                               child: Text(
                                 ' (${t('tableKind_${table.tableMode}')})',
