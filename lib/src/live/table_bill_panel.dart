@@ -27,6 +27,7 @@ class TableBillPanel extends StatefulWidget {
     this.leading,
     this.draftCents = 0,
     this.headerBuilder,
+    this.onAddProduct,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -36,6 +37,7 @@ class TableBillPanel extends StatefulWidget {
   final Widget? leading;
   final int draftCents;
   final Widget Function(Widget filter)? headerBuilder;
+  final Future<void> Function(String productRef)? onAddProduct;
   @override
   State<TableBillPanel> createState() => _TableBillPanelState();
 }
@@ -238,6 +240,12 @@ class _TableBillPanelState extends State<TableBillPanel>
       builder: (context) => SimpleDialog(
         title: Text(t('billChooseOriginal')),
         children: [
+          if (widget.onAddProduct != null)
+            SimpleDialogOption(
+              key: const ValueKey('bill-add-product'),
+              onPressed: () => Navigator.pop(context, -1),
+              child: Text(t('billAddOrder')),
+            ),
           for (var i = 0; i < group.lines.length; i++)
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, i),
@@ -254,6 +262,10 @@ class _TableBillPanelState extends State<TableBillPanel>
         ],
       ),
     );
+    if (selected == -1 && mounted && foreground) {
+      await widget.onAddProduct?.call(group.productRef);
+      return;
+    }
     if (selected != null && mounted && foreground) {
       await openItem(group.lines[selected].order, group.lines[selected].item);
     }
@@ -267,7 +279,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         order.cashierOrder &&
         order.status == 'paid' &&
         order.refund == null;
-    final refund = await showDialog<bool>(
+    final action = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(item.name(widget.language)),
@@ -288,18 +300,29 @@ class _TableBillPanelState extends State<TableBillPanel>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context),
             child: Text(t('staffCancelSelection')),
           ),
+          if (widget.onAddProduct != null)
+            FilledButton(
+              key: const ValueKey('bill-add-product'),
+              onPressed: () => Navigator.pop(context, 'add'),
+              child: Text(t('billAddOrder')),
+            ),
           if (canRefund)
             FilledButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () => Navigator.pop(context, 'refund'),
               child: Text(t('billReturnAction')),
             ),
         ],
       ),
     );
-    if (refund != true || !mounted || !foreground) return;
+    if (!mounted || !foreground) return;
+    if (action == 'add') {
+      await widget.onAddProduct?.call(item.productRef);
+      return;
+    }
+    if (action != 'refund') return;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,

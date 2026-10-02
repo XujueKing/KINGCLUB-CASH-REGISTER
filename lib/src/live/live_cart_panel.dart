@@ -491,6 +491,52 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     }
   }
 
+  Future<void> addExistingProduct(String productRef) async {
+    if (!editable) return;
+    final identity = widget.auth.session, generation = epoch;
+    CatalogProduct? product;
+    setState(() {
+      busy = true;
+      message = null;
+    });
+    try {
+      String? cursor;
+      final seen = <String>{};
+      do {
+        final page = await widget.auth.readCatalog(afterProduct: cursor);
+        if (!mounted ||
+            generation != epoch ||
+            !identical(identity, widget.auth.session)) {
+          return;
+        }
+        product = page.products
+            .where((p) => p.reference == productRef)
+            .firstOrNull;
+        if (product != null) break;
+        cursor = page.nextAfterProduct;
+        if (cursor != null && !seen.add(cursor)) throw const FormatException();
+      } while (cursor != null);
+      if (product == null) throw const FormatException();
+    } catch (_) {
+      if (mounted && generation == epoch) {
+        setState(() => message = 'billAddUnavailable');
+      }
+      return;
+    } finally {
+      if (mounted && generation == epoch) setState(() => busy = false);
+    }
+    if (!mounted ||
+        !editable ||
+        generation != epoch ||
+        !identical(identity, widget.auth.session)) {
+      return;
+    }
+    change(product, 1);
+    if (items.containsKey(product.reference) && message == null) {
+      await editDraftItem(product);
+    }
+  }
+
   Future<void> editDraftItem(CatalogProduct product) async {
     if (!editable) return;
     await showDialog<void>(
@@ -688,6 +734,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
               children: [
                 Expanded(
                   child: TableBillPanel(
+                    onAddProduct: editable ? addExistingProduct : null,
                     draftCents: total,
                     headerBuilder: widget.tablePanel == null
                         ? null
