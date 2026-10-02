@@ -6,9 +6,18 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'itemReturnPending':
+      '退库取消待确认|Pending item returns|退庫取消待確認|รายการคืนสต็อกรอยืนยัน',
+  'itemReturnNotice': '商品实物退回后，取消所选数量并减少未付金额。|Return the physical goods to cancel this quantity and reduce the amount due.|商品實物退回後，取消所選數量並減少未付金額。|รับสินค้าคืนแล้วจึงยกเลิกจำนวนที่เลือกและลดยอดค้างชำระ',
+  'itemReturnConfirm': '实物已退回，确认取消|Goods returned — confirm cancellation|實物已退回，確認取消|รับสินค้าคืนแล้ว ยืนยันยกเลิก',
+  'itemReturnDueReduction': '减少应付|Reduce amount due|減少應付|ลดยอดค้างชำระ',
+  'itemReturnPendingNotice': '结果待核对，请查询原操作，不要重新退库。|Check the original operation; do not return the goods again.|結果待核對，請查詢原操作，不要重新退庫。|โปรดตรวจสอบรายการเดิม อย่าคืนสินค้าอีกครั้ง',
+  'itemReturnRetryNotice': '使用原请求再次确认退库取消，不是再次退回商品。|Retry the original cancellation request. Do not physically return the goods again.|使用原請求再次確認退庫取消，不是再次退回商品。|ยืนยันคำขอยกเลิกเดิมอีกครั้ง ไม่ต้องคืนสินค้าอีกครั้ง',
   'billRecall': '召回|Recall|召回|เรียกคืน',
-  'billRecallWait': '改回未上，等待重上|Recall for redelivery|改回未上，等待重上|เรียกคืนเพื่อเสิร์ฟใหม่',
-  'billRecallReturn': '退库并取消商品|Return stock and cancel item|退庫並取消商品|คืนสต็อกและยกเลิกสินค้า',
+  'billRecallWait':
+      '改回未上，等待重上|Recall for redelivery|改回未上，等待重上|เรียกคืนเพื่อเสิร์ฟใหม่',
+  'billRecallReturn':
+      '退库并取消商品|Return stock and cancel item|退庫並取消商品|คืนสต็อกและยกเลิกสินค้า',
   'billRecallWaitNotice': '保留消费和付款，将所选数量改回未上；不退库、不退款。|Keep the charge and payment; mark the selected quantity as not served. No restock or refund.|保留消費和付款，將所選數量改回未上；不退庫、不退款。|คงรายการและการชำระเงิน เปลี่ยนจำนวนที่เลือกเป็นยังไม่เสิร์ฟ ไม่คืนสต็อกหรือเงิน',
   'billRecallQuantity': '召回数量|Recall quantity|召回數量|จำนวนที่เรียกคืน',
   'billRecallConfirmed': '召回已确认，等待重上|Recall confirmed; awaiting redelivery|召回已確認，等待重上|ยืนยันเรียกคืนแล้ว รอเสิร์ฟใหม่',

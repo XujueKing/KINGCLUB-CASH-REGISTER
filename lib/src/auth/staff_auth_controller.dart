@@ -1399,6 +1399,7 @@ class StaffAuthController extends ChangeNotifier {
     if (!identity.permissions.contains('orders.create')) {
       throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
     }
+    await _guardItemReturn(identity, orderRef, productRef, epoch);
     final random = Random.secure();
     final bytes = List.generate(16, (_) => random.nextInt(256));
     bytes[6] = (bytes[6] & 15) | 64;
@@ -1721,6 +1722,21 @@ class StaffAuthController extends ChangeNotifier {
     return entries;
   }
 
+  Future<void> _guardItemReturn(
+    StaffSession identity,
+    String orderRef,
+    String productRef,
+    int epoch,
+  ) async {
+    final entries = await _itemReturnJournal.load(identity);
+    _check(epoch);
+    if (entries.any(
+      (entry) => entry.orderRef == orderRef && entry.productRef == productRef,
+    )) {
+      throw const CcsopFailure('ITEM_RETURN_ALREADY_PENDING');
+    }
+  }
+
   Future<ItemReturnResult> _itemReturnCall(
     PendingItemReturn command,
     StaffSession identity,
@@ -1840,6 +1856,7 @@ class StaffAuthController extends ChangeNotifier {
     required bool confirmed,
   }) => _servingOperation(() async {
     final identity = _servingIdentity(), epoch = _epoch;
+    await _guardItemReturn(identity, orderRef, productRef, epoch);
     final command = PendingServing.prepare(
       identity: identity,
       tableRef: tableRef,

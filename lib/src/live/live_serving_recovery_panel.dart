@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'serving_command.dart';
+import 'item_return_recovery.dart';
 
 class LiveServingRecoveryPanel extends StatefulWidget {
   const LiveServingRecoveryPanel({
@@ -222,6 +223,10 @@ class _LiveServingRecoveryPanelState extends State<LiveServingRecoveryPanel>
         ),
       if (message != null)
         Padding(padding: const EdgeInsets.all(12), child: Text(t(message!))),
+      Expanded(
+        flex: 0,
+        child: ItemReturnRecovery(auth: widget.auth, language: widget.language),
+      ),
       Expanded(
         child: entries.isEmpty
             ? Center(child: Text(busy ? '' : t('servingNoPending')))

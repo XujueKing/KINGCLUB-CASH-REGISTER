@@ -3,6 +3,7 @@ import 'workspace_read_cache.dart';
 import 'bill_product_card.dart';
 import 'bill_details_dialog.dart';
 import 'bill_serving_dialog.dart';
+import 'bill_item_return_dialog.dart';
 import 'catalog_snapshot.dart';
 
 import 'dart:async';
@@ -406,11 +407,44 @@ class _TableBillPanelState extends State<TableBillPanel>
               onPressed: () => Navigator.pop(context, true),
               child: Text(t('billRecallWait')),
             ),
-            ListTile(enabled: false, title: Text(t('billRecallReturn'))),
+            ListTile(
+              key: const ValueKey('bill-recall-return'),
+              enabled:
+                  selected.order.status == 'pending' &&
+                  identity?.permissions.contains('orders.create') == true &&
+                  identity?.permissions.contains('payment.refund') == true &&
+                  snapshot?.sessionStatus == 'open',
+              onTap:
+                  selected.order.status == 'pending' &&
+                      identity?.permissions.contains('orders.create') == true &&
+                      identity?.permissions.contains('payment.refund') ==
+                          true &&
+                      snapshot?.sessionStatus == 'open'
+                  ? () => Navigator.pop(context, false)
+                  : null,
+              title: Text(t('billRecallReturn')),
+            ),
           ],
         ),
       );
-      if (!mounted || !current() || choice != true) return;
+      if (!mounted || !current() || choice == null) return;
+      if (!choice) {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => BillItemReturnDialog(
+            auth: widget.auth,
+            language: widget.language,
+            tableRef: widget.tableRef,
+            sessionRef: widget.sessionRef,
+            order: selected.order,
+            item: selected.item,
+            isCurrent: current,
+          ),
+        );
+        if (mounted && foreground) await load();
+        return;
+      }
     }
     if ((!recall &&
             selected.action == 'serve' &&

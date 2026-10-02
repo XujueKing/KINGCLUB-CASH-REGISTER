@@ -9,6 +9,9 @@ import 'package:kingclub_cash_register/src/live/serving_journal.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 
 import 'serving_command_test.dart' as s;
+
+import 'package:kingclub_cash_register/src/live/item_return_journal.dart';
+
 import 'staff_session_test.dart' as a;
 import 'cash_command_test.dart' show Storage;
 
@@ -75,6 +78,7 @@ Future<StaffAuthController> controller(
   final value = StaffAuthController(
     vault: SessionVault(storage: storage),
     servingJournal: ServingJournal(storage: storage),
+    itemReturnJournal: ItemReturnJournal(storage: storage),
     authFactory: (_) => auth,
     sessionFactory: (_) => api,
     now: now ?? () => a.now,
