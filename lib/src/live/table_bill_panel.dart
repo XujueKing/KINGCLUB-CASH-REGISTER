@@ -60,6 +60,11 @@ class _TableBillPanelState extends State<TableBillPanel>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     widget.auth.addListener(reset);
+    restoreDisplayCache();
+    unawaited(load());
+  }
+
+  void restoreDisplayCache() {
     if (foreground && canRead) {
       final cached =
           WorkspaceReadCache.read<
@@ -73,16 +78,16 @@ class _TableBillPanelState extends State<TableBillPanel>
         orders = List.of(cached.orders);
       }
     }
-    unawaited(load());
   }
 
-  void reset() {
+  void reset({bool useCache = false}) {
     epoch++;
     setState(() {
       orders = [];
       snapshot = null;
       loading = false;
       failed = false;
+      if (useCache) restoreDisplayCache();
     });
     if (foreground) {
       unawaited(load());
@@ -102,7 +107,7 @@ class _TableBillPanelState extends State<TableBillPanel>
     if (old.auth != widget.auth ||
         old.tableRef != widget.tableRef ||
         old.sessionRef != widget.sessionRef) {
-      reset();
+      reset(useCache: old.auth == widget.auth);
     } else if (old.revision != widget.revision && foreground) {
       unawaited(load());
     }

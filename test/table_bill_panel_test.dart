@@ -27,6 +27,8 @@ class BillAuth extends TableAuth {
     if (failRead) throw StateError('read failed');
     if (ordersGate != null) return ordersGate!.future;
     final raw = orderFixture(), data = raw['result'] as Map;
+    data['tableRef'] = tableRef;
+    data['session']['sessionRef'] = sessionRef;
     data['session']['paymentTiming'] = postpay ? 'postpay' : 'prepay';
     (data['orders'] as List).first['cashierOrder'] = postpay;
     final progress = (data['orders'] as List).first['items'][0];
@@ -111,14 +113,16 @@ void main() {
     int revision, {
     bool checkoutAllowed = true,
     int draftCents = 0,
+    String tableRef = 'test-000',
+    String sessionRef = 'session-0',
   }) => MaterialApp(
     home: Scaffold(
       body: SingleChildScrollView(
         child: TableBillPanel(
           auth: auth,
           language: UiLanguage.en,
-          tableRef: 'test-000',
-          sessionRef: 'session-0',
+          tableRef: tableRef,
+          sessionRef: sessionRef,
           revision: revision,
           checkoutAllowed: checkoutAllowed,
           draftCents: draftCents,
@@ -126,66 +130,123 @@ void main() {
       ),
     ),
   );
-  testWidgets('returning table paints cached bill before read completes but cannot pay', (tester) async {
+  testWidgets('reused panel restores only matching table and session cache', (
+    tester,
+  ) async {
     final auth = BillAuth();
     await tester.pumpWidget(page(auth, 0));
     await tester.pumpAndSettle();
-    await tester.pumpWidget(const SizedBox());
-    auth.ordersGate = Completer<Object?>();
+    await tester.pumpWidget(
+      page(auth, 0, tableRef: 'test-001', sessionRef: 'session-1'),
+    );
+    await tester.pumpAndSettle();
+    final gate = Completer<Object?>();
+    auth.ordersGate = gate;
     await tester.pumpWidget(page(auth, 0));
     await tester.pump();
     expect(find.text('Test product'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('table-bill-checkout'))).onPressed, isNull);
-    auth.ordersGate!.complete(orderFixture());
-    await tester.pumpAndSettle();
-    await tester.pumpWidget(const SizedBox());
-    auth.dispose();
-  });
-  testWidgets('new draft reveals unpaid tab and contributes to preview totals', (
-    tester,
-  ) async {
-    final auth = BillAuth()..paid = true;
-    await tester.pumpWidget(page(auth, 0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('bill-filter')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Paid').last);
-    await tester.pumpAndSettle();
-    await tester.pumpWidget(
-      page(auth, 0, checkoutAllowed: false, draftCents: 300),
-    );
-    await tester.pumpAndSettle();
     expect(
       tester
-          .widget<DropdownButton<String>>(find.byKey(const ValueKey('bill-filter')))
-          .value,
-      'pending',
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('table-bill-checkout')),
+          )
+          .onPressed,
+      isNull,
     );
+
+    // A new sitting at the same table must not inherit the previous bill.
+    await tester.pumpWidget(page(auth, 0, sessionRef: 'session-new'));
+    await tester.pump();
+    expect(find.text('Test product'), findsNothing);
+    // The outstanding old-table reply must not put its products back on screen.
+    gate.complete(orderFixture());
+    await tester.pumpAndSettle();
+    expect(find.text('Test product'), findsNothing);
     expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('table-bill-total')),
-        matching: find.text('CNY 15.00'),
-      ),
-      findsOneWidget,
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('table-bill-checkout')),
+          )
+          .onPressed,
+      isNull,
     );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('table-bill-pending')),
-        matching: find.text('CNY 3.00'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('table-bill-paid')),
-        matching: find.text('CNY 12.00'),
-      ),
-      findsOneWidget,
-    );
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     auth.dispose();
   });
+  testWidgets(
+    'returning table paints cached bill before read completes but cannot pay',
+    (tester) async {
+      final auth = BillAuth();
+      await tester.pumpWidget(page(auth, 0));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      auth.ordersGate = Completer<Object?>();
+      await tester.pumpWidget(page(auth, 0));
+      await tester.pump();
+      expect(find.text('Test product'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('table-bill-checkout')),
+            )
+            .onPressed,
+        isNull,
+      );
+      auth.ordersGate!.complete(orderFixture());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
+    'new draft reveals unpaid tab and contributes to preview totals',
+    (tester) async {
+      final auth = BillAuth()..paid = true;
+      await tester.pumpWidget(page(auth, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('bill-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Paid').last);
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        page(auth, 0, checkoutAllowed: false, draftCents: 300),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<DropdownButton<String>>(
+              find.byKey(const ValueKey('bill-filter')),
+            )
+            .value,
+        'pending',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('table-bill-total')),
+          matching: find.text('CNY 15.00'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('table-bill-pending')),
+          matching: find.text('CNY 3.00'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('table-bill-paid')),
+          matching: find.text('CNY 12.00'),
+        ),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   testWidgets('paid partial delivery and filters retain whole-table totals', (
     tester,
   ) async {
@@ -197,7 +258,12 @@ void main() {
     expect(find.text('Served 1 / Not served 1'), findsOneWidget);
     await tester.tap(find.text('Test product'));
     await tester.pumpAndSettle();
-    expect(find.text('Served items require a return; quantity cannot be reduced directly.'), findsOneWidget);
+    expect(
+      find.text(
+        'Served items require a return; quantity cannot be reduced directly.',
+      ),
+      findsOneWidget,
+    );
     expect(find.byIcon(Icons.remove), findsNothing);
     Navigator.of(tester.element(find.byType(AlertDialog))).pop();
     await tester.pumpAndSettle();
