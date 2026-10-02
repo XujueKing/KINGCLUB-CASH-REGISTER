@@ -1749,7 +1749,7 @@ class StaffAuthController extends ChangeNotifier {
       throw const CcsopFailure('ITEM_RETURN_SCOPE_CHANGED');
     }
     final raw = await _api!.call(
-      lookup ? 'K261002001970' : 'K261002001969',
+      lookup ? 'K261002001990' : 'K261002001969',
       command.params,
     );
     _check(epoch);

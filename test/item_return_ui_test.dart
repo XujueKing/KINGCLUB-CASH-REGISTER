@@ -45,7 +45,7 @@ class UiAuth extends StaffAuthController {
     String requestId, {
     bool retryOriginal = false,
   }) async {
-    calls.add('K261002001970');
+    calls.add('K261002001990');
     expect(retryOriginal, false);
     final c = pending.single;
     pending = [];
@@ -161,7 +161,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('item-return-lookup-$id')));
       await tester.pumpAndSettle();
-      expect(auth.calls, ['K261002001969', 'K261002001970']);
+      expect(auth.calls, ['K261002001969', 'K261002001990']);
       expect(await auth.pendingItemReturns(), isEmpty);
       await tester.pump();
       expect(find.byKey(ValueKey('item-return-lookup-$id')), findsNothing);
