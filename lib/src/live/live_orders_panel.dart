@@ -311,7 +311,8 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   bool servingEligible(LiveOrder order, OrderItem item) =>
       foreground &&
       widget.auth.session?.permissions.contains('orders.serve') == true &&
-      order.refunds.isEmpty &&
+      order.refundQuantitiesKnown &&
+      !order.fullyRefunded &&
       {'open', 'clearing'}.contains(data?.sessionStatus) &&
       item.servingKnown &&
       item.remainingQuantity! > 0 &&
@@ -407,7 +408,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
         sessionRef: widget.table.session!.reference,
         orderRef: order.reference,
         productRef: item.productRef,
-        quantity: item.quantity,
+        quantity: item.activeQuantity,
         expectedServedQuantity: item.servedQuantity!,
         targetServedQuantity: item.servedQuantity! + delivered,
         expectedServingEpoch: item.servingEpoch,

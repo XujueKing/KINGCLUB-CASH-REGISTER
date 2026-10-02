@@ -56,6 +56,7 @@ class OrderItem {
       subtotalCents = _positive(value['subtotalCents']),
       servedQuantity = _servingCount(value, 'servedQuantity'),
       remainingQuantity = _servingCount(value, 'remainingQuantity'),
+      refundedQuantity = _servingCount(value, 'refundedQuantity'),
       returnableUnservedQuantity = _servingCount(
         value,
         'returnableUnservedQuantity',
@@ -67,6 +68,7 @@ class OrderItem {
       specifications = _localized(_map(value['snapshot'])['specifications']) {
     _positive(_map(value['snapshot'])['revision']);
     if (quantity * priceCents != subtotalCents) throw const FormatException();
+    if ((refundedQuantity ?? 0) > quantity) throw const FormatException();
     if (returnableUnservedQuantity != null &&
         (remainingQuantity == null ||
             returnableUnservedQuantity! > remainingQuantity!)) {
@@ -74,7 +76,7 @@ class OrderItem {
     }
     if ((servedQuantity == null) != (remainingQuantity == null) ||
         (servedQuantity != null &&
-            servedQuantity! + remainingQuantity! != quantity)) {
+            servedQuantity! + remainingQuantity! != activeQuantity)) {
       throw const FormatException();
     }
   }
@@ -83,6 +85,8 @@ class OrderItem {
   final int quantity, priceCents, subtotalCents;
   // Both absent means an older server did not provide delivery progress, never zero delivered.
   final int? servedQuantity, remainingQuantity;
+  final int? refundedQuantity;
+  int get activeQuantity => quantity - (refundedQuantity ?? 0);
   // Display hint only; the server revalidates physical stock and original receipts.
   final int? returnableUnservedQuantity;
   final int? servingEpoch;
@@ -155,6 +159,17 @@ class LiveOrder {
             totalCents) {
       throw const FormatException();
     }
+    if (items.any((item) => item.refundedQuantity != null) &&
+        (status != 'paid' ||
+            !cashierOrder ||
+            items.any((item) => item.refundedQuantity == null) ||
+            items.fold<int>(
+                  0,
+                  (sum, item) => sum + item.refundedQuantity! * item.priceCents,
+                ) !=
+                refundedCents)) {
+      throw const FormatException();
+    }
   }
   final String reference, status, currency;
   // Read-only navigation, never a payment or refund authorization.
@@ -166,6 +181,8 @@ class LiveOrder {
   int get refundedCents => refunds.fold(0, (sum, r) => sum + r.totalCents);
   int get netPaidCents => status == 'paid' ? totalCents - refundedCents : 0;
   bool get fullyRefunded => status == 'paid' && refundedCents == totalCents;
+  bool get refundQuantitiesKnown =>
+      refunds.isEmpty || items.every((item) => item.refundedQuantity != null);
   final DateTime createdAt;
   final List<OrderItem> items;
 }

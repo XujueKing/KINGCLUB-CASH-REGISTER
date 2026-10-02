@@ -5,17 +5,25 @@ class BillProductGroup {
   final String productRef, currency;
   final lines = <({LiveOrder order, OrderItem item})>[];
   OrderItem get item => lines.first.item;
-  Iterable<({LiveOrder order, OrderItem item})> get active =>
-      lines.where((line) => !line.order.fullyRefunded);
-  int get quantity => active.fold(0, (n, line) => n + line.item.quantity);
-  int get returned => lines
-      .where((line) => line.order.fullyRefunded)
-      .fold(0, (n, line) => n + line.item.quantity);
-  int get totalCents =>
-      active.fold(0, (n, line) => n + line.item.subtotalCents);
+  Iterable<({LiveOrder order, OrderItem item})> get active => lines.where(
+    (line) => !line.order.fullyRefunded && line.item.activeQuantity > 0,
+  );
+  int get quantity => active.fold(0, (n, line) => n + line.item.activeQuantity);
+  int get returned => lines.fold(
+    0,
+    (n, line) =>
+        n +
+        (line.order.fullyRefunded
+            ? line.item.quantity
+            : (line.item.refundedQuantity ?? 0)),
+  );
+  int get totalCents => active.fold(
+    0,
+    (n, line) => n + line.item.activeQuantity * line.item.priceCents,
+  );
   int get paidQuantity => active
       .where((line) => line.order.status == 'paid')
-      .fold(0, (n, line) => n + line.item.quantity);
+      .fold(0, (n, line) => n + line.item.activeQuantity);
   int get unpaidQuantity => quantity - paidQuantity;
   bool get servingKnown => active.every((line) => line.item.servingKnown);
   int get served =>

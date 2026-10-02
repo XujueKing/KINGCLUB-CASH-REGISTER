@@ -61,7 +61,7 @@ class BillDetailsDialog extends StatelessWidget {
                   context,
                   line.order,
                   line.item,
-                  line.item.quantity,
+                  line.item.activeQuantity,
                   'unknown',
                 )
               else ...[
@@ -82,6 +82,18 @@ class BillDetailsDialog extends StatelessWidget {
                     'served',
                   ),
               ],
+            for (final line in group.lines.where(
+              (line) =>
+                  !line.order.fullyRefunded &&
+                  (line.item.refundedQuantity ?? 0) > 0,
+            ))
+              row(
+                context,
+                line.order,
+                line.item,
+                line.item.refundedQuantity!,
+                'refunded',
+              ),
           ],
         ),
       ),

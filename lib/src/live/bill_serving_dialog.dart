@@ -85,7 +85,7 @@ class _BillServingDialogState extends State<BillServingDialog> {
         sessionRef: widget.sessionRef,
         orderRef: widget.order.reference,
         productRef: widget.item.productRef,
-        quantity: widget.item.quantity,
+        quantity: widget.item.activeQuantity,
         expectedServedQuantity: widget.item.servedQuantity!,
         targetServedQuantity:
             widget.item.servedQuantity! +

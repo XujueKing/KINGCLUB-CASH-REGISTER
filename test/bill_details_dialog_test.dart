@@ -25,6 +25,59 @@ List<LiveOrder> records() {
 }
 
 void main() {
+  testWidgets(
+    'partial refund has a separate returned row and only one unit left to serve',
+    (tester) async {
+      final data =
+          orderFixture()['result']['orders'][0] as Map<String, dynamic>;
+      data.addAll({
+        'status': 'paid',
+        'cashierOrder': true,
+        'refunds': [
+          {
+            'refundRef': '00000000-0000-4000-8000-000000000001',
+            'accountType': 'platform_cash',
+            'totalCents': 600,
+            'principalCents': 600,
+            'giftCents': 0,
+            'refundedAt': '2026-10-03T00:00:00Z',
+          },
+        ],
+      });
+      data['items'][0]['refundedQuantity'] = 1;
+      data['items'][0]['remainingQuantity'] = 1;
+      final order = LiveOrder(data);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BillDetailsDialog(
+              group: groupBillProducts([order]).single,
+              language: UiLanguage.zh,
+              canServe: (o, i) =>
+                  o.refundQuantitiesKnown && i.remainingQuantity! > 0,
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey('bill-detail-D00000000001-refunded')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('bill-detail-D00000000001-unserved')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('bill-serve-D00000000001')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('bill-refund-D00000000001-refunded')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   for (final language in UiLanguage.values) {
     testWidgets('original paid and unpaid delivery rows fit ${language.name}', (
       tester,
