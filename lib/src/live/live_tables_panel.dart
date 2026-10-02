@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'table_calendar_panel.dart';
+
 import 'swipe_grid.dart';
 
 import 'provider_recovery_panel.dart';
@@ -10,6 +12,7 @@ import 'recharge_recovery_panel.dart';
 import 'recharge_collect_panel.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../auth/staff_auth_controller.dart';
 import '../auth/staff_session.dart';
@@ -76,12 +79,17 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   int realtimeRevision = 0;
   CashierRealtimeClient? realtime;
   Timer? refreshDebounce;
+  Timer? clockTimer;
+  DateTime? selectedDate;
   String t(String key) => tr(widget.language, key);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && foreground) setState(() {});
+    });
     foreground =
         WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
@@ -205,6 +213,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   void dispose() {
+    clockTimer?.cancel();
     ++epoch;
     refreshDebounce?.cancel();
     realtime?.removeListener(realtimeChanged);
@@ -390,6 +399,22 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       );
     }
     final data = snapshot;
+    if (selectedDate != null) {
+      return Column(
+        children: [
+          workspaceHeader(),
+          Expanded(
+            child: TableCalendarPanel(
+              key: ValueKey(selectedDate),
+              auth: widget.auth,
+              language: widget.language,
+              date: selectedDate!,
+                revision: realtimeRevision,
+            ),
+          ),
+        ],
+      );
+    }
     final focused = data?.tables
         .where((table) => table.reference == focusedTableRef)
         .firstOrNull;
@@ -606,6 +631,47 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
           onPressed: foreground ? showTools : null,
           icon: const Icon(Icons.more_horiz),
         ),
+        if (selectedDate != null)
+          TextButton(
+            onPressed: () => setState(() => selectedDate = null),
+            child: Text(t('ordersBack')),
+          ),
+        TextButton.icon(
+          key: const ValueKey('table-calendar'),
+          onPressed: () async {
+            final now = DateTime.now();
+            final date = await showDatePicker(
+              context: context,
+              builder: (context, child) => Localizations.override(
+                context: context,
+                locale: switch (widget.language) {
+                  UiLanguage.zh => const Locale('zh', 'CN'),
+                  UiLanguage.tw => const Locale('zh', 'TW'),
+                  UiLanguage.en => const Locale('en'),
+                  UiLanguage.th => const Locale('th'),
+                },
+                delegates: GlobalMaterialLocalizations.delegates,
+                child: child,
+              ),
+              initialDate: selectedDate ?? now,
+              firstDate: DateTime(2020),
+              lastDate: DateTime(now.year + 3, 12, 31),
+            );
+            if (!mounted || date == null) return;
+            setState(() {
+              selectedDate = date;
+              focusedTableRef = null;
+            });
+          },
+          icon: const Icon(Icons.calendar_month_outlined, size: 18),
+          label: Text(
+            tableCalendarLabel(
+              selectedDate ?? DateTime.now(),
+              DateTime.now(),
+              widget.language,
+            ),
+          ),
+        ),
       ],
     ),
   );
@@ -810,12 +876,12 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   Color tableColor(LiveTable table) => table.status != 'active'
       ? const Color(0xFF64748B)
       : table.session == null
-      ? Colors.white
+      ? (table.reservation == null ? Colors.white : const Color(0xFFFACC15))
       : table.session!.status == 'clearing'
-      ? const Color(0xFF1D4ED8)
+      ? const Color(0xFF15803D)
       : table.session!.temporaryHold || table.session!.pendingCents > 0
-      ? const Color(0xFFB45309)
-      : const Color(0xFF15803D);
+      ? const Color(0xFFDC2626)
+      : const Color(0xFF1D4ED8);
 
   Widget tableCard(LiveTable table, String currency) {
     final session = table.session;

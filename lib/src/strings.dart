@@ -6,6 +6,28 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'reserveTable': '预留桌位|Reserve table|預留桌位|จองโต๊ะ',
+  'reserveGuest': '客人称呼|Guest name|客人稱呼|ชื่อลูกค้า',
+  'reservePeople': '人数|Guests|人數|จำนวนคน',
+  'reserveTime': '到店时间|Arrival time|到店時間|เวลามาถึง',
+  'reserveHours': '预留小时数|Hours reserved|預留小時數|จำนวนชั่วโมง',
+  'reserveCancel': '取消预留|Cancel reservation|取消預留|ยกเลิกการจอง',
+  'reserveSave': '确认预留|Confirm reservation|確認預留|ยืนยันการจอง',
+  'reserveConflict': '这个时段已被预订，请换桌或换时间|Time already reserved; choose another table or time|這個時段已被預訂，請換桌或換時間|ช่วงเวลานี้ถูกจองแล้ว โปรดเปลี่ยนโต๊ะหรือเวลา',
+  'reserveFailed': '未能确认预留，请核对人数与时间后重试|Could not confirm; check guests and time and retry|未能確認預留，請核對人數與時間後重試|ยืนยันไม่ได้ ตรวจสอบจำนวนคนและเวลาแล้วลองใหม่',
+  'reserveRetry':
+      '查询/重试原预留|Check / retry reservation|查詢／重試原預留|ตรวจสอบหรือลองการจองเดิม',
+  'reserveApp': 'APP组局|APP party|APP組局|กิจกรรมแอป',
+  'reserveNone': '该营业日暂无预订|No reservations for this business date|該營業日暫無預訂|ไม่มีการจองสำหรับวันทำการนี้',
+  'reserveAppPending': 'APP组局同步尚未在此服务器启用|APP party sync is not enabled on this server|APP組局同步尚未在此伺服器啟用|ยังไม่เปิดซิงค์กิจกรรมแอปบนเซิร์ฟเวอร์นี้',
+  'tableTomorrow': '明日|Tomorrow|明日|พรุ่งนี้',
+  'tableHistory': '历史订单|Order history|歷史訂單|ประวัติคำสั่งซื้อ',
+  'tableHistoryEmpty': '该营业日暂无开台记录|No sessions for this business date|該營業日暫無開檯記錄|ไม่มีรอบสำหรับวันทำการนี้',
+  'tableHistoryDay': '按营业日查看，点击场次查看订单|By business date; tap a session for orders|按營業日查看，點擊場次查看訂單|ดูตามวันทำการ แตะรอบเพื่อดูคำสั่งซื้อ',
+  'tableReservationsUnavailable': '预订数据尚未接通，暂不能确认该日预订情况|Reservations are not connected; availability cannot be confirmed|預訂資料尚未接通，暫不能確認該日預訂情況|ยังไม่ได้เชื่อมต่อการจอง ไม่สามารถยืนยันสถานะได้',
+  'tableReserved': '预订|Reserved|預訂|จองแล้ว',
+  'tableClosed': '已结束|Closed|已結束|สิ้นสุดแล้ว',
+  'tableMoreHistory': '更多记录|More records|更多記錄|เพิ่มเติม',
   'tableKind_manual': '空降台|Walk-in|空降檯|โต๊ะวอล์กอิน',
   'tableKind_aa': 'AA台|AA|AA檯|โต๊ะแชร์จ่าย',
   'tableKind_minimum_spend': '抵消台|Min. spend|抵消檯|โต๊ะขั้นต่ำ',
@@ -48,7 +70,8 @@ const copy = <String, String>{
   'tableBillPaid': '已付款|Paid|已付款|ชำระแล้ว',
   'tableBillUnpaid': '未付款|Unpaid|未付款|ยังไม่ชำระ',
   'tableBillRefunded': '已退款|Refunded|已退款|คืนเงินแล้ว',
-  'billOrderRefunded': '原订单已退|Original order refunded|原訂單已退|ยอดคืนเงินของคำสั่งซื้อเดิม',
+  'billOrderRefunded':
+      '原订单已退|Original order refunded|原訂單已退|ยอดคืนเงินของคำสั่งซื้อเดิม',
   'billNetReceived': '剩余实收|Net received|剩餘實收|ยอดรับสุทธิคงเหลือ',
   'tableBillMore': '更多已点商品|More table orders|更多已點商品|ดูรายการเพิ่ม',
   'tableBillRetry': '账单读取失败，点击重试|Bill unavailable. Retry|帳單讀取失敗，點擊重試|โหลดบิลไม่สำเร็จ ลองใหม่',

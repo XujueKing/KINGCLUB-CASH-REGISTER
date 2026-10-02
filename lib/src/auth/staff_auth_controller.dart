@@ -1379,6 +1379,45 @@ class StaffAuthController extends ChangeNotifier {
     return value;
   }
 
+  Future<Object?> readTableCalendar({
+    required String selectedDate,
+    String? afterSession,
+  }) async {
+    final session = _session, api = _api, epoch = _epoch;
+    if (session == null ||
+        api == null ||
+        _busy ||
+        !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    final value = await api.call('K260929001902', {
+      'storeRef': session.storeRef,
+      'selectedDate': selectedDate,
+      'afterSession': ?afterSession,
+    });
+    _check(epoch);
+    if (!session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    return value;
+  }
+
+  Future<Object?> saveTableReservation(Map<String, Object> params) async {
+    final identity = _session, api = _api, epoch = _epoch;
+    if (identity == null ||
+        api == null ||
+        _busy ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    final value = await api.call('K261003002001', {
+      ...params,
+      'storeRef': identity.storeRef,
+    });
+    _check(epoch);
+    return value;
+  }
+
   Future<void> reduceUnpaidItem({
     required String tableRef,
     required String sessionRef,

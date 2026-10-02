@@ -101,6 +101,9 @@ class LiveTable {
   LiveTable(Map<String, dynamic> value)
     : reference = _ref(value['tableRef']),
       name = _text(value['tableName']),
+      reservation = value['reservation'] == null
+          ? null
+          : Map<String, dynamic>.from(_object(value['reservation'])),
       tableMode = value['tableMode'] == null ? null : _text(value['tableMode']),
       status = _text(value['tableStatus']),
       minimumSeats = value['minimumSeats'] == null
@@ -125,6 +128,7 @@ class LiveTable {
     }
   }
   final String reference, name, status;
+  final Map<String, dynamic>? reservation;
   final String? tableMode;
   final int? minimumSeats;
   final int maximumSeats;
@@ -132,7 +136,7 @@ class LiveTable {
   String get stateLabel => status != 'active'
       ? 'tableDisabled'
       : session == null
-      ? 'free'
+      ? (reservation == null ? 'free' : 'tableReserved')
       : session!.status == 'clearing'
       ? 'cleaning'
       : session!.temporaryHold

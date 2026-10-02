@@ -108,7 +108,7 @@ void main() {
     (tester) async {
       final auth = TableAuth(), data = tableFixture();
       data['result']['tables'][0]['maximumSeats'] = 10;
-    data['result']['tables'][0]['tableMode'] = 'aa';
+      data['result']['tables'][0]['tableMode'] = 'aa';
       final session = data['result']['tables'][0]['session'];
       session['partySize'] = 5;
       session['openedAt'] = '2026-09-29T07:35:00.000Z';
@@ -124,10 +124,16 @@ void main() {
       }
       expect(find.byIcon(Icons.person), findsNothing);
       expect(find.text('5/10'), findsNothing);
-    expect(find.text(' (AA)'), findsOneWidget);
-    expect(tester.getTopLeft(find.textContaining('Today')).dy, greaterThan(tester.getTopLeft(find.text('Test table 0')).dy));
-    expect(find.byKey(const ValueKey('table-total-test-000')), findsOneWidget);
-      expect(find.textContaining('Today'), findsOneWidget);
+      expect(find.text(' (AA)'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.textContaining('(25min)')).dy,
+        greaterThan(tester.getTopLeft(find.text('Test table 0')).dy),
+      );
+      expect(
+        find.byKey(const ValueKey('table-total-test-000')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Today'), findsNWidgets(2));
       expect(find.textContaining('(25min)'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
