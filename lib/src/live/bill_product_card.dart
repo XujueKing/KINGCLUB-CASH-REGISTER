@@ -20,6 +20,10 @@ class BillProductCard extends StatelessWidget {
     this.leadingBadge,
     this.onTap,
     this.priceLabel,
+    this.quantityControls = false,
+    this.onPlus,
+    this.onMinus,
+    this.productRef,
   });
   final UiLanguage language;
   final String name, specification;
@@ -31,6 +35,49 @@ class BillProductCard extends StatelessWidget {
   final Widget? leadingBadge;
   final VoidCallback? onTap;
   final String? priceLabel;
+  final bool quantityControls;
+  final VoidCallback? onPlus, onMinus;
+  final String? productRef;
+  Widget quantityButton(bool plus) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () {},
+    child: IconButton(
+      key: productRef == null
+          ? null
+          : ValueKey('cart-${plus ? 'plus' : 'minus'}-$productRef'),
+      onPressed: plus ? onPlus : onMinus,
+      tooltip: tr(language, plus ? 'cartAdd' : 'cartRemove'),
+      padding: const EdgeInsets.all(4),
+      constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+      icon: Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: plus
+              ? (onPlus == null
+                    ? const Color(0xffdddddd)
+                    : const Color(0xffffc107))
+              : Colors.transparent,
+          border: Border.all(
+            color: (plus ? onPlus : onMinus) == null
+                ? const Color(0xffcccccc)
+                : const Color(0xffffc107),
+            width: 1.5,
+          ),
+        ),
+        child: Icon(
+          plus ? Icons.add : Icons.remove,
+          size: 21,
+          color: (plus ? onPlus : onMinus) == null
+              ? const Color(0xff999999)
+              : plus
+              ? Colors.black
+              : const Color(0xffd99a00),
+        ),
+      ),
+    ),
+  );
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.symmetric(vertical: 7),
@@ -50,7 +97,24 @@ class BillProductCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (leadingBadge != null || badges != null) ...[
-                Row(children: [?leadingBadge, const Spacer(), ?badges]),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: leadingBadge ?? const SizedBox(),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: badges ?? const SizedBox(),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 9),
               ],
               Row(
@@ -81,7 +145,8 @@ class BillProductCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          priceLabel ?? '${tr(language, 'billUnitPrice')} ¥${formatCents(priceCents)}',
+                          priceLabel ??
+                              '${tr(language, 'billUnitPrice')} ¥${formatCents(priceCents)}',
                           style: const TextStyle(fontSize: 12),
                         ),
                       ],
@@ -92,7 +157,26 @@ class BillProductCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       const SizedBox(height: 7),
-                      Text('× $quantity', style: const TextStyle(fontSize: 13)),
+                      if (quantityControls)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            quantityButton(false),
+                            Text(
+                              '$quantity',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            quantityButton(true),
+                          ],
+                        )
+                      else
+                        Text(
+                          '× $quantity',
+                          style: const TextStyle(fontSize: 13),
+                        ),
                       Text(
                         '¥${formatCents(totalCents)}',
                         style: const TextStyle(

@@ -491,7 +491,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     }
   }
 
-  Future<void> addExistingProduct(String productRef) async {
+  Future<void> addExistingProduct(String productRef, {bool edit = true}) async {
     if (!editable) return;
     final identity = widget.auth.session, generation = epoch;
     CatalogProduct? product;
@@ -532,7 +532,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       return;
     }
     change(product, 1);
-    if (items.containsKey(product.reference) && message == null) {
+    if (edit && items.containsKey(product.reference) && message == null) {
       await editDraftItem(product);
     }
   }
@@ -682,6 +682,30 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           child: Text(t('tableOpen'), style: const TextStyle(fontSize: 11)),
         ),
         filter,
+        PopupMenuButton<String>(
+          key: const ValueKey('cart-draft-menu'),
+          padding: EdgeInsets.zero,
+          icon: const Icon(Icons.more_vert, size: 18),
+          constraints: const BoxConstraints(minWidth: 160),
+          onSelected: (action) => unawaited(draftOperation(action)),
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'save',
+              enabled: editable && items.isNotEmpty && dirty,
+              child: Text(t('cartDraftSave')),
+            ),
+            PopupMenuItem(
+              value: 'restore',
+              enabled: draftAction && savedDraft != null && !dirty,
+              child: Text(t('cartDraftRestore')),
+            ),
+            PopupMenuItem(
+              value: 'discard',
+              enabled: draftAction && savedDraft != null,
+              child: Text(t('cartDraftDiscard')),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -735,6 +759,9 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                 Expanded(
                   child: TableBillPanel(
                     onAddProduct: editable ? addExistingProduct : null,
+                    onQuickAddProduct: editable
+                        ? (ref) => addExistingProduct(ref, edit: false)
+                        : null,
                     // Once sent, only server orders contribute to consumption.
                     // The outbox owns an uncertain command, not a second draft.
                     draftCents: attempted ? 0 : total,
@@ -756,46 +783,28 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           totalCents: item.quantity * item.product.priceCents,
                           base: widget.auth.session?.base,
                           thumbnailPath: item.product.thumbnailPath,
-                          footer: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  t('billDraft'),
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                              IconButton(
-                                key: ValueKey(
-                                  'cart-minus-${item.product.reference}',
-                                ),
-                                tooltip: t('cartRemove'),
-                                onPressed: editable
-                                    ? () => change(item.product, -1)
-                                    : null,
-                                icon: const Icon(Icons.remove, size: 18),
-                              ),
-                              Text('${item.quantity}'),
-                              IconButton(
-                                key: ValueKey(
-                                  'cart-plus-${item.product.reference}',
-                                ),
-                                tooltip: t('cartAdd'),
-                                onPressed: editable
-                                    ? () => change(item.product, 1)
-                                    : null,
-                                icon: const Icon(Icons.add, size: 18),
-                              ),
-                              IconButton(
-                                key: ValueKey(
-                                  'cart-delete-${item.product.reference}',
-                                ),
-                                tooltip: t('cartDelete'),
-                                onPressed: editable
-                                    ? () => change(item.product, -item.quantity)
-                                    : null,
-                                icon: const Icon(Icons.close, size: 18),
-                              ),
-                            ],
+                          quantityControls: true,
+                          productRef: item.product.reference,
+                          onMinus: editable
+                              ? () => change(item.product, -1)
+                              : null,
+                          onPlus:
+                              editable &&
+                                  item.product.inventoryKnown &&
+                                  item.quantity < item.product.available &&
+                                  item.quantity < 1000
+                              ? () => change(item.product, 1)
+                              : null,
+                          badges: Text(
+                            '${t('tableBillPaid')} 0 / ${t('tableBillUnpaid')} ${item.quantity}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Color(0xff216344),
+                            ),
+                          ),
+                          leadingBadge: Text(
+                            t('billDraft'),
+                            style: const TextStyle(fontSize: 10),
                           ),
                         ),
                     },
@@ -850,9 +859,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           ),
                         if (widget.tablePanel == null)
                           Text(t('cartDraftNotice')),
-                        if (widget.tablePanel == null ||
-                            items.isNotEmpty ||
-                            savedDraft != null)
+                        if (widget.tablePanel == null)
                           Wrap(
                             spacing: 8,
                             children: [

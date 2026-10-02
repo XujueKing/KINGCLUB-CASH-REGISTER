@@ -356,7 +356,14 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byIcon(Icons.remove), findsNothing);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey('cart-minus-test-product')),
+          )
+          .onPressed,
+      isNull,
+    );
     Navigator.of(tester.element(find.byType(AlertDialog))).pop();
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('bill-filter')));

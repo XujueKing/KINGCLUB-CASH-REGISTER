@@ -90,6 +90,36 @@ void main() {
         tester.widget<BillProductCard>(find.byType(BillProductCard)).quantity,
         2,
       );
+      expect(find.text('Paid 1 / Unpaid 1'), findsOneWidget);
+      await tap(tester, 'cart-minus-p001');
+      expect(
+        tester.widget<BillProductCard>(find.byType(BillProductCard)).quantity,
+        1,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const ValueKey('cart-minus-p001')))
+            .onPressed,
+        isNull,
+      );
+      await tap(tester, 'cart-minus-p001');
+      expect(find.byType(AlertDialog), findsNothing);
+      await tap(tester, 'cart-plus-p001');
+      expect(find.byType(AlertDialog), findsNothing);
+      await tap(tester, 'cart-plus-p001');
+      await tap(tester, 'cart-plus-p001');
+      expect(
+        tester.widget<BillProductCard>(find.byType(BillProductCard)).quantity,
+        4,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const ValueKey('cart-plus-p001')))
+            .onPressed,
+        isNull,
+      );
+      await tap(tester, 'cart-minus-p001');
+      await tap(tester, 'cart-minus-p001');
       await tap(tester, 'cart-submit');
       await tester.tap(find.byKey(const ValueKey('cart-confirm')));
       await tester.pump(const Duration(milliseconds: 300));

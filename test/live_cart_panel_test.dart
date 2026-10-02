@@ -158,36 +158,51 @@ bool enabled(WidgetTester tester) =>
     null;
 
 void main() {
-  testWidgets('reorder reads current price and uses confirmed original submit flow', (tester) async {
+  testWidgets(
+    'reorder reads current price and uses confirmed original submit flow',
+    (tester) async {
+      final auth = CartAuth();
+      await show(tester, auth);
+      auth.priceCents = 2345;
+      final add = tester
+          .widget<TableBillPanel>(find.byType(TableBillPanel))
+          .onAddProduct!;
+      final pending = add('p001');
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tap(tester, 'draft-dialog-plus');
+      expect(auth.submits, 0);
+      Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+      await tester.pumpAndSettle();
+      await pending;
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        4690,
+      );
+      await tap(tester, 'cart-submit');
+      expect(auth.submits, 0);
+      await tap(tester, 'cart-confirm');
+      expect(auth.submits, 1);
+      expect(auth.sent!.single.quantity, 2);
+      expect(auth.sent!.single.product.priceCents, 2345);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets('missing reorder product leaves draft and orders untouched', (
+    tester,
+  ) async {
     final auth = CartAuth();
     await show(tester, auth);
-    auth.priceCents = 2345;
-    final add = tester.widget<TableBillPanel>(find.byType(TableBillPanel)).onAddProduct!;
-    final pending = add('p001');
-    await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget);
-    await tap(tester, 'draft-dialog-plus');
-    expect(auth.submits, 0);
-    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
-    await tester.pumpAndSettle();
-    await pending;
-    expect(tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents, 4690);
-    await tap(tester, 'cart-submit');
-    expect(auth.submits, 0);
-    await tap(tester, 'cart-confirm');
-    expect(auth.submits, 1);
-    expect(auth.sent!.single.quantity, 2);
-    expect(auth.sent!.single.product.priceCents, 2345);
-    await tester.pumpWidget(const SizedBox());
-    auth.dispose();
-  });
-  testWidgets('missing reorder product leaves draft and orders untouched', (tester) async {
-    final auth = CartAuth();
-    await show(tester, auth);
-    await tester.widget<TableBillPanel>(find.byType(TableBillPanel)).onAddProduct!('missing');
+    await tester
+        .widget<TableBillPanel>(find.byType(TableBillPanel))
+        .onAddProduct!('missing');
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
-    expect(tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents, 0);
+    expect(
+      tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+      0,
+    );
     expect(auth.submits, 0);
     expect(find.text(tr(UiLanguage.zh, 'billAddUnavailable')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
@@ -235,9 +250,15 @@ void main() {
       expect(find.byKey(const ValueKey('cart-minus-p001')), findsOneWidget);
       await tap(tester, 'draft-card-p001');
       await tap(tester, 'draft-dialog-plus');
-      expect(tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents, total * 2);
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        total * 2,
+      );
       await tap(tester, 'draft-dialog-minus');
-      expect(tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents, total);
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        total,
+      );
       Navigator.of(tester.element(find.byType(AlertDialog))).pop();
       await tester.pumpAndSettle();
       expect(auth.submits, 0);
@@ -286,7 +307,7 @@ void main() {
       revision.value++;
       await tester.pumpAndSettle();
       expect(enabled(tester), false);
-      expect(find.byKey(const ValueKey('cart-delete-p001')), findsOneWidget);
+      expect(find.byKey(const ValueKey('cart-minus-p001')), findsOneWidget);
       expect(
         tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
         total,
@@ -461,7 +482,12 @@ void main() {
       expect(find.text('CNY 24.68'), findsOneWidget);
       await tap(tester, 'cart-plus-p001');
       await tap(tester, 'cart-plus-p001');
-      expect(find.text(tr(UiLanguage.zh, 'cartLimit')), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const ValueKey('cart-plus-p001')))
+            .onPressed,
+        isNull,
+      );
       await tap(tester, 'cart-minus-p001');
       await tap(tester, 'cart-submit');
       expect(auth.submits, 0);
@@ -498,7 +524,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(auth.submits, 0);
       expect(enabled(tester), true);
-      await tap(tester, 'cart-delete-p001');
+      await tap(tester, 'cart-minus-p001');
       expect(enabled(tester), false);
       expect(find.text('CNY 0.00'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());

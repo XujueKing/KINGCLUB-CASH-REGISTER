@@ -3,6 +3,7 @@ import 'workspace_read_cache.dart';
 import 'bill_product_card.dart';
 import 'balance_refund_dialog.dart';
 import 'bill_serving_dialog.dart';
+import 'catalog_snapshot.dart';
 
 import 'dart:async';
 
@@ -30,6 +31,7 @@ class TableBillPanel extends StatefulWidget {
     this.headerBuilder,
     this.onAddProduct,
     this.draftCards = const {},
+    this.onQuickAddProduct,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -41,6 +43,7 @@ class TableBillPanel extends StatefulWidget {
   final Widget Function(Widget filter)? headerBuilder;
   final Future<void> Function(String productRef)? onAddProduct;
   final Map<String, BillProductCard> draftCards;
+  final Future<void> Function(String productRef)? onQuickAddProduct;
   @override
   State<TableBillPanel> createState() => _TableBillPanelState();
 }
@@ -52,6 +55,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   OrderSnapshot? snapshot;
   bool loading = false, failed = false, foreground = true, checkout = false;
   int epoch = 0;
+  final inventory = <String, CatalogProduct>{};
   String t(String key) => tr(widget.language, key);
   bool get canRead =>
       widget.auth.session?.permissions.contains('orders.read') == true;
@@ -91,6 +95,7 @@ class _TableBillPanelState extends State<TableBillPanel>
       loading = false;
       failed = false;
       if (useCache) restoreDisplayCache();
+      inventory.clear();
     });
     if (foreground) {
       unawaited(load());
@@ -113,6 +118,11 @@ class _TableBillPanelState extends State<TableBillPanel>
       reset(useCache: old.auth == widget.auth);
     } else if (old.revision != widget.revision && foreground) {
       unawaited(load());
+    } else if (old.onQuickAddProduct == null &&
+        widget.onQuickAddProduct != null &&
+        !loading &&
+        inventory.isEmpty) {
+      unawaited(loadInventory(epoch));
     }
   }
 
@@ -135,6 +145,7 @@ class _TableBillPanelState extends State<TableBillPanel>
     setState(() {
       loading = true;
       failed = false;
+      inventory.clear();
     });
     try {
       var after = cursor;
@@ -172,6 +183,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         snapshot = next;
         loading = false;
       });
+      if (widget.onQuickAddProduct != null) unawaited(loadInventory(ticket));
     } catch (_) {
       if (mounted && ticket == epoch) {
         setState(() {
@@ -179,6 +191,33 @@ class _TableBillPanelState extends State<TableBillPanel>
           loading = false;
         });
       }
+    }
+  }
+
+  Future<void> loadInventory(int ticket) async {
+    try {
+      final wanted = orders
+          .expand((o) => o.items)
+          .map((i) => i.productRef)
+          .toSet();
+      final found = <String, CatalogProduct>{};
+      String? cursor;
+      final seen = <String>{};
+      while (wanted.isNotEmpty) {
+        final page = await widget.auth.readCatalog(afterProduct: cursor);
+        if (!mounted || ticket != epoch || !foreground) return;
+        for (final product in page.products) {
+          if (wanted.remove(product.reference)) {
+            found[product.reference] = product;
+          }
+        }
+        cursor = page.nextAfterProduct;
+        if (cursor == null) break;
+        if (!seen.add(cursor)) throw const FormatException();
+      }
+      if (mounted && ticket == epoch) setState(() => inventory.addAll(found));
+    } catch (_) {
+      // Unknown stock leaves quick-add disabled; bill amounts remain readable.
     }
   }
 
@@ -508,12 +547,25 @@ class _TableBillPanelState extends State<TableBillPanel>
               thumbnailPath: group.item.thumbnailPath,
               base: widget.auth.session?.base,
               onTap: () => openGroup(group),
-              badges: group.paidQuantity == 0
-                  ? null
-                  : status(
-                      '${t('tableBillPaid')}${group.unpaidQuantity > 0 || draftFor(group) != null ? ' ${group.paidQuantity}' : ''}',
-                      const Color(0xff216344),
-                    ),
+              quantityControls: true,
+              productRef: group.productRef,
+              onMinus: !loading && !failed ? draftFor(group)?.onMinus : null,
+              onPlus:
+                  !loading &&
+                      !failed &&
+                      widget.onQuickAddProduct != null &&
+                      (inventory[group.productRef]?.inventoryKnown ?? false) &&
+                      group.unpaidQuantity + (draftFor(group)?.quantity ?? 0) <
+                          inventory[group.productRef]!.available &&
+                      (draftFor(group)?.quantity ?? 0) < 1000
+                  ? (draftFor(group) != null
+                        ? draftFor(group)!.onPlus
+                        : () => widget.onQuickAddProduct!(group.productRef))
+                  : null,
+              badges: status(
+                '${t('tableBillPaid')} ${group.paidQuantity} / ${t('tableBillUnpaid')} ${group.unpaidQuantity + (draftFor(group)?.quantity ?? 0)}',
+                const Color(0xff216344),
+              ),
               leadingBadge: group.quantity == 0
                   ? null
                   : !group.servingKnown
@@ -524,23 +576,23 @@ class _TableBillPanelState extends State<TableBillPanel>
                           ? const Color(0xff216344)
                           : const Color(0xff994a16),
                     ),
-              footer: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (group.unpaidQuantity > 0 && group.paidQuantity > 0 ||
-                      group.returned > 0)
-                    Text(
-                      [
-                        if (group.unpaidQuantity > 0)
-                          '${t('tableBillUnpaid')} ${group.unpaidQuantity}',
+              footer: group.returned == 0 && draftFor(group)?.footer == null
+                  ? null
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         if (group.returned > 0)
-                          '${t('tableBillRefunded')} ${group.returned}',
-                      ].join(' · '),
-                      style: const TextStyle(fontSize: 11),
+                          Text(
+                            [
+                              if (group.returned > 0)
+                                '${t('tableBillRefunded')} ${group.returned}',
+                            ].join(' · '),
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        if (draftFor(group)?.footer != null)
+                          draftFor(group)!.footer!,
+                      ],
                     ),
-                  if (draftFor(group)?.footer != null) draftFor(group)!.footer!,
-                ],
-              ),
             ),
           if (snapshot?.nextAfterOrder != null)
             TextButton(
