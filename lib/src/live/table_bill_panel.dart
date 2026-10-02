@@ -10,6 +10,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
+import '../network/ccsop_client.dart';
 import '../strings.dart';
 import 'order_snapshot.dart';
 import 'table_checkout_dialog.dart';
@@ -25,6 +26,7 @@ class TableBillPanel extends StatefulWidget {
     required this.sessionRef,
     required this.revision,
     this.checkoutAllowed = true,
+    this.changesAllowed = true,
     this.fillHeight = false,
     this.leading,
     this.draftCents = 0,
@@ -38,6 +40,7 @@ class TableBillPanel extends StatefulWidget {
   final String tableRef, sessionRef;
   final int revision;
   final bool checkoutAllowed, fillHeight;
+  final bool changesAllowed;
   final Widget? leading;
   final int draftCents;
   final Widget Function(Widget filter)? headerBuilder;
@@ -54,6 +57,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   String filter = 'all';
   OrderSnapshot? snapshot;
   bool loading = false, failed = false, foreground = true, checkout = false;
+  bool reducing = false;
   int epoch = 0;
   final inventory = <String, CatalogProduct>{};
   String t(String key) => tr(widget.language, key);
@@ -227,6 +231,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         checkout ||
         !foreground ||
         !widget.checkoutAllowed ||
+        reducing ||
         snapshot == null) {
       return;
     }
@@ -275,6 +280,77 @@ class _TableBillPanelState extends State<TableBillPanel>
     widget.auth.removeListener(reset);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  bool canReduce(BillProductGroup group) =>
+      !reducing &&
+      !checkout &&
+      widget.changesAllowed &&
+      foreground &&
+      widget.auth.session?.permissions.contains('orders.create') == true &&
+      snapshot?.sessionStatus == 'open' &&
+      group.active.any(
+        (line) =>
+            line.order.status == 'pending' &&
+            line.item.servingKnown &&
+            (line.item.remainingQuantity ?? 0) > 0,
+      );
+
+  Future<void> reduceGroup(BillProductGroup group) async {
+    if (loading || failed || !canReduce(group)) return;
+    final identity = widget.auth.session,
+        table = widget.tableRef,
+        session = widget.sessionRef;
+    // Most recent unpaid addition first, keeping the original price on each order.
+    final lines =
+        group.active
+            .where(
+              (line) =>
+                  line.order.status == 'pending' &&
+                  line.item.servingKnown &&
+                  (line.item.remainingQuantity ?? 0) > 0,
+            )
+            .toList()
+          ..sort((a, b) => b.order.reference.compareTo(a.order.reference));
+    final target = lines.first;
+    setState(() => reducing = true);
+    try {
+      await widget.auth.reduceUnpaidItem(
+        tableRef: table,
+        sessionRef: session,
+        orderRef: target.order.reference,
+        productRef: target.item.productRef,
+        expectedQuantity: target.item.quantity,
+        expectedServedQuantity: target.item.servedQuantity!,
+        expectedTotalCents: target.order.totalCents,
+      );
+    } catch (error) {
+      if (mounted &&
+          identical(identity, widget.auth.session) &&
+          table == widget.tableRef &&
+          session == widget.sessionRef) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              t(
+                error is CcsopFailure &&
+                        [
+                          'ORDER_REDUCTION_PAYMENT_REVIEW',
+                          'CASHIER_TABLE_CHECKOUT_IN_PROGRESS',
+                        ].contains(error.code)
+                    ? 'billReductionPaymentBusy'
+                    : 'billReductionRefresh',
+              ),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        await load();
+        if (mounted) setState(() => reducing = false);
+      }
+    }
   }
 
   Future<void> openGroup(BillProductGroup group) async {
@@ -549,10 +625,15 @@ class _TableBillPanelState extends State<TableBillPanel>
               onTap: () => openGroup(group),
               quantityControls: true,
               productRef: group.productRef,
-              onMinus: !loading && !failed ? draftFor(group)?.onMinus : null,
+              onMinus: !loading && !failed && !reducing && !checkout
+                  ? (draftFor(group) != null
+                        ? draftFor(group)!.onMinus
+                        : (canReduce(group) ? () => reduceGroup(group) : null))
+                  : null,
               onPlus:
                   !loading &&
                       !failed &&
+                      !reducing &&
                       widget.onQuickAddProduct != null &&
                       (inventory[group.productRef]?.inventoryKnown ?? false) &&
                       group.unpaidQuantity + (draftFor(group)?.quantity ?? 0) <
@@ -644,6 +725,7 @@ class _TableBillPanelState extends State<TableBillPanel>
                     !failed &&
                     !checkout &&
                     widget.checkoutAllowed &&
+                    !reducing &&
                     pending != null &&
                     pending.orderCount > 0
                 ? pay

@@ -816,6 +816,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     tableRef: widget.orderContext.tableRef,
                     sessionRef: widget.orderContext.sessionRef,
                     revision: widget.revision + billRevision,
+                    changesAllowed: editable && widget.contextVerified,
                     checkoutAllowed:
                         widget.contextVerified &&
                         !busy &&

@@ -6,6 +6,8 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'billReductionRefresh': '减量结果待核对，正在刷新账单，请确认数量后再操作。|Refreshing bill to verify the reduction. Check the quantity before continuing.|減量結果待核對，正在重新整理帳單，請確認數量後再操作。|กำลังโหลดบิลเพื่อตรวจสอบการลดจำนวน โปรดตรวจสอบก่อนทำต่อ',
+  'billReductionPaymentBusy': '这笔订单已有收款请求，请先确认收款结果再减数量。|Resolve the payment request before reducing items.|這筆訂單已有收款請求，請先確認收款結果再減數量。|โปรดตรวจสอบผลการชำระเงินก่อนลดจำนวน',
   'billUnitPrice': '单价|Unit price|單價|ราคาต่อหน่วย',
   'billTotal': '总金额|Total|總金額|ยอดรวม',
   'billPaidAmount': '已付|Paid|已付|ชำระแล้ว',

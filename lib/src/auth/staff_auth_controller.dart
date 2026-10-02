@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -1339,6 +1340,65 @@ class StaffAuthController extends ChangeNotifier {
       throw const CcsopFailure('SESSION_REQUIRED');
     }
     return value;
+  }
+
+  Future<void> reduceUnpaidItem({
+    required String tableRef,
+    required String sessionRef,
+    required String orderRef,
+    required String productRef,
+    required int expectedQuantity,
+    required int expectedServedQuantity,
+    required int expectedTotalCents,
+  }) async {
+    final identity = _session, api = _api, epoch = _epoch;
+    if (identity == null ||
+        api == null ||
+        _busy ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('orders.create')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    final random = Random.secure();
+    final bytes = List.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final requestId =
+        '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+    final params = <String, Object>{
+      'storeRef': identity.storeRef,
+      'tableRef': tableRef,
+      'sessionRef': sessionRef,
+      'orderRef': orderRef,
+      'productRef': productRef,
+      'requestId': requestId,
+      'expectedQuantity': expectedQuantity,
+      'expectedServedQuantity': expectedServedQuantity,
+      'expectedTotalCents': expectedTotalCents,
+      'quantity': 1,
+    };
+    // No automatic retry. The quantity/total preconditions also reject a second
+    // command from an old display after a lost response; reload before another tap.
+    final raw = await api.call('K261002001964', params);
+    _check(epoch);
+    final result = raw is Map ? raw['result'] : null;
+    if (result is! Map ||
+        params.entries.any((e) => result[e.key] != e.value) ||
+        result['operatedBy'] != identity.employeeRef ||
+        result['remainingQuantity'] != expectedQuantity - 1 ||
+        result['remainingTotalCents'] is! int ||
+        (result['remainingTotalCents'] as int) < 0 ||
+        (result['remainingTotalCents'] as int) >= expectedTotalCents ||
+        result['orderStatus'] !=
+            (result['remainingTotalCents'] == 0 ? 'expired' : 'pending')) {
+      throw const CcsopFailure(
+        'ORDER_REDUCTION_RECEIPT_INVALID',
+        deliveryUncertain: true,
+      );
+    }
   }
 
   /// Read-only, bound-store order query; late responses cannot survive a session change.
