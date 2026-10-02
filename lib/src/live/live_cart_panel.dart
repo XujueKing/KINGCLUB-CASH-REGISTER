@@ -28,6 +28,7 @@ class LiveCartPanel extends StatefulWidget {
     required this.onBack,
     this.revision = 0,
     this.tablePanel,
+    this.menuHeader,
     this.tableActions,
   });
   final bool? menuVisible;
@@ -38,7 +39,7 @@ class LiveCartPanel extends StatefulWidget {
   final String? memberRef;
   final VoidCallback onBack;
   final int revision;
-  final Widget? tablePanel, tableActions;
+  final Widget? tablePanel, tableActions, menuHeader;
   @override
   State<LiveCartPanel> createState() => _LiveCartPanelState();
 }
@@ -511,6 +512,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
               : AbsorbPointer(
                   absorbing: !editable,
                   child: LiveCatalogPanel(
+                    header: widget.menuHeader,
                     paymentTiming: currentContext.paymentTiming,
                     auth: widget.auth,
                     language: widget.language,

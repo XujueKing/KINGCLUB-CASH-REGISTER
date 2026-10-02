@@ -103,7 +103,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Temporary hold stays distinct until server releases the table', (tester) async {
+  testWidgets('Temporary hold stays distinct until server releases the table', (
+    tester,
+  ) async {
     final auth = TableAuth();
     final data = tableFixture();
     final session = data['result']['tables'][0]['session'];
@@ -124,6 +126,8 @@ void main() {
     await tester.pump(const Duration(minutes: 11));
     expect(find.text('临时占座'), findsOneWidget);
     data['result']['tables'][0]['session'] = null;
+    await tester.tap(find.byKey(const ValueKey('table-tools')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('live-refresh')));
     await tester.pumpAndSettle();
     expect(find.text('临时占座'), findsNothing);
@@ -196,6 +200,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('table-detail-back')));
       await tester.pumpAndSettle();
       auth.fail = true;
+      await tester.tap(find.byKey(const ValueKey('table-tools')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('live-refresh')));
       await tester.pumpAndSettle();
       expect(find.text('Test table 0'), findsNothing);
@@ -231,6 +237,8 @@ void main() {
       await show(tester, auth);
       final pending = Completer<Object?>();
       auth.gate = pending;
+      await tester.tap(find.byKey(const ValueKey('table-tools')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('live-refresh')));
       await tester.pump();
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
@@ -254,6 +262,8 @@ void main() {
     final auth = TableAuth();
     await show(tester, auth);
     auth.gate = Completer<Object?>();
+    await tester.tap(find.byKey(const ValueKey('table-tools')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('live-refresh')));
     await tester.pump();
     expect(find.text('Test table 0'), findsOneWidget);
@@ -274,7 +284,13 @@ void main() {
         ..reply = tableFixture(count: 100, next: 'test-099');
       await show(tester, auth);
       auth.reply = tableFixture(count: 0);
-      await tester.tap(find.byKey(const ValueKey('live-next')));
+      for (var i = 0; i < 30 && auth.requested.length == 1; i++) {
+        await tester.drag(
+          find.byKey(const ValueKey('swipe-pages')),
+          const Offset(-500, 0),
+        );
+        await tester.pumpAndSettle();
+      }
       await tester.pumpAndSettle();
       expect(auth.requested, [null, 'test-099']);
       expect(find.text('Test table 0'), findsNothing);
@@ -292,6 +308,8 @@ void main() {
         expect(tester.takeException(), isNull);
       }
       auth.gate = Completer<Object?>();
+      await tester.tap(find.byKey(const ValueKey('table-tools')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('live-refresh')));
       await tester.pump();
       await tester.pumpWidget(const SizedBox());

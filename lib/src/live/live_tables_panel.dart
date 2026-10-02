@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'swipe_grid.dart';
+
 import 'provider_recovery_panel.dart';
 import 'voucher_report_panel.dart';
 import 'voucher_lookup_panel.dart';
@@ -394,57 +396,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  data?.storeName ??
-                      widget.auth.session?.storeName ??
-                      t('tables'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (realtime != null)
-                Tooltip(
-                  message: t(switch (realtime!.state) {
-                    CashierRealtimeState.offline => 'realtimeOffline',
-                    CashierRealtimeState.connecting => 'realtimeConnecting',
-                    CashierRealtimeState.connected => 'realtimeConnected',
-                  }),
-                  child: Icon(
-                    realtime!.state == CashierRealtimeState.connected
-                        ? Icons.wifi
-                        : Icons.wifi_off,
-                    color: realtime!.state == CashierRealtimeState.connected
-                        ? const Color(0xFF166534)
-                        : const Color(0xFFB45309),
-                    size: 20,
-                  ),
-                ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                key: const ValueKey('table-tools'),
-                onPressed: foreground ? showTools : null,
-                icon: const Icon(Icons.apps_rounded, size: 18),
-                label: Text(t('tableTools')),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                key: const ValueKey('live-refresh'),
-                tooltip: t('liveRefresh'),
-                onPressed: loading ? null : () => unawaited(load(reset: true)),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-        ),
+        if (data == null) workspaceHeader(),
         if (loading) const LinearProgressIndicator(),
         Expanded(
           child: failed
@@ -456,8 +408,6 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 )
               : data == null
               ? const SizedBox()
-              : data.tables.isEmpty
-              ? Center(child: Text(t('liveNoTables')))
               : LayoutBuilder(
                   builder: (context, box) {
                     final scale = MediaQuery.textScalerOf(context)
@@ -471,15 +421,25 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                 ((focused == null ? 190 : 160) * scale))
                             .floor()
                             .clamp(1, 8);
-                    final grid = GridView.count(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                      crossAxisCount: columns,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      mainAxisExtent: (focused == null ? 124 : 104) * scale,
+                    final grid = Column(
                       children: [
-                        for (final table in data.tables)
-                          tableCard(table, data.currency),
+                        workspaceHeader(),
+                        if (data.tables.isEmpty) Text(t('liveNoTables')),
+                        Expanded(
+                          child: SwipeGrid(
+                            key: ValueKey('table-page-$page'),
+                            columns: columns,
+                            tileHeight: (focused == null ? 124 : 104) * scale,
+                            itemCount: data.tables.length,
+                            itemBuilder: (context, index) =>
+                                tableCard(data.tables[index], data.currency),
+                            hasPrevious: page > 0,
+                            hasNext: data.nextAfterTable != null,
+                            loading: loading,
+                            onPrevious: () => unawaited(load(target: page - 1)),
+                            onNext: next,
+                          ),
+                        ),
                       ],
                     );
                     if (focused?.session != null &&
@@ -544,6 +504,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                           menuVisible: widget.menuVisible,
                           onMenuChanged: widget.onMenuChanged,
                           tablePanel: grid,
+                          menuHeader: workspaceHeader(),
                           tableActions: actions,
                           onBack: () => setState(() => focusedTableRef = null),
                         );
@@ -610,38 +571,43 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                   },
                 ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 20,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              OutlinedButton(
-                onPressed: loading || page == 0
-                    ? null
-                    : () => unawaited(load(target: page - 1)),
-                child: Text(t('livePrevious')),
-              ),
-              Text('${t('livePage')} ${page + 1}'),
-              if (data != null)
-                Text(
-                  '${t('liveBusinessDate')}: ${data.businessDate}',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              OutlinedButton(
-                key: const ValueKey('live-next'),
-                onPressed: loading || data?.nextAfterTable == null
-                    ? null
-                    : next,
-                child: Text(t('liveNext')),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
+
+  Widget workspaceHeader() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            snapshot?.storeName ??
+                widget.auth.session?.storeName ??
+                t('tables'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+        if (realtime != null &&
+            realtime!.state != CashierRealtimeState.connected)
+          Text(
+            t(
+              realtime!.state == CashierRealtimeState.connecting
+                  ? 'realtimeConnecting'
+                  : 'realtimeOffline',
+            ),
+            style: const TextStyle(color: Color(0xffb45309), fontSize: 12),
+          ),
+        IconButton(
+          key: const ValueKey('table-tools'),
+          tooltip: t('tableTools'),
+          onPressed: foreground ? showTools : null,
+          icon: const Icon(Icons.more_horiz),
+        ),
+      ],
+    ),
+  );
 
   void showTools() {
     final toolsSession = widget.auth.session;
@@ -690,6 +656,16 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   }
 
   List<OutlinedButton> toolButtons() => [
+    OutlinedButton(
+      key: const ValueKey('live-refresh'),
+      onPressed: loading
+          ? null
+          : () {
+              setState(() => realtimeRevision++);
+              unawaited(load(reset: true));
+            },
+      child: Text(t('liveRefresh')),
+    ),
     if (const bool.fromEnvironment('CASHIER_VOUCHER_LOOKUP') &&
         [
           'voucher.douyin',

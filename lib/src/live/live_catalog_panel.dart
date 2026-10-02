@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import 'swipe_grid.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -16,9 +19,11 @@ class LiveCatalogPanel extends StatefulWidget {
     required this.language,
     required this.onBack,
     this.revision = 0,
+    this.header,
     this.onSelect,
     this.paymentTiming = 'postpay',
   });
+  final Widget? header;
   final StaffAuthController auth;
   final UiLanguage language;
   final VoidCallback onBack;
@@ -142,45 +147,47 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Row(
-          children: [
-            IconButton(
-              tooltip: t('ordersBack'),
-              onPressed: widget.onBack,
-              icon: const Icon(Icons.arrow_back, size: 20),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                t('catalogTitle'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+      if (widget.header != null) widget.header!,
+      if (widget.header == null)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: t('ordersBack'),
+                onPressed: widget.onBack,
+                icon: const Icon(Icons.arrow_back, size: 20),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  t('catalogTitle'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
-            Tooltip(
-              message: t(
-                widget.onSelect == null ? 'catalogNotice' : 'cartNotice',
+              Tooltip(
+                message: t(
+                  widget.onSelect == null ? 'catalogNotice' : 'cartNotice',
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Icon(Icons.info_outline, size: 20),
+                ),
               ),
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Icon(Icons.info_outline, size: 20),
+              IconButton(
+                key: const ValueKey('catalog-refresh'),
+                tooltip: t('liveRefresh'),
+                onPressed: loading ? null : () => unawaited(load(reset: true)),
+                icon: const Icon(Icons.refresh),
               ),
-            ),
-            IconButton(
-              key: const ValueKey('catalog-refresh'),
-              tooltip: t('liveRefresh'),
-              onPressed: loading ? null : () => unawaited(load(reset: true)),
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       SizedBox(
         height:
             52 * math.max(1, MediaQuery.textScalerOf(context).scale(14) / 14),
@@ -215,8 +222,6 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
             ? Center(child: Text(t('liveReadFailed')))
             : data == null
             ? const SizedBox()
-            : data!.products.isEmpty
-            ? Center(child: Text(t('catalogEmpty')))
             : LayoutBuilder(
                 builder: (context, constraints) {
                   final scale = math.max(
@@ -226,60 +231,24 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                   final columns = ((constraints.maxWidth - 14) / (250 * scale))
                       .floor()
                       .clamp(1, 6);
-                  return GridView.builder(
-                    padding: const EdgeInsets.all(12),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: columns,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      mainAxisExtent: 168 * scale,
-                    ),
+                  return SwipeGrid(
+                    key: ValueKey('catalog-page-$category-$page'),
+                    columns: columns,
+                    tileHeight: 168 * scale,
+                    loading: loading,
+                    hasPrevious: page > 0,
+                    hasNext: data?.nextAfterProduct != null,
+                    onPrevious: () => unawaited(load(target: page - 1)),
+                    onNext: () {
+                      cursors.removeRange(page + 1, cursors.length);
+                      cursors.add(data!.nextAfterProduct);
+                      unawaited(load(target: page + 1));
+                    },
                     itemCount: data!.products.length,
                     itemBuilder: (context, i) => productCard(data!.products[i]),
                   );
                 },
               ),
-      ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: data == null
-                  ? const SizedBox()
-                  : Tooltip(
-                      message:
-                          '${t('liveObserved')}: ${data!.observedAt.toLocal()}',
-                      child: Text(
-                        '${t('liveObserved')}: ${TimeOfDay.fromDateTime(data!.observedAt.toLocal()).format(context)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-            ),
-            IconButton(
-              tooltip: t('livePrevious'),
-              onPressed: loading || page == 0
-                  ? null
-                  : () => unawaited(load(target: page - 1)),
-              icon: const Icon(Icons.chevron_left),
-            ),
-            Text('${t('livePage')} ${page + 1}'),
-            IconButton(
-              key: const ValueKey('catalog-next'),
-              tooltip: t('liveNext'),
-              onPressed: loading || data?.nextAfterProduct == null
-                  ? null
-                  : () {
-                      cursors.removeRange(page + 1, cursors.length);
-                      cursors.add(data!.nextAfterProduct);
-                      unawaited(load(target: page + 1));
-                    },
-              icon: const Icon(Icons.chevron_right),
-            ),
-          ],
-        ),
       ),
     ],
   );

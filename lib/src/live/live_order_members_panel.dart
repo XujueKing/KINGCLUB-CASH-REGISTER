@@ -22,6 +22,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
     required this.onBack,
     this.revision = 0,
     this.tablePanel,
+    this.menuHeader,
     this.tableActions,
   });
   final bool? menuVisible;
@@ -31,7 +32,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
   final String tableRef, sessionRef;
   final VoidCallback onBack;
   final int revision;
-  final Widget? tablePanel, tableActions;
+  final Widget? tablePanel, tableActions, menuHeader;
   @override
   State<LiveOrderMembersPanel> createState() => _LiveOrderMembersPanelState();
 }
@@ -200,6 +201,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         menuVisible: widget.menuVisible,
         onMenuChanged: widget.onMenuChanged,
         tablePanel: widget.tablePanel,
+        menuHeader: widget.menuHeader,
         tableActions: widget.tableActions,
         memberRef: selected?.reference,
         revision: widget.revision,
