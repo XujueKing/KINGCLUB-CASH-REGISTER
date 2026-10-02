@@ -1,3 +1,4 @@
+import 'product_thumbnail.dart';
 import '../strings.dart';
 
 Map<String, dynamic> _map(Object? v) {
@@ -49,8 +50,9 @@ class CatalogCategory {
 }
 
 class CatalogProduct {
-  CatalogProduct(Map<String, dynamic> v)
-    : reference = _ref(v['productRef']),
+  CatalogProduct(Map<String, dynamic> v, {String? storeRef})
+    : thumbnailPath = productThumbnail(v['bottleMaterial'], storeRef ?? ''),
+      reference = _ref(v['productRef']),
       categoryRef = _ref(v['categoryRef']),
       names = _words(v['names']),
       specifications = _words(v['specifications']),
@@ -67,6 +69,7 @@ class CatalogProduct {
     }
   }
   final String reference, categoryRef;
+  final String? thumbnailPath;
   final List<String> names, specifications;
   final int priceCents, revision, sortOrder, available;
   final bool inventoryKnown;
@@ -106,7 +109,9 @@ class CatalogSnapshot {
     );
     final refs = categories.map((e) => e.reference).toSet();
     final products = List<CatalogProduct>.unmodifiable(
-      (v['products'] as List).map((e) => CatalogProduct(_map(e))),
+      (v['products'] as List).map(
+        (e) => CatalogProduct(_map(e), storeRef: storeRef),
+      ),
     );
     if (categories.length > 100 ||
         refs.length != categories.length ||

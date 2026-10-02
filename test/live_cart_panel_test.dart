@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:kingclub_cash_register/src/live/table_bill_panel.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/catalog_snapshot.dart';
@@ -154,6 +156,52 @@ bool enabled(WidgetTester tester) =>
     null;
 
 void main() {
+  testWidgets(
+    'table/menu toggle keeps the same bill and unsubmitted selection',
+    (tester) async {
+      final auth = CartAuth();
+      m.size(tester);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveCartPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              orderContext: m.parse(m.contextData()),
+              memberRef: 'member-000',
+              onBack: () {},
+              tablePanel: const Text('TABLE GRID'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final bill = tester.state(find.byType(TableBillPanel));
+      expect(find.text('TABLE GRID'), findsOneWidget);
+      await tap(tester, 'workspace-toggle-menu');
+      expect(find.text('TABLE GRID'), findsNothing);
+      await tap(tester, 'catalog-add-p001');
+      final total = tester
+          .widget<Text>(find.byKey(const ValueKey('cart-total')))
+          .data;
+      await tap(tester, 'workspace-toggle-menu');
+      expect(find.text('TABLE GRID'), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('cart-total'))).data,
+        total,
+      );
+      expect(
+        identical(bill, tester.state(find.byType(TableBillPanel))),
+        isTrue,
+      );
+      await tap(tester, 'workspace-toggle-menu');
+      expect(find.byKey(const ValueKey('cart-minus-p001')), findsOneWidget);
+      expect(auth.submits, 0);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+
   testWidgets(
     'realtime refresh retains selection; failed refresh blocks submit and retries',
     (tester) async {

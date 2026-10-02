@@ -14,6 +14,7 @@ import '../auth/staff_session.dart';
 import '../network/cashier_realtime_client.dart';
 import '../strings.dart';
 import 'table_snapshot.dart';
+import 'table_bill_panel.dart';
 import 'live_orders_panel.dart';
 import 'table_checkout_recovery_panel.dart';
 import 'live_opening_panel.dart';
@@ -28,11 +29,15 @@ import 'live_cart_drafts_panel.dart';
 class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
     super.key,
+    this.menuVisible,
+    this.onMenuChanged,
     required this.auth,
     required this.language,
     this.enableRealtime = const bool.fromEnvironment('CASHIER_REALTIME'),
     this.realtimeFactory,
   });
+  final bool? menuVisible;
+  final ValueChanged<bool>? onMenuChanged;
   final StaffAuthController auth;
   final UiLanguage language;
   final bool enableRealtime;
@@ -44,7 +49,6 @@ class LiveTablesPanel extends StatefulWidget {
 class _LiveTablesPanelState extends State<LiveTablesPanel>
     with WidgetsBindingObserver {
   TableSnapshot? snapshot;
-  LiveTable? selected;
   String? focusedTableRef;
   LiveTable? orderingTable;
   bool opening = false;
@@ -383,21 +387,6 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         },
       );
     }
-    if (selected != null) {
-      return LiveOrdersPanel(
-        key: ValueKey(selected!.session!.reference),
-        auth: widget.auth,
-        language: widget.language,
-        table: selected!,
-        revision: realtimeRevision,
-        onBack: () {
-          setState(() {
-            selected = null;
-          });
-          unawaited(load(reset: true));
-        },
-      );
-    }
     final data = snapshot;
     final focused = data?.tables
         .where((table) => table.reference == focusedTableRef)
@@ -476,9 +465,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         .clamp(1.0, 2.0);
                     final detailWidth = focused == null
                         ? 0.0
-                        : 300.0 * scale.clamp(1.0, 1.2);
+                        : box.maxWidth * 0.4;
                     final columns =
-                        ((box.maxWidth - detailWidth - 24) / (190 * scale))
+                        ((box.maxWidth - detailWidth - 24) /
+                                ((focused == null ? 190 : 160) * scale))
                             .floor()
                             .clamp(1, 8);
                     final grid = GridView.count(
@@ -486,12 +476,104 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                       crossAxisCount: columns,
                       mainAxisSpacing: 10,
                       crossAxisSpacing: 10,
-                      mainAxisExtent: 124 * scale,
+                      mainAxisExtent: (focused == null ? 124 : 104) * scale,
                       children: [
                         for (final table in data.tables)
                           tableCard(table, data.currency),
                       ],
                     );
+                    if (focused?.session != null &&
+                        widget.auth.session?.permissions.contains(
+                              'orders.read',
+                            ) ==
+                            true) {
+                      final table = focused!;
+                      final actions = Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: t('orderOperations'),
+                            icon: const Icon(Icons.more_horiz),
+                            onPressed: () => showDialog<void>(
+                              context: context,
+                              builder: (dialogContext) => Dialog(
+                                insetPadding: const EdgeInsets.all(24),
+                                child: LiveOrdersPanel(
+                                  auth: widget.auth,
+                                  language: widget.language,
+                                  table: table,
+                                  revision: realtimeRevision,
+                                  onBack: () => Navigator.pop(dialogContext),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (widget.auth.session?.permissions.contains(
+                                'table.clear',
+                              ) ==
+                              true)
+                            IconButton(
+                              key: ValueKey(
+                                'tableClear-table-${table.reference}',
+                              ),
+                              tooltip: t('tableClearConfirm'),
+                              icon: const Icon(
+                                Icons.cleaning_services_outlined,
+                              ),
+                              onPressed: () => setState(() {
+                                tableClear = true;
+                                clearingTable = table;
+                              }),
+                            ),
+                        ],
+                      );
+                      if (table.session!.status == 'open' &&
+                          widget.auth.session?.permissions.contains(
+                                'orders.create',
+                              ) ==
+                              true) {
+                        return LiveOrderMembersPanel(
+                          key: ValueKey(
+                            'workspace-${table.session!.reference}',
+                          ),
+                          auth: widget.auth,
+                          language: widget.language,
+                          tableRef: table.reference,
+                          sessionRef: table.session!.reference,
+                          revision: realtimeRevision,
+                          menuVisible: widget.menuVisible,
+                          onMenuChanged: widget.onMenuChanged,
+                          tablePanel: grid,
+                          tableActions: actions,
+                          onBack: () => setState(() => focusedTableRef = null),
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(flex: 3, child: grid),
+                          Expanded(
+                            flex: 2,
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: TableBillPanel(
+                                auth: widget.auth,
+                                language: widget.language,
+                                tableRef: table.reference,
+                                sessionRef: table.session!.reference,
+                                revision: realtimeRevision,
+                                fillHeight: true,
+                                leading: Row(
+                                  children: [
+                                    Expanded(child: Text(table.name)),
+                                    actions,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -831,15 +913,6 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         : const Color(0xFF1E6550);
     final actions = <Widget>[
       if (session != null) ...[
-        if (widget.auth.session?.permissions.contains('orders.read') == true)
-          FilledButton(
-            key: ValueKey('orders-open-${table.reference}'),
-            onPressed: () => setState(() {
-              focusedTableRef = null;
-              selected = table;
-            }),
-            child: Text(t('ordersDetails')),
-          ),
         if (active &&
             session.status == 'open' &&
             widget.auth.session?.permissions.contains('orders.create') == true)

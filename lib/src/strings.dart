@@ -493,6 +493,7 @@ const copy = <String, String>{
   'openingQuery': '查询原结果|Query original result|查詢原結果|ตรวจสอบผลเดิม',
   'openingRetry': '重试原请求|Retry original request|重試原請求|ลองคำขอเดิมอีกครั้ง',
   'openingCancel': '终止原请求|Terminate original request|終止原請求|ยุติคำขอเดิม',
+  'orderOperations': '出酒 / 退款 / 小票|Serve / refund / receipt|出酒 / 退款 / 小票|เสิร์ฟ / คืนเงิน / ใบเสร็จ',
   'ordersDetails': '消费明细|Order details|消費明細|รายละเอียดรายการ',
   'ordersBack': '返回桌台|Back to tables|返回桌檯|กลับไปที่โต๊ะ',
   'ordersRefresh': '刷新明细|Refresh orders|重新整理明細|รีเฟรชรายการ',

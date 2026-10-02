@@ -336,7 +336,8 @@ void main() {
       await tester.pumpWidget(panel(auth, revision: 1));
       await tester.pump();
       expect(find.byType(LiveCartPanel), findsOneWidget);
-      expect(find.text(tr(UiLanguage.zh, 'cartStale')), findsOneWidget);
+      // An empty cart has no stale price selection to invalidate on a hint.
+      expect(find.text(tr(UiLanguage.zh, 'cartStale')), findsNothing);
       auth.invalidate();
       await tester.pump();
       auth.gate!.complete(parse(contextData()));

@@ -1,3 +1,4 @@
+import 'product_thumbnail.dart';
 import '../strings.dart';
 
 Map<String, dynamic> _map(Object? value) {
@@ -47,8 +48,9 @@ List<String> _localized(Object? value) {
 }
 
 class OrderItem {
-  OrderItem(Map<String, dynamic> value)
-    : productRef = _ref(value['productRef']),
+  OrderItem(Map<String, dynamic> value, {String? storeRef})
+    : thumbnailPath = productThumbnail(value['bottleMaterial'], storeRef ?? ''),
+      productRef = _ref(value['productRef']),
       quantity = _positive(value['quantity'], 1000),
       priceCents = _positive(value['priceCents'], 100000000),
       subtotalCents = _positive(value['subtotalCents']),
@@ -65,6 +67,7 @@ class OrderItem {
     }
   }
   final String productRef;
+  final String? thumbnailPath;
   final int quantity, priceCents, subtotalCents;
   // Both absent means an older server did not provide delivery progress, never zero delivered.
   final int? servedQuantity, remainingQuantity;
@@ -82,7 +85,7 @@ int? _servingCount(Map<String, dynamic> value, String key) {
 }
 
 class LiveOrder {
-  LiveOrder(Map<String, dynamic> value)
+  LiveOrder(Map<String, dynamic> value, {String? storeRef})
     : reference = _ref(value['orderRef']),
       tableCheckoutRef = _tableCheckoutRef(value['tableCheckoutRef']),
       cashierOrder = value.containsKey('cashierOrder')
@@ -96,9 +99,12 @@ class LiveOrder {
           : OrderRefund(_map(value['refund'])),
       createdAt = _time(value['createdAt']),
       items = List.unmodifiable(
-        (value['items'] as List).map((item) => OrderItem(_map(item))),
+        (value['items'] as List).map(
+          (item) => OrderItem(_map(item), storeRef: storeRef),
+        ),
       ) {
-    if ((tableCheckoutRef != null && status != 'paid') || (refund != null &&
+    if ((tableCheckoutRef != null && status != 'paid') ||
+        (refund != null &&
             (status != 'paid' ||
                 !cashierOrder ||
                 refund!.totalCents != totalCents)) ||
@@ -124,9 +130,10 @@ class LiveOrder {
 
 String? _tableCheckoutRef(Object? value) {
   if (value == null) return null;
-  if (value is! String || !RegExp(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-  ).hasMatch(value)) {
+  if (value is! String ||
+      !RegExp(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+      ).hasMatch(value)) {
     throw const FormatException();
   }
   return value;
@@ -199,7 +206,9 @@ class OrderSnapshot {
       throw const FormatException();
     }
     final orders = List<LiveOrder>.unmodifiable(
-      (data['orders'] as List).map((value) => LiveOrder(_map(value))),
+      (data['orders'] as List).map(
+        (value) => LiveOrder(_map(value), storeRef: storeRef),
+      ),
     );
     if (orders.length > 20 ||
         orders.map((order) => order.reference).toSet().length !=

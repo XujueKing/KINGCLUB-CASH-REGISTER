@@ -1,3 +1,5 @@
+import 'table_bill_panel.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -11,18 +13,25 @@ import 'member_seating_panel.dart';
 class LiveOrderMembersPanel extends StatefulWidget {
   const LiveOrderMembersPanel({
     super.key,
+    this.menuVisible,
+    this.onMenuChanged,
     required this.auth,
     required this.language,
     required this.tableRef,
     required this.sessionRef,
     required this.onBack,
     this.revision = 0,
+    this.tablePanel,
+    this.tableActions,
   });
+  final bool? menuVisible;
+  final ValueChanged<bool>? onMenuChanged;
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef, sessionRef;
   final VoidCallback onBack;
   final int revision;
+  final Widget? tablePanel, tableActions;
   @override
   State<LiveOrderMembersPanel> createState() => _LiveOrderMembersPanelState();
 }
@@ -33,6 +42,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
   SeatedOrderMember? selected;
   bool cart = false;
   bool seating = false;
+  bool selectingMember = false;
   final cursors = <String?>[null];
   int page = 0, epoch = 0;
   bool loading = false, failed = false, foreground = true;
@@ -187,6 +197,10 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         auth: widget.auth,
         language: widget.language,
         orderContext: data!,
+        menuVisible: widget.menuVisible,
+        onMenuChanged: widget.onMenuChanged,
+        tablePanel: widget.tablePanel,
+        tableActions: widget.tableActions,
         memberRef: selected?.reference,
         revision: widget.revision,
         onBack: data!.tableOrderAllowed
@@ -194,142 +208,187 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
             : () => unawaited(load(reset: true)),
       );
     }
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(
-            children: [
-              TextButton.icon(
-                onPressed: widget.onBack,
-                icon: const Icon(Icons.arrow_back, size: 18),
-                label: Text(t('ordersBack')),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '${data?.tableName ?? ''} · ${t('orderMembersTitle')}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Tooltip(
-                message: t('orderMembersNotice'),
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Icon(Icons.info_outline, size: 20),
-                ),
-              ),
-              if (widget.auth.session?.permissions.contains('table.open') ==
-                  true)
-                TextButton.icon(
-                  key: const ValueKey('order-members-seat'),
-                  onPressed: data == null || loading
-                      ? null
-                      : () => setState(() => seating = true),
-                  icon: const Icon(Icons.qr_code_scanner, size: 18),
-                  label: Text(t('seatingTitle')),
-                ),
-              IconButton(
-                key: const ValueKey('order-members-refresh'),
-                tooltip: t('liveRefresh'),
-                onPressed: loading ? null : () => unawaited(load(reset: true)),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
+    final selector = memberSelector();
+    if (widget.tablePanel != null) {
+      return Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: selectingMember ? selector : widget.tablePanel!,
           ),
-        ),
-        if (data != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Row(
-              children: [
-                Text(
-                  t(
-                    data!.paymentTiming == 'prepay'
-                        ? 'livePrepay'
-                        : 'livePostpay',
-                  ),
+          const VerticalDivider(width: 1),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: TableBillPanel(
+                auth: widget.auth,
+                language: widget.language,
+                tableRef: widget.tableRef,
+                sessionRef: widget.sessionRef,
+                revision: widget.revision,
+                fillHeight: true,
+                leading: Row(
+                  children: [
+                    Expanded(
+                      child: Text(data?.tableName ?? t('ordersDetails')),
+                    ),
+                    TextButton(
+                      onPressed: data == null
+                          ? null
+                          : () => setState(
+                              () => selectingMember = !selectingMember,
+                            ),
+                      child: Text(
+                        t(selectingMember ? 'tables' : 'tableOrderStart'),
+                      ),
+                    ),
+                    ?widget.tableActions,
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Text('${t('guests')}: ${data!.partySize ?? '—'}'),
-              ],
+              ),
             ),
           ),
-        if (loading) const LinearProgressIndicator(),
-        Expanded(
-          child: failed
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(t('orderMembersFailed')),
-                  ),
-                )
-              : data == null
-              ? const SizedBox()
-              : data!.members.isEmpty
-              ? Center(child: Text(t('orderMembersEmpty')))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: data!.members.length,
-                  itemBuilder: (context, index) {
-                    final member = data!.members[index];
-                    return Card(
-                      child: ListTile(
-                        key: ValueKey('order-member-${member.reference}'),
-                        enabled: member.eligible,
-                        selected: selected?.reference == member.reference,
-                        title: Text(member.nickname ?? t('orderMemberUnnamed')),
-                        subtitle: member.eligible
-                            ? null
-                            : Text(t('orderMemberIneligible')),
-                        trailing: member.eligible
-                            ? const Icon(Icons.chevron_right)
-                            : null,
-                        onTap: member.eligible
-                            ? () => setState(() {
-                                selected = member;
-                                cart = true;
-                              })
-                            : null,
-                      ),
-                    );
-                  },
+        ],
+      );
+    }
+    return selector;
+  }
+
+  Widget memberSelector() => Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Row(
+          children: [
+            TextButton.icon(
+              onPressed: widget.onBack,
+              icon: const Icon(Icons.arrow_back, size: 18),
+              label: Text(t('ordersBack')),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '${data?.tableName ?? ''} · ${t('orderMembersTitle')}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
                 ),
+              ),
+            ),
+            Tooltip(
+              message: t('orderMembersNotice'),
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.info_outline, size: 20),
+              ),
+            ),
+            if (widget.auth.session?.permissions.contains('table.open') == true)
+              TextButton.icon(
+                key: const ValueKey('order-members-seat'),
+                onPressed: data == null || loading
+                    ? null
+                    : () => setState(() => seating = true),
+                icon: const Icon(Icons.qr_code_scanner, size: 18),
+                label: Text(t('seatingTitle')),
+              ),
+            IconButton(
+              key: const ValueKey('order-members-refresh'),
+              tooltip: t('liveRefresh'),
+              onPressed: loading ? null : () => unawaited(load(reset: true)),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
         ),
+      ),
+      if (data != null)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Wrap(
-            spacing: 20,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
             children: [
-              OutlinedButton(
-                key: const ValueKey('order-members-previous'),
-                onPressed: loading || page == 0
-                    ? null
-                    : () => unawaited(load(target: page - 1)),
-                child: Text(t('livePrevious')),
+              Text(
+                t(
+                  data!.paymentTiming == 'prepay'
+                      ? 'livePrepay'
+                      : 'livePostpay',
+                ),
               ),
-              Text('${t('livePage')} ${page + 1}'),
-              OutlinedButton(
-                key: const ValueKey('order-members-next'),
-                onPressed: loading || data?.nextAfterMember == null
-                    ? null
-                    : () {
-                        cursors.removeRange(page + 1, cursors.length);
-                        cursors.add(data!.nextAfterMember);
-                        unawaited(load(target: page + 1));
-                      },
-                child: Text(t('liveNext')),
-              ),
+              const SizedBox(width: 16),
+              Text('${t('guests')}: ${data!.partySize ?? '—'}'),
             ],
           ),
         ),
-      ],
-    );
-  }
+      if (loading) const LinearProgressIndicator(),
+      Expanded(
+        child: failed
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(t('orderMembersFailed')),
+                ),
+              )
+            : data == null
+            ? const SizedBox()
+            : data!.members.isEmpty
+            ? Center(child: Text(t('orderMembersEmpty')))
+            : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: data!.members.length,
+                itemBuilder: (context, index) {
+                  final member = data!.members[index];
+                  return Card(
+                    child: ListTile(
+                      key: ValueKey('order-member-${member.reference}'),
+                      enabled: member.eligible,
+                      selected: selected?.reference == member.reference,
+                      title: Text(member.nickname ?? t('orderMemberUnnamed')),
+                      subtitle: member.eligible
+                          ? null
+                          : Text(t('orderMemberIneligible')),
+                      trailing: member.eligible
+                          ? const Icon(Icons.chevron_right)
+                          : null,
+                      onTap: member.eligible
+                          ? () => setState(() {
+                              selected = member;
+                              cart = true;
+                            })
+                          : null,
+                    ),
+                  );
+                },
+              ),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Wrap(
+          spacing: 20,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OutlinedButton(
+              key: const ValueKey('order-members-previous'),
+              onPressed: loading || page == 0
+                  ? null
+                  : () => unawaited(load(target: page - 1)),
+              child: Text(t('livePrevious')),
+            ),
+            Text('${t('livePage')} ${page + 1}'),
+            OutlinedButton(
+              key: const ValueKey('order-members-next'),
+              onPressed: loading || data?.nextAfterMember == null
+                  ? null
+                  : () {
+                      cursors.removeRange(page + 1, cursors.length);
+                      cursors.add(data!.nextAfterMember);
+                      unawaited(load(target: page + 1));
+                    },
+              child: Text(t('liveNext')),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
 }

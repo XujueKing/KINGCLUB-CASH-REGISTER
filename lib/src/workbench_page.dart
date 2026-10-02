@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import 'auth/staff_auth_controller.dart';
 import 'hardware/printer_discovery_dialog.dart';
-import 'live/live_catalog_panel.dart';
 import 'live/member_seating_panel.dart';
 import 'live/live_tables_panel.dart';
 import 'live/voucher_report_panel.dart';
@@ -182,15 +181,12 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
 
   Widget content() => switch (page) {
     // Order views require selection of a real table and its current session.
-    0 || 2 => LiveTablesPanel(
+    0 || 1 || 2 => LiveTablesPanel(
       key: const ValueKey('tables'),
+      menuVisible: page == 1,
+      onMenuChanged: (value) => setState(() => page = value ? 1 : 0),
       auth: widget.auth,
       language: widget.language,
-    ),
-    1 => LiveCatalogPanel(
-      auth: widget.auth,
-      language: widget.language,
-      onBack: () => setState(() => page = 0),
     ),
     3 => MemberSeatingPanel(auth: widget.auth, language: widget.language),
     4 =>

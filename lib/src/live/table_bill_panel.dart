@@ -1,3 +1,5 @@
+import 'product_thumbnail.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -228,10 +230,33 @@ class _TableBillPanelState extends State<TableBillPanel>
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   children: [
+                    ProductThumbnail(
+                      path: item.thumbnailPath,
+                      base: widget.auth.session?.base,
+                    ),
                     Expanded(
-                      child: Text(
-                        '${item.name(widget.language)} · ${item.specification(widget.language)}',
-                        style: const TextStyle(fontSize: 13),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.name(widget.language),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            item.specification(widget.language),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xff66756e),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     SizedBox(

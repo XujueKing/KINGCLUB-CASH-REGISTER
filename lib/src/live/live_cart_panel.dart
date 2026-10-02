@@ -1,3 +1,5 @@
+import 'product_thumbnail.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -17,19 +19,26 @@ import 'table_bill_panel.dart';
 class LiveCartPanel extends StatefulWidget {
   const LiveCartPanel({
     super.key,
+    this.menuVisible,
+    this.onMenuChanged,
     required this.auth,
     required this.language,
     required this.orderContext,
     required this.memberRef,
     required this.onBack,
     this.revision = 0,
+    this.tablePanel,
+    this.tableActions,
   });
+  final bool? menuVisible;
+  final ValueChanged<bool>? onMenuChanged;
   final StaffAuthController auth;
   final UiLanguage language;
   final OrderContextSnapshot orderContext;
   final String? memberRef;
   final VoidCallback onBack;
   final int revision;
+  final Widget? tablePanel, tableActions;
   @override
   State<LiveCartPanel> createState() => _LiveCartPanelState();
 }
@@ -40,6 +49,16 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   CartDraft? savedDraft;
   OrderContextSnapshot? restoredContext;
   bool draftLoaded = false, dirty = false;
+  bool showMenu = false;
+  bool get menuOpen => widget.menuVisible ?? showMenu;
+  void setMenu(bool value) {
+    if (widget.onMenuChanged != null) {
+      widget.onMenuChanged!(value);
+    } else {
+      setState(() => showMenu = value);
+    }
+  }
+
   BuildContext? activeDialog;
   OrderContextSnapshot get currentContext =>
       restoredContext ?? widget.orderContext;
@@ -487,17 +506,21 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       children: [
         Expanded(
           flex: 3,
-          child: AbsorbPointer(
-            absorbing: !editable,
-            child: LiveCatalogPanel(
-              paymentTiming: currentContext.paymentTiming,
-              auth: widget.auth,
-              language: widget.language,
-              revision: widget.revision,
-              onBack: widget.onBack,
-              onSelect: (product) => change(product, 1),
-            ),
-          ),
+          child: widget.tablePanel != null && !menuOpen
+              ? widget.tablePanel!
+              : AbsorbPointer(
+                  absorbing: !editable,
+                  child: LiveCatalogPanel(
+                    paymentTiming: currentContext.paymentTiming,
+                    auth: widget.auth,
+                    language: widget.language,
+                    revision: widget.revision,
+                    onBack: widget.tablePanel == null
+                        ? widget.onBack
+                        : () => setMenu(false),
+                    onSelect: (product) => change(product, 1),
+                  ),
+                ),
         ),
         const VerticalDivider(width: 1),
         Expanded(
@@ -507,6 +530,28 @@ class _LiveCartPanelState extends State<LiveCartPanel>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (widget.tablePanel != null)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.orderContext.tableName,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      TextButton.icon(
+                        key: const ValueKey('workspace-toggle-menu'),
+                        onPressed: busy ? null : () => setMenu(!menuOpen),
+                        icon: Icon(
+                          menuOpen
+                              ? Icons.table_restaurant
+                              : Icons.restaurant_menu,
+                        ),
+                        label: Text(t(menuOpen ? 'tables' : 'tableOrderStart')),
+                      ),
+                      if (widget.tableActions != null) widget.tableActions!,
+                    ],
+                  ),
                 Expanded(
                   child: TableBillPanel(
                     auth: widget.auth,
@@ -526,7 +571,9 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          '${widget.orderContext.tableName} · ${t('cartTitle')}',
+                          widget.tablePanel == null
+                              ? '${widget.orderContext.tableName} · ${t('ordersDetails')}'
+                              : t('ordersDetails'),
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         if (widget.memberRef != null) Text(memberName),
@@ -550,42 +597,51 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                             onPressed: () => unawaited(refreshSelection()),
                             child: Text(t('cartRefreshRetry')),
                           ),
-                        Text(t('cartDraftNotice')),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            OutlinedButton(
-                              key: const ValueKey('cart-draft-save'),
-                              onPressed: editable && items.isNotEmpty && dirty
-                                  ? () => unawaited(draftOperation('save'))
-                                  : null,
-                              child: Text(t('cartDraftSave')),
-                            ),
-                            OutlinedButton(
-                              key: const ValueKey('cart-draft-restore'),
-                              onPressed:
-                                  draftAction && savedDraft != null && !dirty
-                                  ? () => unawaited(draftOperation('restore'))
-                                  : null,
-                              child: Text(t('cartDraftRestore')),
-                            ),
-                            TextButton(
-                              key: const ValueKey('cart-draft-discard'),
-                              onPressed: draftAction && savedDraft != null
-                                  ? () => unawaited(draftOperation('discard'))
-                                  : null,
-                              child: Text(t('cartDraftDiscard')),
-                            ),
-                          ],
-                        ),
+                        if (widget.tablePanel == null)
+                          Text(t('cartDraftNotice')),
+                        if (widget.tablePanel == null ||
+                            items.isNotEmpty ||
+                            savedDraft != null)
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              OutlinedButton(
+                                key: const ValueKey('cart-draft-save'),
+                                onPressed: editable && items.isNotEmpty && dirty
+                                    ? () => unawaited(draftOperation('save'))
+                                    : null,
+                                child: Text(t('cartDraftSave')),
+                              ),
+                              OutlinedButton(
+                                key: const ValueKey('cart-draft-restore'),
+                                onPressed:
+                                    draftAction && savedDraft != null && !dirty
+                                    ? () => unawaited(draftOperation('restore'))
+                                    : null,
+                                child: Text(t('cartDraftRestore')),
+                              ),
+                              TextButton(
+                                key: const ValueKey('cart-draft-discard'),
+                                onPressed: draftAction && savedDraft != null
+                                    ? () => unawaited(draftOperation('discard'))
+                                    : null,
+                                child: Text(t('cartDraftDiscard')),
+                              ),
+                            ],
+                          ),
                         if (savedDraft != null && dirty)
                           Text(t('cartDraftResave')),
-                        if (items.isEmpty) Text(t('cartDraftEmpty')),
+                        if (items.isEmpty && widget.tablePanel == null)
+                          Text(t('cartDraftEmpty')),
                         for (final item in items.values)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
                               children: [
+                                ProductThumbnail(
+                                  path: item.product.thumbnailPath,
+                                  base: widget.auth.session?.base,
+                                ),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -664,28 +720,32 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     ),
                   ),
                 ),
-                Text(
-                  'CNY ${formatCents(total)}',
-                  key: const ValueKey('cart-total'),
-                ),
-                FilledButton(
-                  key: const ValueKey('cart-submit'),
-                  onPressed: canSubmit ? () => unawaited(submit()) : null,
-                  child: Text(t('cartSubmit')),
-                ),
-                OutlinedButton(
-                  key: const ValueKey('cart-recovery'),
-                  onPressed: busy
-                      ? null
-                      : () => setState(() {
-                          recovery = true;
-                        }),
-                  child: Text(t('orderRecoveryTitle')),
-                ),
-                TextButton(
-                  onPressed: busy ? null : widget.onBack,
-                  child: Text(t('ordersBack')),
-                ),
+                if (widget.tablePanel == null || items.isNotEmpty)
+                  Text(
+                    'CNY ${formatCents(total)}',
+                    key: const ValueKey('cart-total'),
+                  ),
+                if (widget.tablePanel == null || items.isNotEmpty || busy)
+                  FilledButton(
+                    key: const ValueKey('cart-submit'),
+                    onPressed: canSubmit ? () => unawaited(submit()) : null,
+                    child: Text(t('cartSubmit')),
+                  ),
+                if (widget.tablePanel == null || attempted)
+                  OutlinedButton(
+                    key: const ValueKey('cart-recovery'),
+                    onPressed: busy
+                        ? null
+                        : () => setState(() {
+                            recovery = true;
+                          }),
+                    child: Text(t('orderRecoveryTitle')),
+                  ),
+                if (widget.tablePanel == null)
+                  TextButton(
+                    onPressed: busy ? null : widget.onBack,
+                    child: Text(t('ordersBack')),
+                  ),
               ],
             ),
           ),
