@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/table_bill_panel.dart';
+import 'package:kingclub_cash_register/src/live/bill_product_card.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 
 import 'live_tables_panel_test.dart' show TableAuth;
@@ -116,6 +117,7 @@ void main() {
     String tableRef = 'test-000',
     String sessionRef = 'session-0',
     Future<void> Function(String)? onAddProduct,
+    Map<String, BillProductCard> draftCards = const {},
   }) => MaterialApp(
     home: Scaffold(
       body: SingleChildScrollView(
@@ -128,9 +130,55 @@ void main() {
           checkoutAllowed: checkoutAllowed,
           draftCents: draftCents,
           onAddProduct: onAddProduct,
+          draftCards: draftCards,
         ),
       ),
     ),
+  );
+  testWidgets(
+    'same product draft and paid lines form one card with original totals',
+    (tester) async {
+      final auth = BillAuth()..paid = true;
+      const draft = BillProductCard(
+        key: ValueKey('draft-test'),
+        language: UiLanguage.en,
+        name: 'Test product',
+        specification: 'Bottle',
+        quantity: 1,
+        priceCents: 900,
+        totalCents: 900,
+        base: null,
+        footer: Text('Draft quantity 1'),
+      );
+      await tester.pumpWidget(
+        page(auth, 0, draftCents: 900, draftCards: {'test-product': draft}),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(BillProductCard), findsOneWidget);
+      var card = tester.widget<BillProductCard>(find.byType(BillProductCard));
+      expect(card.quantity, 3);
+      expect(card.totalCents, 2100);
+      expect(card.priceLabel, isNotNull);
+      expect(find.text('Draft quantity 1'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('bill-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Unpaid').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(BillProductCard), findsOneWidget);
+      card = tester.widget<BillProductCard>(find.byType(BillProductCard));
+      expect(card.quantity, 1);
+      expect(card.totalCents, 900);
+      await tester.tap(find.byKey(const ValueKey('bill-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Paid').last);
+      await tester.pumpAndSettle();
+      card = tester.widget<BillProductCard>(find.byType(BillProductCard));
+      expect(card.quantity, 2);
+      expect(card.totalCents, 1200);
+      expect(find.text('Draft quantity 1'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
   );
   for (final switchTable in [false, true]) {
     testWidgets(

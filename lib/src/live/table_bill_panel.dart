@@ -2,6 +2,7 @@ import 'bill_product_group.dart';
 import 'workspace_read_cache.dart';
 import 'bill_product_card.dart';
 import 'balance_refund_dialog.dart';
+import 'bill_serving_dialog.dart';
 
 import 'dart:async';
 
@@ -28,6 +29,7 @@ class TableBillPanel extends StatefulWidget {
     this.draftCents = 0,
     this.headerBuilder,
     this.onAddProduct,
+    this.draftCards = const {},
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -38,6 +40,7 @@ class TableBillPanel extends StatefulWidget {
   final int draftCents;
   final Widget Function(Widget filter)? headerBuilder;
   final Future<void> Function(String productRef)? onAddProduct;
+  final Map<String, BillProductCard> draftCards;
   @override
   State<TableBillPanel> createState() => _TableBillPanelState();
 }
@@ -288,6 +291,16 @@ class _TableBillPanelState extends State<TableBillPanel>
   Future<void> openItem(LiveOrder order, OrderItem item) async {
     if (loading || failed || !foreground) return;
     final generation = epoch, identity = widget.auth.session;
+    final canServe =
+        identity?.permissions.contains('orders.serve') == true &&
+        order.refund == null &&
+        item.servingKnown &&
+        item.remainingQuantity! > 0 &&
+        {'open', 'clearing'}.contains(snapshot?.sessionStatus) &&
+        (order.status == 'paid' ||
+            (snapshot?.paymentTiming == 'postpay' &&
+                order.status == 'pending' &&
+                order.cashierOrder));
     final canRefund =
         const bool.fromEnvironment('CASHIER_BALANCE_REFUND') &&
         widget.auth.session?.permissions.contains('payment.refund') == true &&
@@ -318,6 +331,12 @@ class _TableBillPanelState extends State<TableBillPanel>
             onPressed: () => Navigator.pop(context),
             child: Text(t('staffCancelSelection')),
           ),
+          if (canServe)
+            FilledButton(
+              key: const ValueKey('bill-serve-product'),
+              onPressed: () => Navigator.pop(context, 'serve'),
+              child: Text(t('servingConfirm')),
+            ),
           if (widget.onAddProduct != null)
             FilledButton(
               key: const ValueKey('bill-add-product'),
@@ -342,6 +361,29 @@ class _TableBillPanelState extends State<TableBillPanel>
     }
     if (action == 'add') {
       await widget.onAddProduct?.call(item.productRef);
+      return;
+    }
+    if (action == 'serve') {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => BillServingDialog(
+          auth: widget.auth,
+          language: widget.language,
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          order: order,
+          item: item,
+          isCurrent: () =>
+              mounted &&
+              foreground &&
+              generation == epoch &&
+              identical(identity, widget.auth.session) &&
+              !loading &&
+              !failed,
+        ),
+      );
+      if (mounted && foreground) await load();
       return;
     }
     if (action != 'refund') return;
@@ -407,12 +449,18 @@ class _TableBillPanelState extends State<TableBillPanel>
     final pending = snapshot?.sessionSummary?.buckets['pending'];
     final summary = snapshot?.sessionSummary;
     final paid = summary?.buckets['netPaid'] ?? summary?.buckets['paid'];
+    final drafts = filter == 'all' || filter == 'pending'
+        ? widget.draftCards
+        : <String, BillProductCard>{};
     final visible = orders
         .where(
           (o) =>
               o.status != 'expired' && (filter == 'all' || o.status == filter),
         )
         .toList();
+    final groups = groupBillProducts(visible);
+    BillProductCard? draftFor(BillProductGroup group) =>
+        group.currency == 'CNY' ? drafts[group.productRef] : null;
     final canPay = [
       'payment.cash',
       'payment.wechat',
@@ -424,6 +472,11 @@ class _TableBillPanelState extends State<TableBillPanel>
       children: [
         if (widget.leading != null && (filter == 'all' || filter == 'pending'))
           widget.leading!,
+        for (final entry in drafts.entries)
+          if (!groups.any(
+            (g) => g.currency == 'CNY' && g.productRef == entry.key,
+          ))
+            entry.value,
         if (canRead) ...[
           if (loading && snapshot == null) Text(t('billFirstSync')),
           if (loading && snapshot != null)
@@ -435,25 +488,30 @@ class _TableBillPanelState extends State<TableBillPanel>
             ),
           if (filter == 'voucher' || filter == 'gift')
             Text(t('billSourceUnavailable'))
-          else if (!loading && !failed && visible.isEmpty)
+          else if (!loading && !failed && visible.isEmpty && drafts.isEmpty)
             Text(t('billNoItems')),
-          for (final group in groupBillProducts(visible))
+          for (final group in groups)
             BillProductCard(
               key: ValueKey('bill-group-${group.currency}-${group.productRef}'),
               language: widget.language,
               name: group.item.name(widget.language),
               specification: group.item.specification(widget.language),
-              quantity: group.quantity,
+              quantity: group.quantity + (draftFor(group)?.quantity ?? 0),
               priceCents: group.item.priceCents,
-              priceLabel: group.mixedPrices ? t('billMixedPrices') : null,
-              totalCents: group.totalCents,
+              priceLabel:
+                  group.mixedPrices ||
+                      (draftFor(group) != null &&
+                          group.item.priceCents != draftFor(group)!.priceCents)
+                  ? t('billMixedPrices')
+                  : null,
+              totalCents: group.totalCents + (draftFor(group)?.totalCents ?? 0),
               thumbnailPath: group.item.thumbnailPath,
               base: widget.auth.session?.base,
               onTap: () => openGroup(group),
               badges: group.paidQuantity == 0
                   ? null
                   : status(
-                      '${t('tableBillPaid')}${group.unpaidQuantity > 0 ? ' ${group.paidQuantity}' : ''}',
+                      '${t('tableBillPaid')}${group.unpaidQuantity > 0 || draftFor(group) != null ? ' ${group.paidQuantity}' : ''}',
                       const Color(0xff216344),
                     ),
               leadingBadge: group.quantity == 0
@@ -466,10 +524,12 @@ class _TableBillPanelState extends State<TableBillPanel>
                           ? const Color(0xff216344)
                           : const Color(0xff994a16),
                     ),
-              footer:
-                  group.unpaidQuantity > 0 && group.paidQuantity > 0 ||
-                      group.returned > 0
-                  ? Text(
+              footer: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (group.unpaidQuantity > 0 && group.paidQuantity > 0 ||
+                      group.returned > 0)
+                    Text(
                       [
                         if (group.unpaidQuantity > 0)
                           '${t('tableBillUnpaid')} ${group.unpaidQuantity}',
@@ -477,8 +537,10 @@ class _TableBillPanelState extends State<TableBillPanel>
                           '${t('tableBillRefunded')} ${group.returned}',
                       ].join(' · '),
                       style: const TextStyle(fontSize: 11),
-                    )
-                  : null,
+                    ),
+                  if (draftFor(group)?.footer != null) draftFor(group)!.footer!,
+                ],
+              ),
             ),
           if (snapshot?.nextAfterOrder != null)
             TextButton(

@@ -736,6 +736,66 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                   child: TableBillPanel(
                     onAddProduct: editable ? addExistingProduct : null,
                     draftCents: total,
+                    draftCards: {
+                      for (final item in items.values)
+                        item.product.reference: BillProductCard(
+                          key: ValueKey('draft-card-${item.product.reference}'),
+                          onTap: editable
+                              ? () => editDraftItem(item.product)
+                              : null,
+                          language: widget.language,
+                          name: item.product.name(widget.language),
+                          specification: item.product.specification(
+                            widget.language,
+                          ),
+                          quantity: item.quantity,
+                          priceCents: item.product.priceCents,
+                          totalCents: item.quantity * item.product.priceCents,
+                          base: widget.auth.session?.base,
+                          thumbnailPath: item.product.thumbnailPath,
+                          footer: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  t('billDraft'),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              IconButton(
+                                key: ValueKey(
+                                  'cart-minus-${item.product.reference}',
+                                ),
+                                tooltip: t('cartRemove'),
+                                onPressed: editable
+                                    ? () => change(item.product, -1)
+                                    : null,
+                                icon: const Icon(Icons.remove, size: 18),
+                              ),
+                              Text('${item.quantity}'),
+                              IconButton(
+                                key: ValueKey(
+                                  'cart-plus-${item.product.reference}',
+                                ),
+                                tooltip: t('cartAdd'),
+                                onPressed: editable
+                                    ? () => change(item.product, 1)
+                                    : null,
+                                icon: const Icon(Icons.add, size: 18),
+                              ),
+                              IconButton(
+                                key: ValueKey(
+                                  'cart-delete-${item.product.reference}',
+                                ),
+                                tooltip: t('cartDelete'),
+                                onPressed: editable
+                                    ? () => change(item.product, -item.quantity)
+                                    : null,
+                                icon: const Icon(Icons.close, size: 18),
+                              ),
+                            ],
+                          ),
+                        ),
+                    },
                     headerBuilder: widget.tablePanel == null
                         ? null
                         : billHeader,
@@ -821,67 +881,6 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                           Text(t('cartDraftResave')),
                         if (items.isEmpty && widget.tablePanel == null)
                           Text(t('cartDraftEmpty')),
-                        for (final item in items.values)
-                          BillProductCard(
-                            key: ValueKey(
-                              'draft-card-${item.product.reference}',
-                            ),
-                            onTap: editable
-                                ? () => editDraftItem(item.product)
-                                : null,
-                            language: widget.language,
-                            name: item.product.name(widget.language),
-                            specification: item.product.specification(
-                              widget.language,
-                            ),
-                            quantity: item.quantity,
-                            priceCents: item.product.priceCents,
-                            totalCents: item.quantity * item.product.priceCents,
-                            base: widget.auth.session?.base,
-                            thumbnailPath: item.product.thumbnailPath,
-                            footer: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    t('billDraft'),
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                                IconButton(
-                                  key: ValueKey(
-                                    'cart-minus-${item.product.reference}',
-                                  ),
-                                  tooltip: t('cartRemove'),
-                                  onPressed: editable
-                                      ? () => change(item.product, -1)
-                                      : null,
-                                  icon: const Icon(Icons.remove, size: 18),
-                                ),
-                                Text('${item.quantity}'),
-                                IconButton(
-                                  key: ValueKey(
-                                    'cart-plus-${item.product.reference}',
-                                  ),
-                                  tooltip: t('cartAdd'),
-                                  onPressed: editable
-                                      ? () => change(item.product, 1)
-                                      : null,
-                                  icon: const Icon(Icons.add, size: 18),
-                                ),
-                                IconButton(
-                                  key: ValueKey(
-                                    'cart-delete-${item.product.reference}',
-                                  ),
-                                  tooltip: t('cartDelete'),
-                                  onPressed: editable
-                                      ? () =>
-                                            change(item.product, -item.quantity)
-                                      : null,
-                                  icon: const Icon(Icons.close, size: 18),
-                                ),
-                              ],
-                            ),
-                          ),
                       ],
                     ),
                   ),
