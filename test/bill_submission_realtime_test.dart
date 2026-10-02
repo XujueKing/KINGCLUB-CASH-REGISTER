@@ -9,17 +9,18 @@ import 'package:kingclub_cash_register/src/live/order_command.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 
 import 'live_cart_panel_test.dart' show CartAuth, tap;
-import 'order_context_test.dart' as contextFixture;
+import 'order_context_test.dart' as context_fixture;
 import 'staff_session_test.dart' as staff;
-import 'order_command_test.dart' as commandFixture;
+import 'order_command_test.dart' as command_fixture;
 import 'support/order_fixture.dart';
 
 class RealtimeBillAuth extends CartAuth {
-  @override
-  final StaffSession session = staff.session({
+  final StaffSession identity = staff.session({
     ...staff.response(),
     'permissions': ['workbench.read', 'orders.read', 'orders.create'],
   });
+  @override
+  StaffSession get session => identity;
   bool pushed = false;
   @override
   Future<Object?> readOrders({
@@ -64,7 +65,7 @@ void main() {
       final auth = RealtimeBillAuth()
         ..submitGate = Completer<OrderRequestResult>();
       final revision = ValueNotifier(0);
-      final orderContext = contextFixture.parse(contextFixture.contextData());
+      final orderContext = context_fixture.parse(context_fixture.contextData());
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -101,10 +102,10 @@ void main() {
       expect(card.quantity, 2);
       expect(card.totalCents, 600 + auth.priceCents);
       expect(auth.submits, 1);
-      final command = commandFixture.command();
+      final command = command_fixture.command();
       auth.submitGate!.complete(
         OrderRequestResult.parse(
-          {'result': commandFixture.receipt(command.params)},
+          {'result': command_fixture.receipt(command.params)},
           command,
           submission: true,
         ),
