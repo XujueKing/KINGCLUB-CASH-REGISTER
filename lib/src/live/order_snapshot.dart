@@ -279,7 +279,9 @@ class SessionOrderSummary {
     final data = _map(raw), currency = data['currency'];
     final refundKnown =
         data.containsKey('refunded') && data.containsKey('netPaid');
-    if (data.length != (refundKnown ? 6 : 4) ||
+    final hasFullCount = data.containsKey('fullyRefundedOrderCount');
+    if (data.length != (refundKnown ? (hasFullCount ? 7 : 6) : 4) ||
+        (hasFullCount && !refundKnown) ||
         data.containsKey('refunded') != data.containsKey('netPaid') ||
         currency is! String ||
         !RegExp(r'^[A-Z]{3}$').hasMatch(currency)) {
@@ -335,7 +337,14 @@ class SessionOrderSummary {
       final paid = buckets['paid']!,
           refund = buckets['refunded']!,
           net = buckets['netPaid']!;
-      if (refund.orderCount + net.orderCount != paid.orderCount ||
+      final fully = hasFullCount
+          ? data['fullyRefundedOrderCount']
+          : refund.orderCount;
+      if (fully is! int ||
+          fully < 0 ||
+          fully > refund.orderCount ||
+          refund.orderCount > paid.orderCount ||
+          fully + net.orderCount != paid.orderCount ||
           refund.totalCents + net.totalCents != paid.totalCents) {
         throw const FormatException();
       }

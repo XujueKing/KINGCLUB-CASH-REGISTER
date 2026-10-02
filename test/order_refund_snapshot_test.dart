@@ -10,6 +10,37 @@ Map<String, dynamic> fixture() => {
   'refundedAt': '2026-09-30T00:00:00.000Z',
 };
 void main() {
+  test('partial refunds preserve remaining net paid orders', () {
+    final data = <String, dynamic>{
+      'currency': 'CNY',
+      'paid': {'orderCount': 1, 'totalCents': 300},
+      'pending': {'orderCount': 0, 'totalCents': 0},
+      'expired': {'orderCount': 0, 'totalCents': 0},
+      'refunded': {'orderCount': 1, 'totalCents': 100},
+      'netPaid': {'orderCount': 1, 'totalCents': 200},
+      'fullyRefundedOrderCount': 0,
+    };
+    expect(
+      SessionOrderSummary.parse(data, []).buckets['netPaid']!.totalCents,
+      200,
+    );
+    for (final invalid in [-1, 1, 2, null, '0']) {
+      expect(
+        () => SessionOrderSummary.parse({
+          ...data,
+          'fullyRefundedOrderCount': invalid,
+        }, []),
+        throwsFormatException,
+      );
+    }
+    expect(
+      () => SessionOrderSummary.parse(
+        {...data}..remove('fullyRefundedOrderCount'),
+        [],
+      ),
+      throwsFormatException,
+    );
+  });
   test('refund principal and gifts remain separate', () {
     final value = OrderRefund(fixture());
     expect(value.principalCents, 1000);
