@@ -102,7 +102,7 @@ class _OrderPreviewDialogState extends State<OrderPreviewDialog>
                                 const Divider(),
                                 Text(widget.order.reference),
                                 Text(
-                                  '${t('orderPreviewStatus')}: ${t(widget.order.refund != null ? 'liveRefunded' : 'order_${widget.order.status}')}',
+                                  '${t('orderPreviewStatus')}: ${t(widget.order.fullyRefunded ? 'liveRefunded' : 'order_${widget.order.status}')}',
                                 ),
                                 Text(
                                   '${t('liveObserved')}: ${widget.observedAt.toLocal()}',

@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/order_snapshot.dart';
 
+import 'support/order_fixture.dart';
+
 Map<String, dynamic> fixture() => {
   'refundRef': '00000000-0000-4000-8000-000000000001',
   'accountType': 'store_balance',
@@ -10,6 +12,72 @@ Map<String, dynamic> fixture() => {
   'refundedAt': '2026-09-30T00:00:00.000Z',
 };
 void main() {
+  LiveOrder orderWithRefunds(List<Map<String, dynamic>> receipts) {
+    final raw = orderFixture();
+    final order =
+        ((raw['result'] as Map)['orders'] as List).first
+            as Map<String, dynamic>;
+    return LiveOrder({
+      ...order,
+      'status': 'paid',
+      'cashierOrder': true,
+      'refunds': receipts,
+    });
+  }
+
+  test('partial receipt history preserves original items and remaining paid amount', () {
+    final receipt = {
+      ...fixture(),
+      'totalCents': 300,
+      'principalCents': 200,
+      'giftCents': 100,
+    };
+    final original = orderWithRefunds([]);
+    final partial = orderWithRefunds([receipt]);
+    expect(partial.totalCents, original.totalCents);
+    expect(partial.items.single.quantity, original.items.single.quantity);
+    expect(partial.netPaidCents, original.totalCents - 300);
+    expect(partial.fullyRefunded, false);
+    final remainder = original.totalCents - 300;
+    final full = orderWithRefunds([
+      receipt,
+      {
+        ...fixture(),
+        'refundRef': '00000000-0000-4000-8000-000000000002',
+        'totalCents': remainder,
+        'principalCents': remainder,
+        'giftCents': 0,
+      },
+    ]);
+    expect(full.fullyRefunded, true);
+    expect(full.netPaidCents, 0);
+    expect(full.refund, isNull);
+    expect(() => orderWithRefunds([receipt, receipt]), throwsFormatException);
+    expect(
+      () => orderWithRefunds([
+        receipt,
+        {
+          ...receipt,
+          'refundRef': '00000000-0000-4000-8000-000000000002',
+          'accountType': 'platform_cash',
+          'principalCents': 300,
+          'giftCents': 0,
+        },
+      ]),
+      throwsFormatException,
+    );
+    expect(
+      () => orderWithRefunds([
+        {
+          ...receipt,
+          'totalCents': original.totalCents + 1,
+          'principalCents': original.totalCents + 1,
+          'giftCents': 0,
+        },
+      ]),
+      throwsFormatException,
+    );
+  });
   test('partial refunds preserve remaining net paid orders', () {
     final data = <String, dynamic>{
       'currency': 'CNY',

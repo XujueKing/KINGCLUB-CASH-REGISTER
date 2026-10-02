@@ -367,7 +367,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         !failed;
     bool canServe(LiveOrder order, OrderItem item) =>
         identity?.permissions.contains('orders.serve') == true &&
-        order.refund == null &&
+        order.refunds.isEmpty &&
         item.servingKnown &&
         item.remainingQuantity! > 0 &&
         {'open', 'clearing'}.contains(snapshot?.sessionStatus) &&
@@ -376,7 +376,7 @@ class _TableBillPanelState extends State<TableBillPanel>
                 order.status == 'pending'));
     bool canRecall(LiveOrder order, OrderItem item) =>
         identity?.permissions.contains('orders.serve') == true &&
-        order.refund == null &&
+        order.refunds.isEmpty &&
         item.servingKnown &&
         item.servedQuantity! > 0 &&
         item.servingEpoch != null &&
@@ -388,7 +388,7 @@ class _TableBillPanelState extends State<TableBillPanel>
     bool canReturnUnserved(LiveOrder order, OrderItem item) =>
         identity?.permissions.contains('orders.serve') == true &&
         identity?.permissions.contains('orders.create') == true &&
-        order.refund == null &&
+        order.refunds.isEmpty &&
         order.status == 'pending' &&
         snapshot?.paymentTiming == 'postpay' &&
         snapshot?.sessionStatus == 'open' &&

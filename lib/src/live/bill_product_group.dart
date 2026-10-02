@@ -6,10 +6,10 @@ class BillProductGroup {
   final lines = <({LiveOrder order, OrderItem item})>[];
   OrderItem get item => lines.first.item;
   Iterable<({LiveOrder order, OrderItem item})> get active =>
-      lines.where((line) => line.order.refund == null);
+      lines.where((line) => !line.order.fullyRefunded);
   int get quantity => active.fold(0, (n, line) => n + line.item.quantity);
   int get returned => lines
-      .where((line) => line.order.refund != null)
+      .where((line) => line.order.fullyRefunded)
       .fold(0, (n, line) => n + line.item.quantity);
   int get totalCents =>
       active.fold(0, (n, line) => n + line.item.subtotalCents);

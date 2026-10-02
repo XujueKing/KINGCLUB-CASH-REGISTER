@@ -311,7 +311,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
   bool servingEligible(LiveOrder order, OrderItem item) =>
       foreground &&
       widget.auth.session?.permissions.contains('orders.serve') == true &&
-      order.refund == null &&
+      order.refunds.isEmpty &&
       {'open', 'clearing'}.contains(data?.sessionStatus) &&
       item.servingKnown &&
       item.remainingQuantity! > 0 &&
@@ -735,7 +735,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            '${order.reference} · ${t(order.refund != null ? 'liveRefunded' : 'order_${order.status}')} · ${order.currency} ${formatCents(order.totalCents)}',
+                                            '${order.reference} · ${t(order.fullyRefunded ? 'liveRefunded' : 'order_${order.status}')} · ${order.currency} ${formatCents(order.totalCents)}',
                                           ),
                                           Text('${order.createdAt.toLocal()}'),
                                         ],
@@ -782,7 +782,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                         : null,
                                     child: Text(t('refundTitle')),
                                   ),
-                                if (order.refund case final refund?) ...[
+                                for (final refund in order.refunds) ...[
                                   Text(
                                     '${t('refundPrincipal')}: ${order.currency} ${formatCents(refund.principalCents)} · ${t('refundGift')}: ${order.currency} ${formatCents(refund.giftCents)}',
                                   ),
@@ -895,7 +895,7 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                         Text(
                                           item.servingKnown
                                               ? order.status == 'expired' ||
-                                                        order.refund != null
+                                                        order.fullyRefunded
                                                     ? '${t('servingDelivered')}: ${item.servedQuantity}'
                                                     : '${t('servingDelivered')}: ${item.servedQuantity} · ${t('servingRemaining')}: ${item.remainingQuantity}'
                                               : t('servingUnknown'),

@@ -38,8 +38,17 @@ class BillDetailsDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            for (final line in group.lines.where(
+              (line) => line.order.refunds.isNotEmpty,
+            ))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  '${t('billOrderRefunded')} ${line.order.currency} ${formatCents(line.order.refundedCents)} · ${t('billNetReceived')} ${formatCents(line.order.netPaidCents)}',
+                ),
+              ),
             for (final line in group.lines)
-              if (line.order.refund != null)
+              if (line.order.fullyRefunded)
                 row(
                   context,
                   line.order,

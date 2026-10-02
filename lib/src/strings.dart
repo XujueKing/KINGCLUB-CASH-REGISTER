@@ -38,6 +38,8 @@ const copy = <String, String>{
   'tableBillPaid': '已付款|Paid|已付款|ชำระแล้ว',
   'tableBillUnpaid': '未付款|Unpaid|未付款|ยังไม่ชำระ',
   'tableBillRefunded': '已退款|Refunded|已退款|คืนเงินแล้ว',
+  'billOrderRefunded': '原订单已退|Original order refunded|原訂單已退|ยอดคืนเงินของคำสั่งซื้อเดิม',
+  'billNetReceived': '剩余实收|Net received|剩餘實收|ยอดรับสุทธิคงเหลือ',
   'tableBillMore': '更多已点商品|More table orders|更多已點商品|ดูรายการเพิ่ม',
   'tableBillRetry': '账单读取失败，点击重试|Bill unavailable. Retry|帳單讀取失敗，點擊重試|โหลดบิลไม่สำเร็จ ลองใหม่',
   'tableOrderStart': '点单|Order|點單|สั่งอาหาร',

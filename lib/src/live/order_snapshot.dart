@@ -119,12 +119,28 @@ class LiveOrder {
       refund = value['refund'] == null
           ? null
           : OrderRefund(_map(value['refund'])),
+      refunds = _orderRefunds(value),
       createdAt = _time(value['createdAt']),
       items = List.unmodifiable(
         (value['items'] as List).map(
           (item) => OrderItem(_map(item), storeRef: storeRef),
         ),
       ) {
+    if (refunds.length > 10000 ||
+        refunds.map((r) => r.reference).toSet().length != refunds.length ||
+        refunds.map((r) => r.accountType).toSet().length > 1 ||
+        refundedCents > totalCents ||
+        (refunds.isNotEmpty && (status != 'paid' || !cashierOrder)) ||
+        (refund != null &&
+            (refunds.length != 1 ||
+                refunds.single.reference != refund!.reference ||
+                refunds.single.totalCents != refund!.totalCents ||
+                refunds.single.principalCents != refund!.principalCents ||
+                refunds.single.giftCents != refund!.giftCents ||
+                refunds.single.accountType != refund!.accountType ||
+                refunds.single.refundedAt != refund!.refundedAt))) {
+      throw const FormatException();
+    }
     if ((tableCheckoutRef != null && status != 'paid') ||
         (refund != null &&
             (status != 'paid' ||
@@ -146,6 +162,10 @@ class LiveOrder {
   final bool cashierOrder;
   final int totalCents;
   final OrderRefund? refund;
+  final List<OrderRefund> refunds;
+  int get refundedCents => refunds.fold(0, (sum, r) => sum + r.totalCents);
+  int get netPaidCents => status == 'paid' ? totalCents - refundedCents : 0;
+  bool get fullyRefunded => status == 'paid' && refundedCents == totalCents;
   final DateTime createdAt;
   final List<OrderItem> items;
 }
@@ -159,6 +179,13 @@ String? _tableCheckoutRef(Object? value) {
     throw const FormatException();
   }
   return value;
+}
+
+List<OrderRefund> _orderRefunds(Map<String, dynamic> value) {
+  final rows =
+      value['refunds'] ?? (value['refund'] == null ? [] : [value['refund']]);
+  if (rows is! List || rows.length > 10000) throw const FormatException();
+  return List.unmodifiable(rows.map((r) => OrderRefund(_map(r))));
 }
 
 class OrderRefund {
@@ -348,13 +375,13 @@ class SessionOrderSummary {
           refund.totalCents + net.totalCents != paid.totalCents) {
         throw const FormatException();
       }
-      final page = orders.where((order) => order.refund != null);
+      final page = orders.where((order) => order.refunds.isNotEmpty);
       if (page.length > refund.orderCount ||
-          page.fold<int>(0, (sum, order) => sum + order.refund!.totalCents) >
+          page.fold<int>(0, (sum, order) => sum + order.refundedCents) >
               refund.totalCents) {
         throw const FormatException();
       }
-    } else if (orders.any((order) => order.refund != null)) {
+    } else if (orders.any((order) => order.refunds.isNotEmpty)) {
       throw const FormatException();
     }
     return SessionOrderSummary._(currency, Map.unmodifiable(buckets));
