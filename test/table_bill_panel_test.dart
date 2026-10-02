@@ -115,6 +115,7 @@ void main() {
     int draftCents = 0,
     String tableRef = 'test-000',
     String sessionRef = 'session-0',
+    Future<void> Function(String)? onAddProduct,
   }) => MaterialApp(
     home: Scaffold(
       body: SingleChildScrollView(
@@ -126,10 +127,53 @@ void main() {
           revision: revision,
           checkoutAllowed: checkoutAllowed,
           draftCents: draftCents,
+          onAddProduct: onAddProduct,
         ),
       ),
     ),
   );
+  for (final switchTable in [false, true]) {
+    testWidgets(
+      'old product dialog cannot add after ${switchTable ? 'switching tables' : 'a bill update'}',
+      (tester) async {
+        final auth = BillAuth();
+        var additions = 0;
+        Future<void> add(String productRef) async {
+          additions++;
+        }
+
+        await tester.pumpWidget(page(auth, 0, onAddProduct: add));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('bill-group-CNY-test-product')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('bill-add-product')), findsOneWidget);
+        await tester.pumpWidget(
+          page(
+            auth,
+            1,
+            tableRef: switchTable ? 'test-001' : 'test-000',
+            onAddProduct: add,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('bill-add-product')));
+        await tester.pumpAndSettle();
+        expect(additions, 0);
+        // A newly opened card uses the refreshed scope normally.
+        await tester.tap(
+          find.byKey(const ValueKey('bill-group-CNY-test-product')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('bill-add-product')));
+        await tester.pumpAndSettle();
+        expect(additions, 1);
+        await tester.pumpWidget(const SizedBox());
+        auth.dispose();
+      },
+    );
+  }
   testWidgets('reused panel restores only matching table and session cache', (
     tester,
   ) async {

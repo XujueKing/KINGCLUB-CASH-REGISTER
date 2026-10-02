@@ -237,6 +237,7 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   Future<void> openGroup(BillProductGroup group) async {
     if (loading || failed || !foreground) return;
+    final generation = epoch, identity = widget.auth.session;
     if (group.lines.length == 1) {
       return openItem(group.lines.single.order, group.lines.single.item);
     }
@@ -267,17 +268,26 @@ class _TableBillPanelState extends State<TableBillPanel>
         ],
       ),
     );
-    if (selected == -1 && mounted && foreground) {
+    if (!mounted ||
+        !foreground ||
+        generation != epoch ||
+        !identical(identity, widget.auth.session) ||
+        loading ||
+        failed) {
+      return;
+    }
+    if (selected == -1) {
       await widget.onAddProduct?.call(group.productRef);
       return;
     }
-    if (selected != null && mounted && foreground) {
+    if (selected != null) {
       await openItem(group.lines[selected].order, group.lines[selected].item);
     }
   }
 
   Future<void> openItem(LiveOrder order, OrderItem item) async {
     if (loading || failed || !foreground) return;
+    final generation = epoch, identity = widget.auth.session;
     final canRefund =
         const bool.fromEnvironment('CASHIER_BALANCE_REFUND') &&
         widget.auth.session?.permissions.contains('payment.refund') == true &&
@@ -322,7 +332,14 @@ class _TableBillPanelState extends State<TableBillPanel>
         ],
       ),
     );
-    if (!mounted || !foreground) return;
+    if (!mounted ||
+        !foreground ||
+        generation != epoch ||
+        !identical(identity, widget.auth.session) ||
+        loading ||
+        failed) {
+      return;
+    }
     if (action == 'add') {
       await widget.onAddProduct?.call(item.productRef);
       return;
