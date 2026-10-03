@@ -1,3 +1,5 @@
+import 'table_members_panel.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,6 +24,8 @@ class QuickOpeningDialog extends StatefulWidget {
 
 class _QuickOpeningDialogState extends State<QuickOpeningDialog> {
   OpeningContext? data;
+  final memberPanel = GlobalKey<TableMembersPanelState>();
+  String? openedSessionRef;
   String mode = 'manual';
   int count = 1;
   bool busy = true, attempted = false;
@@ -60,7 +64,15 @@ class _QuickOpeningDialogState extends State<QuickOpeningDialog> {
   }
 
   Future<void> open() async {
-    if (busy || attempted || data == null) return;
+    if (busy || data == null || memberPanel.currentState?.busy == true) return;
+    if (openedSessionRef != null) {
+      final linked = await memberPanel.currentState?.attachTo(
+        openedSessionRef!,
+      );
+      if (mounted && linked == true) Navigator.pop(context, true);
+      return;
+    }
+    if (attempted) return;
     final rule = <String, dynamic>{'mode': mode};
     if (mode == 'minimum_spend') {
       final value = double.tryParse(threshold.text);
@@ -97,7 +109,16 @@ class _QuickOpeningDialogState extends State<QuickOpeningDialog> {
       );
       if (!mounted) return;
       if (result.state == OpeningLookupState.confirmed) {
-        Navigator.pop(context, true);
+        openedSessionRef = result.receipt!.sessionRef;
+        final linked = await memberPanel.currentState?.attachTo(
+          openedSessionRef!,
+        );
+        if (!mounted) return;
+        if (linked == true) {
+          Navigator.pop(context, true);
+          return;
+        }
+        setState(() => error = 'tableMembersOpeningPartial');
         return;
       }
       setState(() => error = 'openingPending');
@@ -208,10 +229,27 @@ class _QuickOpeningDialogState extends State<QuickOpeningDialog> {
                     }
                   },
                 ),
+              const SizedBox(height: 16),
+              TableMembersPanel(
+                key: memberPanel,
+                auth: widget.auth,
+                language: widget.language,
+                tableRef: widget.table.reference,
+                enabled: !busy,
+              ),
               if (error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(t(error!)),
+                  child: Text(
+                    error == 'tableMembersOpeningPartial'
+                        ? [
+                            '已开台，会员关联未完成，可重扫后完成',
+                            'Table opened. Rescan unlinked members, then finish.',
+                            '已開台，請重掃未關聯會員',
+                            'เปิดโต๊ะแล้ว กรุณาสแกนสมาชิกอีกครั้ง',
+                          ][widget.language.index]
+                        : t(error!),
+                  ),
                 ),
             ],
           ),
@@ -219,19 +257,25 @@ class _QuickOpeningDialogState extends State<QuickOpeningDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: busy ? null : () => Navigator.pop(context, false),
+          onPressed: busy
+              ? null
+              : () => Navigator.pop(context, openedSessionRef != null),
           child: Text(t('cancel')),
         ),
         FilledButton(
           onPressed:
               busy ||
-                  attempted ||
+                  (attempted && openedSessionRef == null) ||
                   data == null ||
                   !data!.openingEnabled ||
                   data!.activeSessionRef != null
               ? null
               : open,
-          child: Text(t('openingSubmit')),
+          child: Text(
+            openedSessionRef == null
+                ? t('openingSubmit')
+                : ['完成', 'Done', '完成', 'เสร็จสิ้น'][widget.language.index],
+          ),
         ),
       ],
     ),

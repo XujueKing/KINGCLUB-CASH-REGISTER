@@ -1,3 +1,4 @@
+import 'table_members_panel.dart';
 import 'item_price_dialog.dart';
 import 'bill_product_card.dart';
 
@@ -703,28 +704,38 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                   ),
                 ],
               ),
-              InkWell(
-                key: const ValueKey('bill-party-size'),
-                onTap: () => showDialog<void>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(t('guests')),
-                    content: Text(t('billPartyUnavailable')),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(t('staffCancelSelection')),
+              Row(
+                children: [
+                  InkWell(
+                    key: const ValueKey('bill-party-size'),
+                    onTap: () => showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(t('guests')),
+                        content: Text(t('billPartyUnavailable')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(t('staffCancelSelection')),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        '${t('guests')}: ${session?.partySize ?? currentContext.partySize ?? '—'}/${table?.maximumSeats ?? '—'}',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ),
                   ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Text(
-                    '${t('guests')}: ${session?.partySize ?? currentContext.partySize ?? '—'}/${table?.maximumSeats ?? '—'}',
-                    style: const TextStyle(fontSize: 10),
+                  TableMembersButton(
+                    auth: widget.auth,
+                    language: widget.language,
+                    tableRef: currentContext.tableRef,
+                    sessionRef: currentContext.sessionRef,
                   ),
-                ),
+                ],
               ),
             ],
           ),

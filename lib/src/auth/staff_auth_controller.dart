@@ -1487,8 +1487,11 @@ class StaffAuthController extends ChangeNotifier {
     required String identityCode,
   }) async {
     final identity = _session, api = _api, epoch = _epoch;
-    if (identity == null || api == null || !identity.expiresAt.isAfter(_now()))
+    if (identity == null ||
+        api == null ||
+        !identity.expiresAt.isAfter(_now())) {
       throw const CcsopFailure('SESSION_REQUIRED');
+    }
     final expected = <String, Object>{...scope, 'storeRef': identity.storeRef};
     final raw = await api.call('K261003002002', {
       'scope': expected,
@@ -1641,6 +1644,57 @@ class StaffAuthController extends ChangeNotifier {
       throw const CcsopFailure('SESSION_REQUIRED');
     }
     return value;
+  }
+
+  Future<List<Map<String, String?>>> tableMembers({
+    required String tableRef,
+    required String sessionRef,
+    String? identityCode,
+  }) async {
+    final identity = _session, api = _api, epoch = _epoch;
+    if (identity == null ||
+        api == null ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    final scope = {
+      'storeRef': identity.storeRef,
+      'tableRef': tableRef,
+      'sessionRef': sessionRef,
+    };
+    final raw = await api.call('K261003002003', {
+      ...scope,
+      'action': identityCode == null ? 'list' : 'link',
+      'identityCode': ?identityCode,
+    });
+    _check(epoch);
+    final result = raw is Map ? raw['result'] : null;
+    if (result is! Map ||
+        !scope.entries.every((e) => result[e.key] == e.value) ||
+        result['members'] is! List) {
+      throw const FormatException();
+    }
+    final seen = <String>{};
+    return List.unmodifiable(
+      (result['members'] as List).map((row) {
+        if (row is! Map ||
+            row['userAccount'] is! String ||
+            !RegExp(r'^[A-Za-z0-9_-]{1,64}$')
+                .hasMatch(row['userAccount'] as String) ||
+            !seen.add(row['userAccount'] as String) ||
+            (row['nickname'] != null && row['nickname'] is! String) ||
+            row['linkedBy'] is! String ||
+            row['linkedAt'] is! String) {
+          throw const FormatException();
+        }
+        return Map<String, String?>.unmodifiable({
+          'userAccount': row['userAccount'] as String,
+          'nickname': row['nickname'] as String?,
+          'linkedBy': row['linkedBy'] as String,
+          'linkedAt': row['linkedAt'] as String,
+        });
+      }),
+    );
   }
 
   Future<MemberIdentity> readMemberIdentity(String identityCode) async {
