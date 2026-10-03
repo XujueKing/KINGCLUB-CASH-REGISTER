@@ -306,6 +306,7 @@ void main() {
       await tap(tester, 'workspace-toggle-menu');
       await tap(tester, 'catalog-add-p001');
       expect(auth.submits, 1);
+      expect(find.byKey(const ValueKey('cart-recovery')), findsNothing);
       expect(auth.sent!.single.quantity, 1);
       expect(find.byKey(const ValueKey('cart-submit')), findsNothing);
       expect(find.byType(AlertDialog), findsNothing);

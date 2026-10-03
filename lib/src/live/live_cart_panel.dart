@@ -849,7 +849,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              if (attempted)
+                              if (attempted && !busy)
                                 OutlinedButton(
                                   key: const ValueKey('cart-recovery'),
                                   onPressed: busy
