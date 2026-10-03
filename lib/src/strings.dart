@@ -494,7 +494,7 @@ const copy = <String, String>{
   'cartRemove': '减少数量|Reduce quantity|減少數量|ลดจำนวน',
   'cartDelete': '移除商品|Remove item|移除商品|นำสินค้าออก',
   'cartDraftEmpty': '尚未选择商品|No items selected|尚未選擇商品|ยังไม่ได้เลือกสินค้า',
-  'cartSubmit': '核对并下单|Review and place order|核對並下單|ตรวจสอบและสั่งซื้อ',
+  'cartSubmit': '下单|Place order|下單|สั่งซื้อ',
   'cartConfirmNotice': '先付款订单付款时确认库存，售罄不收款；后付款按实际出酒扣库存。选择会员不会扣余额。|Prepay stock is confirmed at payment; sold-out items are not charged. Postpay stock is deducted when issued. Selecting a member does not debit their balance.|先付款訂單付款時確認庫存，售罄不收款；後付款按實際出酒扣庫存。選擇會員不會扣餘額。|คำสั่งซื้อแบบจ่ายก่อนตรวจสต็อกเมื่อชำระเงิน สินค้าหมดจะไม่เรียกเก็บเงิน แบบจ่ายทีหลังตัดสต็อกเมื่อส่งสินค้า การเลือกสมาชิกไม่หักยอดเงิน',
   'cartRefreshing': '正在核对商品，已选内容已保留。|Checking items; your selection is retained.|正在核對商品，已選內容已保留。|กำลังตรวจสอบสินค้า โดยเก็บรายการที่เลือกไว้',
   'cartRefreshFailed': '暂不能下单，已保留所选商品。请重试核对；如商品或入座信息已变更，请返回调整。|Cannot submit yet. Selection retained. Retry checking, or go back if items or seating changed.|暫不能下單，已保留所選商品。請重試核對；如商品或入座資訊已變更，請返回調整。|ยังส่งรายการไม่ได้ เก็บสินค้าที่เลือกไว้แล้ว ลองตรวจสอบอีกครั้ง หรือกลับไปแก้ไขหากสินค้าหรือที่นั่งเปลี่ยน',

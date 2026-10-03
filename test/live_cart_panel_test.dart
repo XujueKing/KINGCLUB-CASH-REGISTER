@@ -180,8 +180,7 @@ void main() {
         4690,
       );
       await tap(tester, 'cart-submit');
-      expect(auth.submits, 0);
-      await tap(tester, 'cart-confirm');
+      expect(find.byType(AlertDialog), findsNothing);
       expect(auth.submits, 1);
       expect(auth.sent!.single.quantity, 2);
       expect(auth.sent!.single.product.priceCents, 2345);
@@ -316,8 +315,6 @@ void main() {
       await tap(tester, 'cart-refresh');
       expect(enabled(tester), true);
       expect(auth.submits, 0);
-      await tap(tester, 'cart-submit');
-      expect(find.byKey(const ValueKey('cart-confirm')), findsOneWidget);
       revision.value++;
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('cart-confirm')), findsNothing);
@@ -382,8 +379,8 @@ void main() {
       await tester.pumpAndSettle();
       await tap(tester, 'order-member-member-000');
       await tap(tester, 'catalog-add-p001');
-      await tap(tester, 'cart-submit');
-      await tester.tap(find.byKey(const ValueKey('cart-confirm')));
+      await tester.tap(find.byKey(const ValueKey('cart-submit')));
+      await tester.tap(find.byKey(const ValueKey('cart-submit')));
       await tester.pump(const Duration(milliseconds: 300));
       revision.value++;
       await tester.pump();
@@ -424,8 +421,8 @@ void main() {
       final auth = CartAuth()..submitGate = Completer<OrderRequestResult>();
       await show(tester, auth);
       await tap(tester, 'catalog-add-p001');
-      await tap(tester, 'cart-submit');
-      await tester.tap(find.byKey(const ValueKey('cart-confirm')));
+      await tester.tap(find.byKey(const ValueKey('cart-submit')));
+      await tester.tap(find.byKey(const ValueKey('cart-submit')));
       await tester.pump(const Duration(milliseconds: 300));
       expect(auth.submits, 1);
       expect(enabled(tester), false);
@@ -490,9 +487,7 @@ void main() {
       );
       await tap(tester, 'cart-minus-p001');
       await tap(tester, 'cart-submit');
-      expect(auth.submits, 0);
-      expect(find.textContaining('TEST size'), findsWidgets);
-      await tap(tester, 'cart-confirm');
+      expect(find.byType(AlertDialog), findsNothing);
       expect(auth.submits, 1);
       expect(auth.sent!.single.quantity, 2);
       expect(auth.sent!.single.product.priceCents, 1234);
@@ -505,7 +500,6 @@ void main() {
       await tap(tester, 'catalog-add-p001');
       expect(enabled(tester), true);
       await tap(tester, 'cart-submit');
-      await tap(tester, 'cart-confirm');
       expect(auth.submits, 2);
       expect(auth.sent!.single.quantity, 1);
       await tester.pumpWidget(const SizedBox());
@@ -514,14 +508,11 @@ void main() {
   );
 
   testWidgets(
-    'cancel confirmation leaves editable draft, removal restores empty',
+    'selection stays local until submitted and removal restores empty',
     (tester) async {
       final auth = CartAuth();
       await show(tester, auth);
       await tap(tester, 'catalog-add-p001');
-      await tap(tester, 'cart-submit');
-      await tester.tap(find.text(tr(UiLanguage.zh, 'cancel')));
-      await tester.pumpAndSettle();
       expect(auth.submits, 0);
       expect(enabled(tester), true);
       await tap(tester, 'cart-minus-p001');
@@ -539,7 +530,6 @@ void main() {
       await show(tester, auth);
       await tap(tester, 'catalog-add-p001');
       await tap(tester, 'cart-submit');
-      await tap(tester, 'cart-confirm');
       expect(auth.submits, 1);
       expect(enabled(tester), false);
       expect(find.textContaining('PRIVATE_'), findsNothing);
@@ -590,13 +580,10 @@ void main() {
     auth.dispose();
   });
 
-  testWidgets('backgrounding invalidates confirmation and clears the draft', (
-    tester,
-  ) async {
+  testWidgets('backgrounding invalidates an unsubmitted draft', (tester) async {
     final auth = CartAuth();
     await show(tester, auth);
     await tap(tester, 'catalog-add-p001');
-    await tap(tester, 'cart-submit');
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -609,11 +596,12 @@ void main() {
     auth.dispose();
   });
 
-  testWidgets('identity change invalidates confirmation', (tester) async {
+  testWidgets('identity change invalidates an unsubmitted draft', (
+    tester,
+  ) async {
     final auth = CartAuth();
     await show(tester, auth);
     await tap(tester, 'catalog-add-p001');
-    await tap(tester, 'cart-submit');
     auth.invalidate();
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('cart-confirm')), findsNothing);
@@ -624,14 +612,16 @@ void main() {
   });
 
   for (final language in UiLanguage.values) {
-    testWidgets('cart and confirmation fit ${language.name}', (tester) async {
+    testWidgets('cart and direct submission fit ${language.name}', (
+      tester,
+    ) async {
       final auth = CartAuth();
       await show(tester, auth, language: language);
       await tap(tester, 'catalog-add-p001');
       await tap(tester, 'cart-submit');
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text(tr(language, 'cancel')));
-      await tester.pumpAndSettle();
+      expect(auth.submits, 1);
+      expect(find.byType(AlertDialog), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();

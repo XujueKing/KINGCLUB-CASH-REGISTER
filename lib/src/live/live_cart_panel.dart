@@ -385,71 +385,18 @@ class _LiveCartPanelState extends State<LiveCartPanel>
 
   Future<void> submit() async {
     if (!canSubmit) return;
-    final generation = epoch, identity = widget.auth.session;
+    final generation = epoch;
     final original = List<OrderSelection>.unmodifiable(items.values);
     final orderContext = currentContext, memberRef = widget.memberRef;
     final draft = savedDraft;
+    // The explicit order button submits the already visible cart once.
     setState(() {
       busy = true;
-      confirming = true;
+      attempted = true;
+      confirming = false;
+      message = null;
     });
     try {
-      final accepted = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) {
-          activeDialog = dialogContext;
-          return AlertDialog(
-            title: Text(t('cartSubmit')),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${orderContext.tableName}\n$memberName'),
-                  Text(
-                    t(
-                      orderContext.paymentTiming == 'prepay'
-                          ? 'livePrepay'
-                          : 'livePostpay',
-                    ),
-                  ),
-                  for (final item in original)
-                    Text(
-                      '${item.product.name(widget.language)} · ${item.product.specification(widget.language)} × ${item.quantity} · CNY ${formatCents(item.quantity * item.product.priceCents)}',
-                    ),
-                  Text('CNY ${formatCents(total)}'),
-                  Text(t('cartConfirmNotice')),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(t('cancel')),
-              ),
-              FilledButton(
-                key: const ValueKey('cart-confirm'),
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(t('confirm')),
-              ),
-            ],
-          );
-        },
-      );
-      activeDialog = null;
-      if (accepted != true ||
-          !mounted ||
-          generation != epoch ||
-          !identical(identity, widget.auth.session)) {
-        return;
-      }
-      // Keep the editor locked until a durable terminal receipt is returned.
-      // An uncertain delivery remains owned by original-request recovery.
-      setState(() {
-        attempted = true;
-        confirming = false;
-        message = null;
-      });
       final result = await widget.auth.submitOrder(
         context: orderContext,
         memberRef: memberRef,
