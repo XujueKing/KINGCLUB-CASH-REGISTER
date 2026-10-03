@@ -807,14 +807,14 @@ class _TableBillPanelState extends State<TableBillPanel>
                 child: Column(
                   children: [
                     amount(
-                      'billUnpaidAmount',
-                      pending.totalCents + widget.draftCents,
-                      'table-bill-pending',
-                    ),
-                    amount(
                       'billPaidAmount',
                       paid.totalCents,
                       'table-bill-paid',
+                    ),
+                    amount(
+                      'billUnpaidAmount',
+                      pending.totalCents + widget.draftCents,
+                      'table-bill-pending',
                     ),
                   ],
                 ),
