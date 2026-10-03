@@ -33,6 +33,7 @@ Future<int?> showItemPriceDialog(
   required int quantity,
   required int originalCents,
   required int currentCents,
+  VoidCallback? onDetails,
 }) => showDialog<int>(
   context: context,
   builder: (_) => _ItemPriceDialog(
@@ -41,6 +42,7 @@ Future<int?> showItemPriceDialog(
     quantity: quantity,
     originalCents: originalCents,
     currentCents: currentCents,
+    onDetails: onDetails,
   ),
 );
 
@@ -51,10 +53,12 @@ class _ItemPriceDialog extends StatefulWidget {
     required this.quantity,
     required this.originalCents,
     required this.currentCents,
+    this.onDetails,
   });
   final UiLanguage language;
   final String name;
   final int quantity, originalCents, currentCents;
+  final VoidCallback? onDetails;
   @override
   State<_ItemPriceDialog> createState() => _ItemPriceDialogState();
 }
@@ -172,6 +176,22 @@ class _ItemPriceDialogState extends State<_ItemPriceDialog> {
       ),
     ),
     actions: [
+      if (widget.onDetails != null)
+        TextButton(
+          key: const ValueKey('item-price-details'),
+          onPressed: () {
+            widget.onDetails!();
+            Navigator.pop(context);
+          },
+          child: Text(
+            words([
+              '上酒 / 退款',
+              'Serving / refunds',
+              '上酒 / 退款',
+              'เสิร์ฟ / คืนเงิน',
+            ]),
+          ),
+        ),
       TextButton(
         onPressed: () => Navigator.pop(context),
         child: Text(words(['取消', 'Cancel', '取消', 'ยกเลิก'])),

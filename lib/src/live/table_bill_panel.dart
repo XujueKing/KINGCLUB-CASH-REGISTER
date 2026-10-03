@@ -5,6 +5,7 @@ import 'bill_details_dialog.dart';
 import 'bill_serving_dialog.dart';
 import 'bill_item_return_dialog.dart';
 import 'catalog_snapshot.dart';
+import 'item_price_dialog.dart';
 
 import 'dart:async';
 
@@ -36,6 +37,8 @@ class TableBillPanel extends StatefulWidget {
     this.onAddProduct,
     this.draftCards = const {},
     this.onQuickAddProduct,
+    this.onRepriceDraft,
+    this.onQuickAddSpecialProduct,
     this.orderAction,
     this.primaryAction,
     this.beforeActions,
@@ -53,6 +56,14 @@ class TableBillPanel extends StatefulWidget {
   final Future<void> Function(String productRef)? onAddProduct;
   final Map<String, BillProductCard> draftCards;
   final Future<void> Function(String productRef)? onQuickAddProduct;
+  final Future<void> Function(
+    String productRef,
+    int unitPriceCents,
+    String selectionRef,
+  )?
+  onQuickAddSpecialProduct;
+  final void Function(String draftRef, int unitPriceCents, String selectionRef)?
+  onRepriceDraft;
   @override
   State<TableBillPanel> createState() => _TableBillPanelState();
 }
@@ -439,6 +450,104 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   Future<void> openGroup(BillProductGroup group) async {
     if (loading || failed || !foreground || reducing || checkout) return;
+    final table = widget.tableRef, session = widget.sessionRef;
+    final unpaid = group.active
+        .where((line) => line.order.status == 'pending')
+        .toList();
+    final draftRef = group.item.pricingRef ?? group.productRef;
+    final draft = widget.draftCards[draftRef];
+    if (unpaid.isEmpty && draft != null) {
+      draft.onTap?.call();
+      return;
+    }
+    if (draft != null && widget.onRepriceDraft == null) {
+      draft.onTap?.call();
+      return;
+    }
+    if (unpaid.isEmpty ||
+        !widget.changesAllowed ||
+        snapshot?.sessionStatus != 'open' ||
+        widget.auth.session?.permissions.contains('orders.create') != true ||
+        unpaid.any((line) => !line.item.servingKnown)) {
+      return openGroupDetails(group);
+    }
+    final generation = epoch, identity = widget.auth.session;
+    var details = false;
+    final first = unpaid.first.item;
+    final price = await showItemPriceDialog(
+      context,
+      language: widget.language,
+      name: '${first.name(widget.language)} · ${t('tableBillUnpaid')}',
+      quantity:
+          unpaid.fold(0, (n, line) => n + line.item.quantity) +
+          (draft?.quantity ?? 0),
+      originalCents: first.originalPriceCents,
+      currentCents: first.priceCents,
+      onDetails: () => details = true,
+    );
+    if (!mounted ||
+        generation != epoch ||
+        !identical(identity, widget.auth.session) ||
+        !foreground) {
+      return;
+    }
+    if (details) return openGroupDetails(group);
+    if (price == null) return;
+    setState(() => checkout = true);
+    try {
+      final selectionRef = await widget.auth.repriceUnpaidItems(
+        tableRef: widget.tableRef,
+        sessionRef: widget.sessionRef,
+        productRef: group.productRef,
+        unitPriceCents: price,
+        items: [
+          for (final line in unpaid)
+            {
+              'orderRef': line.order.reference,
+              'expectedQuantity': line.item.quantity,
+              'expectedServedQuantity': line.item.servedQuantity!,
+              if (line.item.servingEpoch != null)
+                'expectedServingEpoch': line.item.servingEpoch!,
+              'expectedTotalCents': line.order.totalCents,
+              'expectedUnitPriceCents': line.item.priceCents,
+            },
+        ],
+      );
+      if (mounted &&
+          identical(identity, widget.auth.session) &&
+          foreground &&
+          table == widget.tableRef &&
+          session == widget.sessionRef &&
+          draft != null) {
+        widget.onRepriceDraft?.call(draftRef, price, selectionRef);
+      }
+    } catch (_) {
+      if (mounted &&
+          generation == epoch &&
+          identical(identity, widget.auth.session)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              [
+                '改价未完成，请核对账单后重试',
+                'Price update failed. Check the bill and retry.',
+                '改價未完成，請核對帳單後重試',
+                'เปลี่ยนราคาไม่สำเร็จ โปรดตรวจสอบบิลแล้วลองใหม่',
+              ][widget.language.index],
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        await load(fresh: true);
+        if (mounted) setState(() => checkout = false);
+      }
+    }
+  }
+
+  Future<void> openGroupDetails(BillProductGroup group) async {
+    if (loading || failed || !foreground || reducing || checkout) return;
     final generation = epoch, identity = widget.auth.session;
     bool current() =>
         mounted &&
@@ -657,9 +766,8 @@ class _TableBillPanelState extends State<TableBillPanel>
         )
         .toList();
     final groups = groupBillProducts(visible);
-    BillProductCard? draftFor(BillProductGroup group) =>
-        group.currency == 'CNY' && !group.specialPrice
-        ? drafts[group.productRef]
+    BillProductCard? draftFor(BillProductGroup group) => group.currency == 'CNY'
+        ? drafts[group.item.pricingRef ?? group.productRef]
         : null;
     final canPay = [
       'payment.cash',
@@ -676,8 +784,7 @@ class _TableBillPanelState extends State<TableBillPanel>
           if (!groups.any(
             (g) =>
                 g.currency == 'CNY' &&
-                !g.specialPrice &&
-                g.productRef == entry.key,
+                (g.item.pricingRef ?? g.productRef) == entry.key,
           ))
             entry.value,
         if (canRead) ...[
@@ -721,13 +828,21 @@ class _TableBillPanelState extends State<TableBillPanel>
                   : null,
               onPlus:
                   !failed &&
-                      widget.onQuickAddProduct != null &&
+                      (group.specialPrice
+                          ? widget.onQuickAddSpecialProduct != null
+                          : widget.onQuickAddProduct != null) &&
                       (inventory[group.productRef]?.inventoryKnown ?? false) &&
                       (draftFor(group)?.quantity ?? 0) <
                           inventory[group.productRef]!.available &&
                       (draftFor(group)?.quantity ?? 0) < 1000
                   ? (draftFor(group) != null
                         ? draftFor(group)!.onPlus
+                        : group.specialPrice
+                        ? () => widget.onQuickAddSpecialProduct!(
+                            group.productRef,
+                            group.item.priceCents,
+                            group.item.pricingRef!,
+                          )
                         : () => widget.onQuickAddProduct!(group.productRef))
                   : null,
               badges: status(

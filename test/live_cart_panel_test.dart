@@ -158,6 +158,35 @@ bool enabled(WidgetTester tester) =>
     null;
 
 void main() {
+  testWidgets(
+    'special-card plus retains its unit price while menu selection uses normal price',
+    (tester) async {
+      final auth = CartAuth();
+      await show(tester, auth);
+      final add = tester
+          .widget<TableBillPanel>(find.byType(TableBillPanel))
+          .onQuickAddSpecialProduct!;
+      await add('p001', 500, 'price-existing');
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        500,
+      );
+      await tap(tester, 'catalog-add-p001');
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        1734,
+      );
+      await tap(tester, 'cart-plus-price-existing');
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        2234,
+      );
+      expect(find.text('特价'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   testWidgets('prepay card and plus stop at available stock', (tester) async {
     final auth = CartAuth()..available = 2;
     final context = m.contextData();

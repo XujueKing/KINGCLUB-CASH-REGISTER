@@ -1480,6 +1480,110 @@ class StaffAuthController extends ChangeNotifier {
     }
   }
 
+  Future<String> repriceUnpaidItems({
+    required String tableRef,
+    required String sessionRef,
+    required String productRef,
+    required int unitPriceCents,
+    required List<Map<String, Object>> items,
+  }) async {
+    final identity = _session, api = _api, epoch = _epoch;
+    if (identity == null ||
+        api == null ||
+        _busy ||
+        !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('orders.create')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    if (unitPriceCents < 1 ||
+        unitPriceCents > 100000000 ||
+        items.isEmpty ||
+        items.length > 1000 ||
+        items.map((i) => i['orderRef']).toSet().length != items.length) {
+      throw const CcsopFailure('ITEM_PRICE_INVALID');
+    }
+    final lines = items.map((i) => Map<String, Object>.from(i)).toList()
+      ..sort(
+        (a, b) => (a['orderRef'] as String).compareTo(b['orderRef'] as String),
+      );
+    for (final line in lines) {
+      await _guardItemReturn(
+        identity,
+        line['orderRef'] as String,
+        productRef,
+        epoch,
+      );
+    }
+    final random = Random.secure(), bytes = List.generate(16, (_) => 0);
+    for (var i = 0; i < 16; i++) {
+      bytes[i] = random.nextInt(256);
+    }
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final requestId =
+        '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+    final scope = <String, Object>{
+      'storeRef': identity.storeRef,
+      'tableRef': tableRef,
+      'sessionRef': sessionRef,
+      'productRef': productRef,
+      'unitPriceCents': unitPriceCents,
+    };
+    final raw = await api.call('K261002001964', {
+      ...scope,
+      'requestId': requestId,
+      'items': lines,
+    });
+    _check(epoch);
+    final result = raw is Map ? raw['result'] : null;
+    final receipts = result is Map ? result['items'] : null;
+    final selectionRef = result is Map ? result['selectionRef'] : null;
+    bool valid =
+        result is Map &&
+        result['requestId'] == requestId &&
+        selectionRef is String &&
+        RegExp(r'^[a-f0-9]{64}$').hasMatch(selectionRef) &&
+        scope.entries.every((e) => result[e.key] == e.value) &&
+        receipts is List &&
+        receipts.length == lines.length;
+    if (valid) {
+      final refs = <Object?>{};
+      for (var i = 0; i < lines.length; i++) {
+        final row = receipts[i], line = lines[i];
+        final quantity = line['expectedQuantity'] as int;
+        final expected =
+            (line['expectedTotalCents'] as int) +
+            quantity *
+                (unitPriceCents - (line['expectedUnitPriceCents'] as int));
+        if (row is! Map ||
+            !scope.entries.every((e) => row[e.key] == e.value) ||
+            !line.entries.every((e) => row[e.key] == e.value) ||
+            row['operatedBy'] != identity.employeeRef ||
+            row['priceBatchFingerprint'] != selectionRef ||
+            row['quantity'] != quantity ||
+            row['remainingQuantity'] != quantity ||
+            row['remainingTotalCents'] != expected ||
+            row['orderStatus'] != 'pending' ||
+            row['requestId'] is! String ||
+            !uuidPattern.hasMatch(row['requestId'] as String) ||
+            !refs.add(row['requestId'])) {
+          valid = false;
+          break;
+        }
+      }
+    }
+    if (!valid) {
+      throw const CcsopFailure(
+        'ITEM_PRICE_RECEIPT_INVALID',
+        deliveryUncertain: true,
+      );
+    }
+    return selectionRef as String;
+  }
+
   /// Read-only, bound-store order query; late responses cannot survive a session change.
   Future<Object?> readOrders({
     required String tableRef,

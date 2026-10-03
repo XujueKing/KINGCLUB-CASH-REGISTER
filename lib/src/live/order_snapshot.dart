@@ -56,6 +56,14 @@ class OrderItem {
           : _ref(_map(_map(value['snapshot'])['pricing'])['selectionRef']),
       quantity = _positive(value['quantity'], 1000),
       priceCents = _positive(value['priceCents'], 100000000),
+      originalPriceCents = _positive(
+        _map(value['snapshot'])['pricing'] == null
+            ? value['priceCents']
+            : _map(
+                _map(value['snapshot'])['pricing'],
+              )['originalUnitPriceCents'],
+        100000000,
+      ),
       subtotalCents = _positive(value['subtotalCents']),
       servedQuantity = _servingCount(value, 'servedQuantity'),
       remainingQuantity = _servingCount(value, 'remainingQuantity'),
@@ -99,7 +107,7 @@ class OrderItem {
       pricingRef == null ? productRef : '$productRef/$pricingRef';
   bool get specialPrice => pricingRef != null;
   final String? thumbnailPath;
-  final int quantity, priceCents, subtotalCents;
+  final int quantity, priceCents, originalPriceCents, subtotalCents;
   // Both absent means an older server did not provide delivery progress, never zero delivered.
   final int? servedQuantity, remainingQuantity;
   final int? refundedQuantity;

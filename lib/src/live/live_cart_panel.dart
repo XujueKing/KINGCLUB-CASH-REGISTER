@@ -356,7 +356,12 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       selectedQuantity(product) < product.available &&
       selectedQuantity(product) < 1000;
 
-  void change(CatalogProduct product, int delta, {String? selectionRef}) {
+  void change(
+    CatalogProduct product,
+    int delta, {
+    String? selectionRef,
+    int? unitPriceCents,
+  }) {
     if (!editable) return;
     if (delta > 0 && !canAdd(product)) return;
     final key = selectionRef ?? product.reference;
@@ -381,7 +386,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         product,
         quantity,
         selectionRef: key,
-        unitPriceCents: old?.unitPriceCents,
+        unitPriceCents: old?.unitPriceCents ?? unitPriceCents,
         paymentTiming: currentContext.paymentTiming,
       );
       final nextTotal =
@@ -457,11 +462,21 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     }
   }
 
-  Future<void> addExistingProduct(String productRef, {bool edit = true}) async {
+  Future<void> addExistingProduct(
+    String productRef, {
+    bool edit = true,
+    String? selectionRef,
+    int? unitPriceCents,
+  }) async {
     if (!editable) return;
-    final selected = items[productRef];
+    final selected = items[selectionRef ?? productRef];
     if (selected != null && !edit) {
-      change(selected.product, 1);
+      change(
+        selected.product,
+        1,
+        selectionRef: selectionRef,
+        unitPriceCents: unitPriceCents,
+      );
       return;
     }
     final identity = widget.auth.session, generation = epoch;
@@ -508,7 +523,12 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         !identical(identity, widget.auth.session)) {
       return;
     }
-    change(product, 1);
+    change(
+      product,
+      1,
+      selectionRef: selectionRef,
+      unitPriceCents: unitPriceCents,
+    );
     if (widget.tablePanel == null &&
         edit &&
         items.containsKey(product.reference) &&
@@ -764,6 +784,29 @@ class _LiveCartPanelState extends State<LiveCartPanel>
               children: [
                 Expanded(
                   child: TableBillPanel(
+                    onQuickAddSpecialProduct: acceptingAdds
+                        ? (ref, price, selectionRef) => addExistingProduct(
+                            ref,
+                            edit: false,
+                            selectionRef: selectionRef,
+                            unitPriceCents: price,
+                          )
+                        : null,
+                    onRepriceDraft: (draftRef, price, selectionRef) {
+                      final item = items[draftRef];
+                      if (item == null || !editable) return;
+                      setState(() {
+                        items.remove(draftRef);
+                        items[selectionRef] = OrderSelection(
+                          item.product,
+                          item.quantity,
+                          paymentTiming: currentContext.paymentTiming,
+                          selectionRef: selectionRef,
+                          unitPriceCents: price,
+                        );
+                        dirty = true;
+                      });
+                    },
                     onAddProduct: editable ? addExistingProduct : null,
                     onQuickAddProduct: acceptingAdds
                         ? (ref) => addExistingProduct(ref, edit: false)
