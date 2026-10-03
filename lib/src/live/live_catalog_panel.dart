@@ -21,6 +21,7 @@ class LiveCatalogPanel extends StatefulWidget {
     this.revision = 0,
     this.header,
     this.onSelect,
+    this.canAdd,
     this.paymentTiming = 'postpay',
   });
   final Widget? header;
@@ -30,6 +31,7 @@ class LiveCatalogPanel extends StatefulWidget {
   final int revision;
   final String paymentTiming;
   final ValueChanged<CatalogProduct>? onSelect;
+  final bool Function(CatalogProduct)? canAdd;
   @override
   State<LiveCatalogPanel> createState() => _LiveCatalogPanelState();
 }
@@ -219,7 +221,6 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
           ],
         ),
       ),
-      if (loading && data == null) const LinearProgressIndicator(),
       if (failed && data != null) Text(t('liveReadFailed')),
       Expanded(
         child: failed && data == null
@@ -263,7 +264,8 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
         widget.onSelect != null &&
         foreground &&
         !failed &&
-        (widget.paymentTiming == 'prepay' || available);
+        available &&
+        (widget.canAdd?.call(p) ?? true);
     final stockColor = !p.inventoryKnown
         ? const Color(0xff986500)
         : available

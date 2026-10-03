@@ -158,6 +158,45 @@ bool enabled(WidgetTester tester) =>
     null;
 
 void main() {
+  testWidgets('prepay card and plus stop at available stock', (tester) async {
+    final auth = CartAuth()..available = 2;
+    final context = m.contextData();
+    (context['session'] as Map<String, dynamic>)['paymentTiming'] = 'prepay';
+    m.size(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveCartPanel(
+            auth: auth,
+            language: UiLanguage.zh,
+            orderContext: m.parse(context),
+            memberRef: 'member-000',
+            onBack: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final card = find.byKey(const ValueKey('catalog-select-p001'));
+    final add = tester.widget<InkWell>(card).onTap!;
+    add();
+    add();
+    add(); // A queued tap must not bypass the stock limit.
+    await tester.pumpAndSettle();
+    expect(tester.widget<InkWell>(card).onTap, isNull);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('catalog-add-p001')))
+          .onPressed,
+      isNull,
+    );
+    expect(auth.submits, 0);
+    await tap(tester, 'cart-submit');
+    expect(auth.sent!.single.quantity, 2);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
+
   testWidgets('fresh same-session context does not lock continued ordering', (
     tester,
   ) async {
