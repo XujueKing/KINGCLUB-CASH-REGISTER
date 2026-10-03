@@ -463,13 +463,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text(tr(UiLanguage.zh, 'orderRecoveryConfirmed')),
-        findsOneWidget,
+        findsNothing,
       );
       revision.value++;
       await tester.pumpAndSettle();
       expect(
         find.text(tr(UiLanguage.zh, 'orderRecoveryConfirmed')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(auth.submits, 1);
       await tester.pumpWidget(const SizedBox());
@@ -555,7 +555,7 @@ void main() {
       expect(auth.sent!.single.product.priceCents, 1234);
       expect(
         find.text(tr(UiLanguage.zh, 'orderRecoveryConfirmed')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(enabled(tester), false);
       // The receipt is final: add another round without leaving this table.

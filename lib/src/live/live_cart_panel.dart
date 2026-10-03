@@ -449,7 +449,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
             dirty = false;
           }
           message = switch (result.state) {
-            OrderRequestState.confirmed => 'orderRecoveryConfirmed',
+            OrderRequestState.confirmed => null,
             OrderRequestState.cancelled => 'orderRecoveryCancelled',
             OrderRequestState.notObserved => 'orderRecoveryUnknown',
           };
