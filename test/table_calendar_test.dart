@@ -60,6 +60,11 @@ class CalendarAuth extends TableAuth {
 }
 
 void main() {
+  test('business day changes at six including month boundary', () {
+    expect(tableBusinessDay(DateTime(2030, 1, 1, 5, 59)), DateTime(2029, 12, 31));
+    expect(tableBusinessDay(DateTime(2030, 1, 1, 6)), DateTime(2030, 1, 1));
+  });
+
   test('calendar short labels cross year boundaries', () {
     final now = DateTime(2030, 1, 1, 8, 5);
     expect(tableCalendarLabel(now, now, UiLanguage.zh), '今日 08:05');

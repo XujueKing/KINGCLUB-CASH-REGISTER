@@ -6,12 +6,22 @@ import 'order_snapshot.dart';
 import 'table_snapshot.dart';
 import 'table_reservation_dialog.dart';
 
+DateTime tableBusinessDay(DateTime now) {
+  final local = now.toLocal().subtract(const Duration(hours: 6));
+  return DateTime(local.year, local.month, local.day);
+}
+
 String tableCalendarLabel(DateTime date, DateTime now, UiLanguage language) {
-  final days = DateTime.utc(
-    date.year,
-    date.month,
-    date.day,
-  ).difference(DateTime.utc(now.year, now.month, now.day)).inDays;
+  final businessToday = tableBusinessDay(now);
+  final days = DateTime.utc(date.year, date.month, date.day)
+      .difference(
+        DateTime.utc(
+          businessToday.year,
+          businessToday.month,
+          businessToday.day,
+        ),
+      )
+      .inDays;
   final label = switch (days) {
     0 => tr(language, 'tableToday'),
     -1 => tr(language, 'tableYesterday'),
@@ -198,14 +208,14 @@ class _TableCalendarPanelState extends State<TableCalendarPanel>
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final future = widget.date.isAfter(DateTime(now.year, now.month, now.day));
+    final future = widget.date.isAfter(tableBusinessDay(now));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (loading) const LinearProgressIndicator(),
         if (selected == null &&
             widget.auth.session?.permissions.contains('table.open') == true &&
-            !widget.date.isBefore(DateTime(now.year, now.month, now.day)))
+            !widget.date.isBefore(tableBusinessDay(now)))
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.icon(

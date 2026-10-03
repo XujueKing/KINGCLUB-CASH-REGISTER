@@ -654,7 +654,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                 delegates: GlobalMaterialLocalizations.delegates,
                 child: child,
               ),
-              initialDate: selectedDate ?? now,
+              initialDate: selectedDate ?? tableBusinessDay(now),
               firstDate: DateTime(2020),
               lastDate: DateTime(now.year + 3, 12, 31),
             );
@@ -667,7 +667,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
           icon: const Icon(Icons.calendar_month_outlined, size: 18),
           label: Text(
             tableCalendarLabel(
-              selectedDate ?? DateTime.now(),
+              selectedDate ?? tableBusinessDay(DateTime.now()),
               DateTime.now(),
               widget.language,
             ),
