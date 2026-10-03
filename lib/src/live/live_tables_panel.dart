@@ -125,7 +125,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       refreshDebounce = null;
       if (!mounted || !foreground || loading) return;
       refreshQueued = false;
-      unawaited(load(reset: true));
+      unawaited(load());
     });
   }
 
@@ -423,7 +423,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (data == null) workspaceHeader(),
-        if (loading) const LinearProgressIndicator(),
+        if (loading && data == null) const LinearProgressIndicator(),
         Expanded(
           child: failed
               ? Center(

@@ -70,7 +70,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       data = null;
       unawaited(load(reset: true));
     } else if (oldWidget.revision != widget.revision && foreground) {
-      unawaited(load(reset: true));
+      unawaited(load());
     }
   }
 
@@ -216,7 +216,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
           ],
         ),
       ),
-      if (loading) const LinearProgressIndicator(),
+      if (loading && data == null) const LinearProgressIndicator(),
       Expanded(
         child: failed
             ? Center(child: Text(t('liveReadFailed')))

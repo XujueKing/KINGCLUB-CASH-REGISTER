@@ -182,12 +182,16 @@ void main() {
       await show(tester, auth, realtime: realtime);
       expect(realtime.running, isTrue);
       expect(auth.requested.length, 1);
+      final card = find.byKey(const ValueKey('live-table-test-000'));
+      final cardRect = tester.getRect(card);
       auth.gate = Completer<Object?>();
       for (var i = 0; i < 5; i++) {
         realtime.changed();
       }
       await tester.pump(const Duration(milliseconds: 400));
       expect(auth.requested.length, 2);
+      expect(tester.getRect(card), cardRect);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
       for (var i = 0; i < 5; i++) {
         realtime.changed();
       }
@@ -303,7 +307,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('live-refresh')));
     await tester.pump();
     expect(find.text('Test table 0'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
     await tester.pump();
     expect(find.byKey(const ValueKey('table-detail-back')), findsNothing);

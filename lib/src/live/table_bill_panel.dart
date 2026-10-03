@@ -586,8 +586,6 @@ class _TableBillPanelState extends State<TableBillPanel>
             entry.value,
         if (canRead) ...[
           if (loading && snapshot == null) Text(t('billFirstSync')),
-          if (loading && snapshot != null)
-            Text(t('billSyncing'), style: const TextStyle(fontSize: 10)),
           if (failed)
             TextButton(
               onPressed: () => unawaited(load()),
