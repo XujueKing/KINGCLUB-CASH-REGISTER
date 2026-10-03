@@ -6,6 +6,14 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'togetherAdmissionClose': '关闭|Close|關閉|ปิด',
+  'togetherAdmission': '活动入场|Event admission|活動入場|เข้างาน',
+  'togetherAdmissionHelp': '扫描顾客活动入场码，确认核销后放行。|Scan the guest’s event ticket and admit only after confirmation.|掃描顧客活動入場碼，確認核銷後放行。|สแกนบัตรเข้างานและให้เข้าหลังยืนยันสำเร็จ',
+  'togetherAdmissionSuccess':
+      '核销成功，可入场|Admission confirmed|核銷成功，可入場|ยืนยันเข้างานสำเร็จ',
+  'togetherAdmissionRepeated': '此票已核销，请勿重复放行|Already admitted. Do not admit twice.|此票已核銷，請勿重複放行|บัตรนี้ใช้แล้ว ห้ามให้เข้าซ้ำ',
+  'togetherAdmissionFailed': '未能确认核销，请勿放行。请重扫原入场码核对结果。|Admission unconfirmed. Do not admit. Rescan the original code to check.|未能確認核銷，請勿放行。請重掃原入場碼核對結果。|ยังยืนยันไม่ได้ ห้ามให้เข้า โปรดสแกนรหัสเดิมเพื่อตรวจสอบ',
+
   'checkoutDiscount': '整单打折|Bill discount|整單打折|ส่วนลดทั้งบิล',
   'checkoutWaive': '整单免单|Waive bill|整單免單|ยกเว้นทั้งบิล',
   'checkoutDiscountScope': '仅调整本桌未付款商品，按当前单价计算|Applies to unpaid items at current unit prices|僅調整本桌未付款商品，按當前單價計算|ปรับเฉพาะสินค้าที่ยังไม่ชำระตามราคาต่อหน่วยปัจจุบัน',

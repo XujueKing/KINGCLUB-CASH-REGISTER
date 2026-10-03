@@ -1,3 +1,5 @@
+import 'live/together_admission_dialog.dart';
+
 import 'package:flutter/material.dart';
 
 import '../main.dart';
@@ -211,6 +213,22 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                           ),
                         ),
                       ),
+                      if (widget.auth.session?.permissions.contains(
+                            'together.admit',
+                          ) ==
+                          true)
+                        TextButton.icon(
+                          key: const ValueKey('together-admission-open'),
+                          onPressed: () => showDialog<void>(
+                            context: context,
+                            builder: (_) => TogetherAdmissionDialog(
+                              auth: widget.auth,
+                              language: widget.language,
+                            ),
+                          ),
+                          icon: const Icon(Icons.qr_code_scanner),
+                          label: Text(t('togetherAdmission')),
+                        ),
                       Text(
                         [
                           '超级智能收银台',

@@ -23,6 +23,7 @@ const staffPermissions = {
   'payment.refund',
   'voucher.meituan',
   'voucher.douyin',
+  'together.admit',
   'shift.manage',
   'report.read',
 };

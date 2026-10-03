@@ -43,6 +43,7 @@ import '../network/ccsop_crypto.dart';
 import '../network/ccsop_handshake.dart';
 import 'session_vault.dart';
 import 'staff_session.dart';
+import '../live/together_admission.dart';
 
 /// Owns exactly one employee session. Saved projections are never accepted without a server refresh.
 class StaffAuthController extends ChangeNotifier {
@@ -1720,6 +1721,31 @@ class StaffAuthController extends ChangeNotifier {
         });
       }),
     );
+  }
+
+  Future<TogetherAdmission> consumeTogetherAdmission(String code) async {
+    final session = _session, api = _api, epoch = _epoch;
+    if (session == null ||
+        api == null ||
+        _busy ||
+        !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!session.permissions.contains('together.admit')) {
+      throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    }
+    if (!TogetherAdmission.codePattern.hasMatch(code)) {
+      throw const CcsopFailure('TOGETHER_ADMISSION_INVALID');
+    }
+    final result = await api.call('K261004001990', {
+      'storeRef': session.storeRef,
+      'admissionCode': code,
+    });
+    _check(epoch);
+    if (!identical(session, _session) || !session.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    return TogetherAdmission.parse(result, storeRef: session.storeRef);
   }
 
   Future<MemberIdentity> readMemberIdentity(String identityCode) async {
