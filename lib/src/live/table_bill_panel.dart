@@ -27,6 +27,7 @@ class TableBillPanel extends StatefulWidget {
     required this.sessionRef,
     required this.revision,
     this.checkoutAllowed = true,
+    this.recording = false,
     this.changesAllowed = true,
     this.fillHeight = false,
     this.leading,
@@ -43,7 +44,7 @@ class TableBillPanel extends StatefulWidget {
   final UiLanguage language;
   final String tableRef, sessionRef;
   final int revision;
-  final bool checkoutAllowed, fillHeight;
+  final bool checkoutAllowed, fillHeight, recording;
   final bool changesAllowed;
   final Widget? leading;
   final Widget? orderAction, primaryAction, beforeActions;
@@ -762,6 +763,14 @@ class _TableBillPanelState extends State<TableBillPanel>
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFFDC2626),
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor:
+                          (pending?.totalCents ?? 0) > 0 || widget.recording
+                          ? const Color(0xFFDC2626)
+                          : null,
+                      disabledForegroundColor:
+                          (pending?.totalCents ?? 0) > 0 || widget.recording
+                          ? Colors.white
+                          : null,
                     ),
                     onPressed:
                         !loading &&
@@ -777,6 +786,7 @@ class _TableBillPanelState extends State<TableBillPanel>
                     child: Text(
                       pending != null &&
                               pending.totalCents == 0 &&
+                              !widget.recording &&
                               !loading &&
                               !failed
                           ? t('billSettled')

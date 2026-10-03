@@ -433,6 +433,13 @@ void main() {
       await tester.pumpWidget(page(auth, 0, checkoutAllowed: false));
       await tester.pumpAndSettle();
       expect(tester.widget<FilledButton>(checkout).onPressed, isNull);
+      expect(
+        tester.widget<FilledButton>(checkout).style!.backgroundColor!.resolve({
+          WidgetState.disabled,
+        }),
+        const Color(0xFFDC2626),
+      );
+
       await tester.pumpWidget(page(auth, 0));
       await tester.pumpAndSettle();
       expect(tester.widget<FilledButton>(checkout).onPressed, isNotNull);

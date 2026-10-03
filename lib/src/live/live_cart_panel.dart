@@ -843,33 +843,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                               t(menuOpen ? 'ordersBack' : 'tableOrderStart'),
                             ),
                           ),
-                    primaryAction:
-                        widget.tablePanel != null && (items.isNotEmpty || busy)
-                        ? FilledButton(
-                            key: const ValueKey('cart-submit'),
-                            onPressed: null,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (busy) ...[
-                                  const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                ],
-                                Flexible(
-                                  child: Text(
-                                    '${t('cartRecording')} \u00a5${formatCents(total)}',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : null,
+                    recording: busy,
                     beforeActions: widget.tablePanel == null
                         ? null
                         : Column(

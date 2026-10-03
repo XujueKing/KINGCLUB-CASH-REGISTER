@@ -73,6 +73,7 @@ a.TestAuth loginChannel() => a.TestAuth()
 class ViewAuth extends StaffAuthController {
   String? filter, cursor;
   bool fail = false;
+  Completer<CatalogSnapshot>? gate;
   Map<String, dynamic>? reply;
   @override
   Future<CatalogSnapshot> readCatalog({
@@ -81,6 +82,7 @@ class ViewAuth extends StaffAuthController {
   }) async {
     filter = categoryRef;
     cursor = afterProduct;
+    if (gate != null) return gate!.future;
     if (fail) throw const CcsopFailure('TEST_FAILURE');
     return parse(
       reply ?? catalog(),
@@ -91,6 +93,38 @@ class ViewAuth extends StaffAuthController {
 }
 
 void main() {
+  testWidgets('background refresh preserves categories and their interaction', (
+    tester,
+  ) async {
+    final auth = ViewAuth();
+    addTearDown(auth.dispose);
+    Widget page(int revision) => MaterialApp(
+      home: Scaffold(
+        body: LiveCatalogPanel(
+          auth: auth,
+          language: UiLanguage.zh,
+          onBack: () {},
+          revision: revision,
+        ),
+      ),
+    );
+    await tester.pumpWidget(page(0));
+    await tester.pumpAndSettle();
+    final category = find.byKey(const ValueKey('catalog-category-c1'));
+    final element = tester.element(category);
+    auth.gate = Completer<CatalogSnapshot>();
+    await tester.pumpWidget(page(1));
+    await tester.pump();
+    expect(identical(element, tester.element(category)), isTrue);
+    expect(tester.widget<ChoiceChip>(category).onSelected, isNotNull);
+    await tester.tap(category);
+    await tester.pump();
+    expect(category, findsOneWidget);
+    expect(tester.widget<ChoiceChip>(category).selected, isTrue);
+    auth.gate!.complete(parse(catalog()));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('prepay allows selection with unknown stock; postpay blocks it', (
     tester,
   ) async {
@@ -372,7 +406,7 @@ void main() {
     }
   });
   testWidgets(
-    'landscape four-language catalog filters, hides stale data on failure',
+    'landscape four-language catalog filters, retains display on failure',
     (tester) async {
       tester.view.physicalSize = const Size(1024, 600);
       tester.view.devicePixelRatio = 1;
@@ -403,7 +437,7 @@ void main() {
       auth.fail = true;
       await tester.tap(find.byKey(const ValueKey('catalog-refresh')));
       await tester.pumpAndSettle();
-      expect(find.text('TEST product'), findsNothing);
+      expect(find.text('TEST product'), findsOneWidget);
       expect(find.text(tr(UiLanguage.th, 'liveReadFailed')), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();

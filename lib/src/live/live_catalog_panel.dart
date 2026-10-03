@@ -37,6 +37,7 @@ class LiveCatalogPanel extends StatefulWidget {
 class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     with WidgetsBindingObserver {
   CatalogSnapshot? data;
+  List<CatalogCategory> categories = [];
   String? category;
   final cursors = <String?>[null];
   int page = 0, epoch = 0;
@@ -55,6 +56,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     ++epoch;
     setState(() {
       data = null;
+      categories = [];
       loading = false;
       failed = false;
     });
@@ -67,6 +69,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       oldWidget.auth.removeListener(identityChanged);
       widget.auth.addListener(identityChanged);
       category = null;
+      categories = [];
       data = null;
       unawaited(load(reset: true));
     } else if (oldWidget.revision != widget.revision && foreground) {
@@ -115,6 +118,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       }
       setState(() {
         data = result;
+        categories = result.categories;
         page = requestedPage;
         loading = false;
       });
@@ -199,23 +203,24 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
               child: ChoiceChip(
                 label: Text(t('all')),
                 selected: category == null,
-                onSelected: loading ? null : (_) => select(null),
+                onSelected: foreground ? (_) => select(null) : null,
               ),
             ),
-            for (final c in data?.categories ?? <CatalogCategory>[])
+            for (final c in categories)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: ChoiceChip(
                   key: ValueKey('catalog-category-${c.reference}'),
                   label: Text(c.name(widget.language)),
                   selected: category == c.reference,
-                  onSelected: loading ? null : (_) => select(c.reference),
+                  onSelected: foreground ? (_) => select(c.reference) : null,
                 ),
               ),
           ],
         ),
       ),
       if (loading && data == null) const LinearProgressIndicator(),
+      if (failed && data != null) Text(t('liveReadFailed')),
       Expanded(
         child: failed && data == null
             ? Center(child: Text(t('liveReadFailed')))
