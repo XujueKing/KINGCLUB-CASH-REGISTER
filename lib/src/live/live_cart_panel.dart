@@ -597,89 +597,113 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              key: const ValueKey('bill-table-badge'),
-              constraints: const BoxConstraints(minWidth: 52, maxWidth: 82),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-              decoration: BoxDecoration(
-                gradient: tableStatusGradient(color),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                widget.orderContext.tableName,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+        Container(
+          key: const ValueKey('bill-table-badge'),
+          constraints: const BoxConstraints(
+            minWidth: 52,
+            maxWidth: 82,
+            minHeight: 48,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+          decoration: BoxDecoration(
+            gradient: tableStatusGradient(color),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            widget.orderContext.tableName,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
-            InkWell(
-              key: const ValueKey('bill-party-size'),
-              onTap: () => showDialog<void>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text(t('guests')),
-                  content: Text(t('billPartyUnavailable')),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(t('staffCancelSelection')),
-                    ),
-                  ],
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Text(
-                  '${t('guests')}: ${session?.partySize ?? currentContext.partySize ?? '—'}/${table?.maximumSeats ?? '—'}',
-                  style: const TextStyle(fontSize: 10),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(
-              key: const ValueKey('bill-heading'),
-              t('ordersDetails'),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ),
-        TextButton(
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            minimumSize: const Size(0, 40),
-          ),
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text(t('billOpeningAttribute')),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
                 children: [
-                  Text(t('billRuleUnavailable')),
-                  if (widget.tableActions != null) widget.tableActions!,
+                  Flexible(
+                    child: Text(
+                      key: const ValueKey('bill-heading'),
+                      t('ordersDetails'),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  TextButton(
+                    key: const ValueKey('bill-opening-tag'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      backgroundColor: color.withValues(alpha: 0.10),
+                      foregroundColor: color,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: color.withValues(alpha: 0.25)),
+                      ),
+                    ),
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(t('billOpeningAttribute')),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(t('billRuleUnavailable')),
+                            if (widget.tableActions != null)
+                              widget.tableActions!,
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(t('staffCancelSelection')),
+                          ),
+                        ],
+                      ),
+                    ),
+                    child: Text(
+                      t('tableOpen'),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
                 ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(t('staffCancelSelection')),
+              InkWell(
+                key: const ValueKey('bill-party-size'),
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text(t('guests')),
+                    content: Text(t('billPartyUnavailable')),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(t('staffCancelSelection')),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    '${t('guests')}: ${session?.partySize ?? currentContext.partySize ?? '—'}/${table?.maximumSeats ?? '—'}',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                ),
+              ),
+            ],
           ),
-          child: Text(t('tableOpen'), style: const TextStyle(fontSize: 11)),
         ),
         filter,
         PopupMenuButton<String>(
