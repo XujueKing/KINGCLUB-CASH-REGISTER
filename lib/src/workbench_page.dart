@@ -7,6 +7,7 @@ import 'live/member_seating_panel.dart';
 import 'live/live_tables_panel.dart';
 import 'live/voucher_report_panel.dart';
 import 'strings.dart';
+import 'power_icon.dart';
 
 /// The single authenticated workspace, using server-backed business panels.
 class WorkbenchPage extends StatefulWidget {
@@ -27,6 +28,7 @@ class WorkbenchPage extends StatefulWidget {
 
 class _WorkbenchPageState extends State<WorkbenchPage> {
   int page = 0;
+  String? storeName, storeRef;
   String t(String key) => tr(widget.language, key);
   static const labels = [
     'tables',
@@ -57,12 +59,13 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
               children: [
                 const SizedBox(height: 20),
                 Image.asset(
-                  'assets/brand/kingclub.png',
+                  'assets/brand/kingclub-gold.png',
                   key: const ValueKey('kingclub-logo'),
                   semanticLabel: 'KINGCLUB',
-                  width: 64,
+                  width: 76,
                   height: 64,
-                  cacheWidth: 180,
+                  fit: BoxFit.contain,
+                  cacheWidth: 228,
                 ),
                 const SizedBox(height: 20),
                 Expanded(
@@ -115,6 +118,51 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     ),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 4),
+                  child: Tooltip(
+                    message: widget.auth.session?.displayName ?? '',
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Color(0xffdce5df),
+                          child: Icon(
+                            Icons.person_outline,
+                            color: forest,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Text(
+                            widget.auth.session?.displayName ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xffb9c9c2),
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: IconButton(
+                    key: const ValueKey('staff-logout'),
+                    tooltip: t('staffSignOut'),
+                    onPressed: widget.onLogout,
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xffdce5df),
+                    ),
+                    icon: const PowerIcon(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -122,6 +170,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             child: Column(
               children: [
                 Container(
+                  height: 48,
                   color: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
@@ -131,41 +180,28 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     children: [
                       Expanded(
                         child: Text(
-                          t(labels[page]),
+                          widget.auth.session?.storeName ??
+                              (storeRef == widget.auth.session?.storeRef
+                                  ? storeName
+                                  : null) ??
+                              'KINGCLUB',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
-                      Text(widget.auth.session?.displayName ?? ''),
-                      const SizedBox(width: 16),
-                      DropdownButton<UiLanguage>(
-                        key: const ValueKey('staff-language'),
-                        value: widget.language,
-                        onChanged: (value) {
-                          if (value != null) widget.onLanguage(value);
-                        },
-                        items: [
-                          for (final language in UiLanguage.values)
-                            DropdownMenuItem(
-                              value: language,
-                              child: Text(
-                                [
-                                  '简体中文',
-                                  'English',
-                                  '繁體中文',
-                                  'ไทย',
-                                ][language.index],
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
-                      TextButton(
-                        key: const ValueKey('staff-logout'),
-                        onPressed: widget.onLogout,
-                        child: Text(t('staffSignOut')),
+                      Text(
+                        [
+                          '超级智能收银台',
+                          'Super Smart POS',
+                          '超級智能收銀台',
+                          'ระบบแคชเชียร์อัจฉริยะ',
+                        ][widget.language.index],
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -183,6 +219,15 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     // Order views require selection of a real table and its current session.
     0 || 1 || 2 => LiveTablesPanel(
       key: const ValueKey('tables'),
+      onStoreName: (name) {
+        if (mounted &&
+            (storeName != name || storeRef != widget.auth.session?.storeRef)) {
+          setState(() {
+            storeName = name;
+            storeRef = widget.auth.session?.storeRef;
+          });
+        }
+      },
       menuVisible: page == 1,
       onMenuChanged: (value) => setState(() => page = value ? 1 : 0),
       auth: widget.auth,
@@ -198,14 +243,43 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             )
           : Center(child: Text(t('staffAuthFailure'))),
     _ => Center(
-      child: OutlinedButton.icon(
-        key: const ValueKey('printer-inspect-open'),
-        onPressed: () => showDialog<void>(
-          context: context,
-          builder: (_) => PrinterDiscoveryDialog(language: widget.language),
-        ),
-        icon: const Icon(Icons.print_outlined),
-        label: Text(t('printerInspectTitle')),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(t('language')),
+              const SizedBox(width: 20),
+              DropdownButton<UiLanguage>(
+                key: const ValueKey('staff-language'),
+                value: widget.language,
+                onChanged: (value) {
+                  if (value != null) widget.onLanguage(value);
+                },
+                items: [
+                  for (final language in UiLanguage.values)
+                    DropdownMenuItem(
+                      value: language,
+                      child: Text(
+                        ['简体中文', 'English', '繁體中文', 'ไทย'][language.index],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            key: const ValueKey('printer-inspect-open'),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => PrinterDiscoveryDialog(language: widget.language),
+            ),
+            icon: const Icon(Icons.print_outlined),
+            label: Text(t('printerInspectTitle')),
+          ),
+        ],
       ),
     ),
   };

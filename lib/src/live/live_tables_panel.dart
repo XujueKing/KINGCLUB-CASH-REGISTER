@@ -39,6 +39,7 @@ class LiveTablesPanel extends StatefulWidget {
     super.key,
     this.menuVisible,
     this.onMenuChanged,
+    this.onStoreName,
     required this.auth,
     required this.language,
     this.enableRealtime = const bool.fromEnvironment('CASHIER_REALTIME'),
@@ -46,6 +47,7 @@ class LiveTablesPanel extends StatefulWidget {
   });
   final bool? menuVisible;
   final ValueChanged<bool>? onMenuChanged;
+  final ValueChanged<String>? onStoreName;
   final StaffAuthController auth;
   final UiLanguage language;
   final bool enableRealtime;
@@ -193,6 +195,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         page = requestedPage;
         loading = false;
       });
+      widget.onStoreName?.call(value.storeName);
     } catch (_) {
       if (mounted && generation == epoch) {
         setState(() {
@@ -910,7 +913,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(
           color: selected
-            ? Color.lerp(tableColor(table), Colors.black, 0.65)!
+              ? Color.lerp(tableColor(table), Colors.black, 0.65)!
               : empty
               ? const Color(0xFFABBCAF)
               : tableColor(table),

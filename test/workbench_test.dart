@@ -160,6 +160,12 @@ void main() {
       expect(find.byKey(const ValueKey('kingclub-logo')), findsOneWidget);
       expect(find.text('Test table 0'), findsOneWidget);
       expect(find.text('T01'), findsNothing);
+      expect(find.byKey(const ValueKey('staff-language')), findsNothing);
+      await tester.drag(find.byType(ListView).first, const Offset(0, -400));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('nav-5')));
+      await tester.tap(find.byKey(const ValueKey('nav-5')));
+      await tester.pumpAndSettle();
       for (final label in ['English', '繁體中文', 'ไทย', '简体中文']) {
         await tester.tap(find.byKey(const ValueKey('staff-language')));
         await tester.pumpAndSettle();
@@ -168,6 +174,12 @@ void main() {
         expect(tester.takeException(), isNull);
       }
       for (final index in [2, 3, 4, 5, 0]) {
+        await tester.drag(
+          find.byType(ListView).first,
+          Offset(0, index < 3 ? 400 : -400),
+        );
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(ValueKey('nav-$index')));
         await tester.tap(find.byKey(ValueKey('nav-$index')));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
