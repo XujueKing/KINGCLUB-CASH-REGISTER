@@ -208,7 +208,7 @@ void main() {
     auth.dispose();
   });
   testWidgets(
-    'table/menu toggle keeps the same bill and unsubmitted selection',
+    'table workspace records each addition without confirmation and preserves the bill',
     (tester) async {
       final auth = CartAuth();
       m.size(tester);
@@ -230,47 +230,25 @@ void main() {
       final bill = tester.state(find.byType(TableBillPanel));
       expect(find.text('TABLE GRID'), findsOneWidget);
       await tap(tester, 'workspace-toggle-menu');
-      expect(find.text('TABLE GRID'), findsNothing);
       await tap(tester, 'catalog-add-p001');
-      final submitButton = find.byKey(const ValueKey('cart-submit'));
-      final menuButton = find.byKey(const ValueKey('workspace-toggle-menu'));
-      expect(submitButton, findsOneWidget);
-      expect(find.byKey(const ValueKey('table-bill-checkout')), findsNothing);
-      expect(find.textContaining('12.34'), findsWidgets);
-      expect(tester.getRect(submitButton).top, tester.getRect(menuButton).top);
-      expect(
-        tester.getSize(submitButton).width,
-        greaterThan(tester.getSize(menuButton).width),
-      );
-      final total = tester
-          .widget<TableBillPanel>(find.byType(TableBillPanel))
-          .draftCents;
-      await tap(tester, 'workspace-toggle-menu');
-      expect(find.text('TABLE GRID'), findsOneWidget);
+      expect(auth.submits, 1);
+      expect(auth.sent!.single.quantity, 1);
+      expect(find.byKey(const ValueKey('cart-submit')), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
       expect(
         tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
-        total,
+        0,
       );
+      await tap(tester, 'workspace-toggle-menu');
+      expect(find.text('TABLE GRID'), findsOneWidget);
       expect(
         identical(bill, tester.state(find.byType(TableBillPanel))),
         isTrue,
       );
       await tap(tester, 'workspace-toggle-menu');
-      expect(find.byKey(const ValueKey('cart-minus-p001')), findsOneWidget);
-      await tap(tester, 'draft-card-p001');
-      await tap(tester, 'draft-dialog-plus');
-      expect(
-        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
-        total * 2,
-      );
-      await tap(tester, 'draft-dialog-minus');
-      expect(
-        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
-        total,
-      );
-      Navigator.of(tester.element(find.byType(AlertDialog))).pop();
-      await tester.pumpAndSettle();
-      expect(auth.submits, 0);
+      await tap(tester, 'catalog-add-p001');
+      expect(auth.submits, 2);
+      expect(auth.sent!.single.quantity, 1);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();
     },

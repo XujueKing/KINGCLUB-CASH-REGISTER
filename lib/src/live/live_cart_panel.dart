@@ -376,6 +376,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         dirty = true;
         message = null;
       });
+      if (widget.tablePanel != null) unawaited(submit());
     } catch (_) {
       setState(() {
         message = 'cartLimit';
@@ -389,7 +390,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     final original = List<OrderSelection>.unmodifiable(items.values);
     final orderContext = currentContext, memberRef = widget.memberRef;
     final draft = savedDraft;
-    // The explicit order button submits the already visible cart once.
+    // The table workspace records additions immediately; the durable request owns retries.
     setState(() {
       busy = true;
       attempted = true;
@@ -480,7 +481,10 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       return;
     }
     change(product, 1);
-    if (edit && items.containsKey(product.reference) && message == null) {
+    if (widget.tablePanel == null &&
+        edit &&
+        items.containsKey(product.reference) &&
+        message == null) {
       await editDraftItem(product);
     }
   }
@@ -795,9 +799,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                         widget.tablePanel != null && (items.isNotEmpty || busy)
                         ? FilledButton(
                             key: const ValueKey('cart-submit'),
-                            onPressed: canSubmit
-                                ? () => unawaited(submit())
-                                : null,
+                            onPressed: null,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -813,7 +815,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                                 ],
                                 Flexible(
                                   child: Text(
-                                    '${t('cartConfirmOrder')} \u00a5${formatCents(total)}',
+                                    '${t('cartRecording')} \u00a5${formatCents(total)}',
                                   ),
                                 ),
                               ],
