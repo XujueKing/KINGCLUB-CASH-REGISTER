@@ -763,26 +763,46 @@ class _TableBillPanelState extends State<TableBillPanel>
           content,
         if (canRead && pending != null && paid != null) ...[
           const Divider(height: 12, thickness: 1, color: Color(0xffd7e2dc)),
-          amount(
-            'billTotal',
-            paid.totalCents + pending.totalCents + widget.draftCents,
-            'table-bill-total',
-          ),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: amount(
-                  'billPaidAmount',
-                  paid.totalCents,
-                  'table-bill-paid',
+                child: Column(
+                  key: const ValueKey('table-bill-total'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        t('billTotal'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Text(
+                      'CNY ${formatCents(paid.totalCents + pending.totalCents + widget.draftCents)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 20),
               Expanded(
-                child: amount(
-                  'billUnpaidAmount',
-                  pending.totalCents + widget.draftCents,
-                  'table-bill-pending',
+                child: Column(
+                  children: [
+                    amount(
+                      'billUnpaidAmount',
+                      pending.totalCents + widget.draftCents,
+                      'table-bill-pending',
+                    ),
+                    amount(
+                      'billPaidAmount',
+                      paid.totalCents,
+                      'table-bill-paid',
+                    ),
+                  ],
                 ),
               ),
             ],
