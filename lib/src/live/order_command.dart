@@ -283,6 +283,7 @@ class OrderRequestResult {
               ? !['unallocated', 'reserved'].contains(receipt['inventoryState'])
               : ![
                   'unallocated',
+                  'reserved',
                   'issued',
                 ].contains(receipt['inventoryState'])) ||
           receipt['totalCents'] is! int ||

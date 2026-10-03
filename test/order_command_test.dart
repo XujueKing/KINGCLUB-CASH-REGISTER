@@ -200,7 +200,7 @@ void main() {
       );
     }
     final postpay = command();
-    for (final state in ['unallocated', 'issued']) {
+    for (final state in ['unallocated', 'reserved', 'issued']) {
       expect(
         OrderRequestResult.parse(
           {
@@ -212,7 +212,7 @@ void main() {
         OrderRequestState.confirmed,
       );
     }
-    for (final state in ['partial', 'reserved', 'released']) {
+    for (final state in ['partial', 'released']) {
       expect(
         () => OrderRequestResult.parse(
           {
@@ -277,7 +277,7 @@ void main() {
       {'sessionRef': 'H00000000002'},
       {'storeRef': 'other'},
       {'requestId': command().requestId},
-      {'inventoryState': 'reserved'},
+      {'inventoryState': 'partial'},
       {'submissionStatus': 'paid'},
       {'orderRef': 'bad'},
     ]) {

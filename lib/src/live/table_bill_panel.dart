@@ -713,7 +713,7 @@ class _TableBillPanelState extends State<TableBillPanel>
                   !failed &&
                       widget.onQuickAddProduct != null &&
                       (inventory[group.productRef]?.inventoryKnown ?? false) &&
-                      group.unpaidQuantity + (draftFor(group)?.quantity ?? 0) <
+                      (draftFor(group)?.quantity ?? 0) <
                           inventory[group.productRef]!.available &&
                       (draftFor(group)?.quantity ?? 0) < 1000
                   ? (draftFor(group) != null

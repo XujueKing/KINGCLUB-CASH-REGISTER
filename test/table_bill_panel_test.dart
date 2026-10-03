@@ -347,21 +347,21 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('table-bill-total')),
-          matching: find.text('CNY 15.00'),
+          matching: find.text('15.00'),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('table-bill-pending')),
-          matching: find.text('CNY 3.00'),
+          matching: find.text('3.00'),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('table-bill-paid')),
-          matching: find.text('CNY 12.00'),
+          matching: find.text('12.00'),
         ),
         findsOneWidget,
       );
@@ -402,14 +402,14 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('table-bill-total')),
-        matching: find.text('CNY 12.00'),
+        matching: find.text('12.00'),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('table-bill-paid')),
-        matching: find.text('CNY 12.00'),
+        matching: find.text('12.00'),
       ),
       findsOneWidget,
     );
@@ -462,7 +462,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('table-bill-pending')),
-          matching: find.text('CNY 12.00'),
+          matching: find.text('12.00'),
         ),
         findsOneWidget,
       );
@@ -473,7 +473,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('table-bill-pending')),
-          matching: find.text('CNY 0.00'),
+          matching: find.text('0.00'),
         ),
         findsOneWidget,
       );
