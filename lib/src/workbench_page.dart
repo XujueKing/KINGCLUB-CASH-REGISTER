@@ -118,49 +118,60 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 4),
-                  child: Tooltip(
-                    message: widget.auth.session?.displayName ?? '',
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Color(0xffdce5df),
-                          child: Icon(
-                            Icons.person_outline,
-                            color: forest,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: Text(
-                            widget.auth.session?.displayName ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xffb9c9c2),
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Color(0xffdce5df),
+                    child: Icon(Icons.person_outline, color: forest, size: 24),
                   ),
                 ),
+                const SizedBox(height: 28),
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: IconButton(
-                    key: const ValueKey('staff-logout'),
-                    tooltip: t('staffSignOut'),
-                    onPressed: widget.onLogout,
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xffdce5df),
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      key: const ValueKey('staff-logout'),
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: widget.onLogout,
+                      child: SizedBox(
+                        width: 72,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 13,
+                            horizontal: 3,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const ColorFiltered(
+                                colorFilter: ColorFilter.mode(
+                                  Color(0xffb9c9c2),
+                                  BlendMode.srcIn,
+                                ),
+                                child: PowerIcon(),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                [
+                                  '退出',
+                                  'Sign out',
+                                  '退出',
+                                  'ออก',
+                                ][widget.language.index],
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xffb9c9c2),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                    icon: const PowerIcon(),
                   ),
                 ),
               ],
