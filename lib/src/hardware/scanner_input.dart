@@ -1,14 +1,15 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// The visible scan page owns the subscription; no scan values are persisted.
+/// One shared native subscription; only the foreground scan route handles values.
 class ScannerInput {
   static const _channel = EventChannel('kingclub/scanner');
-  static Stream<String> get codes => Platform.isAndroid
-      ? _channel
-            .receiveBroadcastStream()
-            .where((value) => value is String)
-            .cast<String>()
+  static final _events = _channel
+      .receiveBroadcastStream()
+      .where((value) => value is String)
+      .cast<String>();
+  static Stream<String> get codes =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+      ? _events
       : const Stream<String>.empty();
 }

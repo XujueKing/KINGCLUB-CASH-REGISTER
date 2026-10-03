@@ -1,6 +1,7 @@
 package cn.kingclub.kingclub_cash_register
 
 import android.os.Build
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -13,6 +14,11 @@ class MainActivity : FlutterActivity() {
     private var printerStatus: PrinterStatusBridge? = null
     private var usbPrinterPermission: UsbPrinterPermissionBridge? = null
     private var usbRasterOutput: UsbRasterOutputBridge? = null
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (scanner?.onKeyEvent(event) == true) return true
+        return super.dispatchKeyEvent(event)
+    }
 
     override fun onResume() {
         super.onResume()

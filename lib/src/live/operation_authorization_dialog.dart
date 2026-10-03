@@ -32,7 +32,6 @@ class _Authorization extends StatefulWidget {
 
 class _AuthorizationState extends State<_Authorization> {
   StreamSubscription<String>? subscription;
-  final input = TextEditingController();
   bool busy = false, failed = false;
   String words(List<String> v) => v[widget.language.index];
   @override
@@ -51,7 +50,6 @@ class _AuthorizationState extends State<_Authorization> {
       busy = true;
       failed = false;
     });
-    input.clear();
     try {
       final ref = await widget.auth.authorizeItemPrice(
         scope: widget.scope,
@@ -71,7 +69,6 @@ class _AuthorizationState extends State<_Authorization> {
   @override
   void dispose() {
     subscription?.cancel();
-    input.dispose();
     super.dispose();
   }
 
@@ -101,17 +98,13 @@ class _AuthorizationState extends State<_Authorization> {
             ]),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: input,
-            autofocus: true,
-            obscureText: true,
-            enableSuggestions: false,
-            autocorrect: false,
-            keyboardType: TextInputType.none,
-            onSubmitted: scan,
-            decoration: InputDecoration(
-              hintText: words(['等待扫码', 'Waiting for scan', '等待掃碼', 'รอสแกน']),
-            ),
+          Text(
+            words([
+              '等待扫码，无需点击输入框',
+              'Ready to scan — no input focus needed',
+              '等待掃碼，無需點擊輸入框',
+              'พร้อมสแกน ไม่ต้องแตะช่องกรอก',
+            ]),
           ),
           if (busy)
             const Padding(

@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
 import 'dart:async';
 
 import 'package:kingclub_cash_register/src/live/table_bill_panel.dart';
@@ -163,6 +166,16 @@ bool enabled(WidgetTester tester) =>
     null;
 
 void main() {
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('kingclub/scanner'),
+          (_) async => null,
+        );
+  });
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
+  });
   testWidgets(
     'special-card plus retains its unit price while menu selection uses normal price',
     (tester) async {
@@ -304,12 +317,16 @@ void main() {
       await tester.tap(find.text('改单价'));
       await tester.pumpAndSettle();
       await tap(tester, 'price-key-5');
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
       await tap(tester, 'item-price-save');
-      await tester.enterText(
-        find.byType(TextField),
-        'KC:M:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'kingclub/scanner',
+        const StandardMethodCodec().encodeSuccessEnvelope(
+          'KC:M:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        ),
+        (_) {},
       );
-      await tester.testTextInput.receiveAction(TextInputAction.done);
+      debugDefaultTargetPlatformOverride = null;
       await tester.pumpAndSettle();
       await tap(tester, 'catalog-add-p001');
       final bill = tester.widget<TableBillPanel>(find.byType(TableBillPanel));

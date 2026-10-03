@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -65,6 +68,16 @@ class PriceAuth extends TableAuth {
 }
 
 void main() {
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('kingclub/scanner'),
+          (_) async => null,
+        );
+  });
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
+  });
   for (final language in UiLanguage.values) {
     testWidgets(
       'card edits every unpaid batch and preserves paid units ${language.name}',
@@ -95,13 +108,19 @@ void main() {
         expect(find.byKey(const ValueKey('discount-5')), findsOneWidget);
         await tester.tap(find.byKey(const ValueKey('discount-5')));
         await tester.pump();
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
         await tester.tap(find.byKey(const ValueKey('item-price-save')));
         await tester.pumpAndSettle();
-        await tester.enterText(
-          find.byType(TextField),
-          'KC:M:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        expect(find.byType(TextField), findsNothing);
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+          'kingclub/scanner',
+          const StandardMethodCodec().encodeSuccessEnvelope(
+            'KC:M:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          ),
+          (_) {},
         );
-        await tester.testTextInput.receiveAction(TextInputAction.done);
+        debugDefaultTargetPlatformOverride = null;
         await tester.pumpAndSettle();
         expect(auth.price, 300);
         expect(auth.changed!.map((row) => row['orderRef']), [

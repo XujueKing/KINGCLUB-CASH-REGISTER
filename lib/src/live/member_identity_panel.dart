@@ -50,7 +50,12 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
     WidgetsBinding.instance.addObserver(this);
     scanner = (widget.scannerEvents ?? ScannerInput.codes).listen(
       (value) {
-        if (!mounted || !foreground || busy) return;
+        if (!mounted ||
+            !foreground ||
+            busy ||
+            ModalRoute.of(context)?.isCurrent != true) {
+          return;
+        }
         code.text = value;
         unawaited(scan());
       },
