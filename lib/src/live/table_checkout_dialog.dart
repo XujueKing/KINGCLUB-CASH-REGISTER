@@ -54,6 +54,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   bool cancellationNeedsQuery = false, confirmationOpen = false;
   int epoch = 0;
   Route<dynamic>? unpaidPrintRoute;
+  Timer? recoveryTimer;
   Timer? expiry;
   Timer? authorityExpiry;
   Stopwatch? freshness;
@@ -123,18 +124,19 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     widget.auth.addListener(authChanged);
     WidgetsBinding.instance.addObserver(this);
-    scanner = ScannerInput.codes.listen((code) {
+    scanner = ScannerInput.codes.listen((code) async {
       if (!mounted ||
           !foreground ||
           busy ||
           confirmationOpen ||
           ModalRoute.of(context)?.isCurrent != true ||
-          ['cash', 'pos'].contains(command?.channel) ||
-          admission?.paymentStatus != 'prepared') {
+          ['cash', 'pos'].contains(channel) ||
+          !ready)
         return;
-      }
+      if (command == null) await startCollection();
+      if (!mounted || admission?.paymentStatus != 'prepared') return;
       input.text = code;
-      unawaited(collect());
+      await collect();
     });
     if (foreground) unawaited(load());
   }
@@ -162,6 +164,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     if (printRoute != null && printRoute.isActive && mounted) {
       Navigator.of(context).removeRoute(printRoute);
     }
+    recoveryTimer?.cancel();
     expiry?.cancel();
     authorityExpiry?.cancel();
     freshness?.stop();
@@ -206,6 +209,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   @override
   void dispose() {
     epoch++;
+    recoveryTimer?.cancel();
     expiry?.cancel();
     authorityExpiry?.cancel();
     freshness?.stop();
@@ -270,7 +274,54 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     } finally {
       if (current(e)) setState(() => busy = false);
     }
-    if (current(e) && ready && command == null) await readQuote();
+    if (current(e) && ready) {
+      if (command == null) {
+        await readQuote();
+      } else {
+        await resumePayment();
+      }
+    }
+  }
+
+  Future<void> resumePayment() async {
+    if (!mounted ||
+        busy ||
+        !foreground ||
+        command == null ||
+        cancelled ||
+        result?.settled == true)
+      return;
+    await queryAdmission();
+    if (!mounted || !foreground) return;
+    if (admission?.paymentStatus == 'closed') {
+      await cancelOriginal(queryOnly: true);
+    }
+    if (!cancelled &&
+        admission?.observed == true &&
+        admission?.paymentStatus != 'prepared') {
+      await collect(recover: true);
+    }
+    if (mounted &&
+        !cancelled &&
+        result?.settled != true &&
+        admission?.paymentStatus != 'prepared') {
+      recoveryTimer?.cancel();
+      recoveryTimer = Timer(
+        const Duration(seconds: 3),
+        () => unawaited(resumePayment()),
+      );
+    }
+  }
+
+  Future<void> dismissCheckout() async {
+    if (busy) return;
+    if (command != null &&
+        admission?.paymentStatus == 'prepared' &&
+        result?.settled != true) {
+      await cancelOriginal();
+    }
+    if (result?.canCloseUnpaid == true) await collect(close: true);
+    if (mounted) Navigator.of(context).pop(result?.settled == true);
   }
 
   Future<void> readQuote() async {
@@ -491,14 +542,6 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       return;
     }
     final e = epoch;
-    if (!queryOnly &&
-        !await confirmAction(
-          'tableCheckoutCancel',
-          'tableCheckoutCancelConsent',
-          original,
-        )) {
-      return;
-    }
     if (!current(e)) return;
     input.clear();
     setState(() {
@@ -549,6 +592,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     final e = epoch, text = input.text;
     if (!recover &&
         !close &&
+        !['wechat', 'alipay'].contains(original.channel) &&
         !await confirmAction(
           'tableCheckoutCollect',
           original.channel == 'pos'
@@ -638,6 +682,16 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       }
     } finally {
       if (current(e)) setState(() => busy = false);
+    }
+    if (current(e) &&
+        !cancelled &&
+        result?.settled != true &&
+        admission?.paymentStatus != 'prepared') {
+      recoveryTimer?.cancel();
+      recoveryTimer = Timer(
+        const Duration(seconds: 3),
+        () => unawaited(resumePayment()),
+      );
     }
   }
 
@@ -850,11 +904,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                     ),
                   ),
                   IconButton(
-                    onPressed: busy
-                        ? null
-                        : () =>
-                              Navigator.of(context)
-                                  .pop(result?.settled == true),
+                    onPressed: busy ? null : dismissCheckout,
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -989,6 +1039,14 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                       onPressed: busy ? null : load,
                                       child: Text(t('ordersRefresh')),
                                     ),
+                                  if (ready &&
+                                      original == null &&
+                                      !['cash', 'pos'].contains(channel))
+                                    PaymentCodeField(
+                                      controller: input,
+                                      enabled: !busy && q != null,
+                                      label: t('tableCheckoutCode'),
+                                    ),
                                   if (ready && original == null)
                                     FilledButton(
                                       onPressed: busy
@@ -1042,14 +1100,6 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                           enabled: !busy,
                                           label: t('tableCheckoutCode'),
                                         ),
-                                      OutlinedButton(
-                                        onPressed: busy
-                                            ? null
-                                            : () => unawaited(
-                                                collect(recover: true),
-                                              ),
-                                        child: Text(t('tableCheckoutRecover')),
-                                      ),
                                       const SizedBox(height: 12),
                                       FilledButton(
                                         onPressed: busy
@@ -1067,68 +1117,22 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                       OutlinedButton(
                                         onPressed: busy
                                             ? null
-                                            : () => unawaited(cancelOriginal()),
-                                        child: Text(t('tableCheckoutCancel')),
+                                            : dismissCheckout,
+                                        child: Text(t('cancel')),
                                       ),
                                     ] else ...[
-                                      OutlinedButton(
-                                        onPressed: busy
-                                            ? null
-                                            : () => unawaited(queryAdmission()),
-                                        child: Text(t('tableCheckoutQuery')),
+                                      Text(
+                                        [
+                                          '正在确认付款结果，请稍候',
+                                          'Checking payment status…',
+                                          '正在確認付款結果，請稍候',
+                                          'กำลังตรวจสอบการชำระเงิน',
+                                        ][widget.language.index],
                                       ),
-                                      if (admission?.observed == true)
-                                        OutlinedButton(
-                                          onPressed: busy
-                                              ? null
-                                              : () => unawaited(
-                                                  collect(recover: true),
-                                                ),
-                                          child: Text(
-                                            t('tableCheckoutRecover'),
-                                          ),
-                                        ),
-                                      if (!cancellationNeedsQuery &&
-                                          (admission == null ||
-                                              !admission!.observed))
-                                        OutlinedButton(
-                                          onPressed: busy
-                                              ? null
-                                              : () => unawaited(
-                                                  prepare(retry: true),
-                                                ),
-                                          child: Text(
-                                            t('tableCheckoutRetryPrepare'),
-                                          ),
-                                        ),
-                                      if (cancellationNeedsQuery ||
-                                          admission?.paymentStatus ==
-                                              'closed' ||
-                                          admission == null)
-                                        OutlinedButton(
-                                          onPressed: busy
-                                              ? null
-                                              : () => unawaited(
-                                                  cancelOriginal(
-                                                    queryOnly: true,
-                                                  ),
-                                                ),
-                                          child: Text(
-                                            t('tableCheckoutCancelQuery'),
-                                          ),
-                                        ),
-                                      if (result?.canCloseUnpaid == true &&
-                                          original.channel == 'alipay')
-                                        OutlinedButton(
-                                          onPressed: busy
-                                              ? null
-                                              : () => unawaited(
-                                                  collect(close: true),
-                                                ),
-                                          child: Text(
-                                            t('provider_close_attempt'),
-                                          ),
-                                        ),
+                                      TextButton(
+                                        onPressed: busy ? null : resumePayment,
+                                        child: Text(t('ordersRefresh')),
+                                      ),
                                     ],
                                   ],
                                   if (busy && !confirmationOpen)

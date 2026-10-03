@@ -1,3 +1,5 @@
+import 'table_checkout_dialog.dart';
+
 import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
@@ -257,6 +259,27 @@ class _TableCalendarPanelState extends State<TableCalendarPanel>
               ),
               Text(
                 '${selected!['tableName']} · ${_time(DateTime.parse(selected!['openedAt']))} · ${t('tableHistory')}',
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: loading || failed
+                    ? null
+                    : () async {
+                        final original = selected!;
+                        await showDialog<void>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => TableCheckoutDialog(
+                            auth: widget.auth,
+                            tableRef: original['tableRef'] as String,
+                            sessionRef: original['sessionRef'] as String,
+                            language: widget.language,
+                          ),
+                        );
+                        if (mounted && identical(selected, original))
+                          await open(original);
+                      },
+                child: Text(t('tableCheckoutTitle')),
               ),
             ],
           ),
