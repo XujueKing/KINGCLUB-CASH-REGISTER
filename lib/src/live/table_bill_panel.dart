@@ -613,14 +613,27 @@ class _TableBillPanelState extends State<TableBillPanel>
     },
   );
 
+  Widget amountLabel(String label) => Text.rich(
+    TextSpan(
+      text: t(label),
+      children: const [
+        TextSpan(
+          text: ' (CNY)',
+          style: TextStyle(fontSize: 10, color: Color(0xFF86918B)),
+        ),
+      ],
+    ),
+    style: const TextStyle(fontSize: 12),
+  );
+
   Widget amount(String label, int cents, String key) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 2),
     child: Row(
       key: ValueKey(key),
       children: [
-        Expanded(child: Text(t(label), style: const TextStyle(fontSize: 12))),
+        Expanded(child: amountLabel(label)),
         Text(
-          'CNY ${formatCents(cents)}',
+          formatCents(cents),
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ],
@@ -773,13 +786,14 @@ class _TableBillPanelState extends State<TableBillPanel>
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        t('billTotal'),
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                      child: amountLabel('billTotal'),
                     ),
                     Text(
-                      'CNY ${formatCents(paid.totalCents + pending.totalCents + widget.draftCents)}',
+                      formatCents(
+                        paid.totalCents +
+                            pending.totalCents +
+                            widget.draftCents,
+                      ),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
