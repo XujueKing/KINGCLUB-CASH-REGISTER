@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../strings.dart';
 import 'table_snapshot.dart';
+import '../auth/staff_auth_controller.dart';
+import 'member_identity_panel.dart';
 
 // Parse decimal input as integers so discounts are rounded per unit, not per bill.
 int? parseUnitPrice(String raw) {
@@ -34,6 +36,9 @@ Future<int?> showItemPriceDialog(
   required int originalCents,
   required int currentCents,
   VoidCallback? onDetails,
+  StaffAuthController? auth,
+  String? expenseOwnerUserAccount,
+  ValueChanged<String?>? onExpenseOwner,
 }) => showDialog<int>(
   context: context,
   builder: (_) => _ItemPriceDialog(
@@ -43,6 +48,9 @@ Future<int?> showItemPriceDialog(
     originalCents: originalCents,
     currentCents: currentCents,
     onDetails: onDetails,
+    auth: auth,
+    expenseOwnerUserAccount: expenseOwnerUserAccount,
+    onExpenseOwner: onExpenseOwner,
   ),
 );
 
@@ -54,11 +62,17 @@ class _ItemPriceDialog extends StatefulWidget {
     required this.originalCents,
     required this.currentCents,
     this.onDetails,
+    this.auth,
+    this.expenseOwnerUserAccount,
+    this.onExpenseOwner,
   });
   final UiLanguage language;
   final String name;
   final int quantity, originalCents, currentCents;
   final VoidCallback? onDetails;
+  final StaffAuthController? auth;
+  final String? expenseOwnerUserAccount;
+  final ValueChanged<String?>? onExpenseOwner;
   @override
   State<_ItemPriceDialog> createState() => _ItemPriceDialogState();
 }
@@ -69,6 +83,63 @@ class _ItemPriceDialogState extends State<_ItemPriceDialog> {
   );
   final discount = TextEditingController();
   bool byDiscount = false;
+  late String? expenseOwner = widget.expenseOwnerUserAccount;
+  String? expenseOwnerName;
+  Future<void> selectExpenseOwner() async {
+    final selected = await showDialog<({String account, String name})>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          words([
+            '扫码选择赠送承担人',
+            'Scan expense owner',
+            '掃碼選擇贈送承擔人',
+            'สแกนผู้รับผิดชอบค่าใช้จ่าย',
+          ]),
+        ),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: MemberIdentityPanel(
+              auth: widget.auth!,
+              language: widget.language,
+              actionsBuilder: (member, code, stillCurrent) => FilledButton(
+                onPressed: () {
+                  if (stillCurrent()) {
+                    Navigator.pop(dialogContext, (
+                      account: member.memberRef,
+                      name: member.nickname ?? member.memberRef,
+                    ));
+                  }
+                },
+                child: Text(
+                  words([
+                    '使用此会员',
+                    'Use this member',
+                    '使用此會員',
+                    'เลือกสมาชิกนี้',
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(words(['取消', 'Cancel', '取消', 'ยกเลิก'])),
+          ),
+        ],
+      ),
+    );
+    if (mounted && selected != null) {
+      setState(() {
+        expenseOwner = selected.account;
+        expenseOwnerName = selected.name;
+      });
+    }
+  }
+
   String words(List<String> values) => values[widget.language.index];
   int? get cents => byDiscount
       ? discountedUnitPrice(widget.originalCents, discount.text)
@@ -172,6 +243,22 @@ class _ItemPriceDialogState extends State<_ItemPriceDialog> {
               ),
             ],
           ),
+          if (cents == 0 && widget.auth != null)
+            TextButton.icon(
+              key: const ValueKey('item-price-expense-owner'),
+              onPressed: selectExpenseOwner,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: Text(
+                expenseOwnerName ??
+                    expenseOwner ??
+                    words([
+                      '门店赠送 · 扫码记到个人',
+                      'Store expense · scan a person',
+                      '門店贈送 · 掃碼記到個人',
+                      'ค่าใช้จ่ายร้าน · สแกนผู้รับผิดชอบ',
+                    ]),
+              ),
+            ),
         ],
       ),
     ),
@@ -200,7 +287,10 @@ class _ItemPriceDialogState extends State<_ItemPriceDialog> {
         key: const ValueKey('item-price-save'),
         onPressed: cents == null || cents! * widget.quantity > 100000000
             ? null
-            : () => Navigator.pop(context, cents),
+            : () {
+                widget.onExpenseOwner?.call(cents == 0 ? expenseOwner : null);
+                Navigator.pop(context, cents);
+              },
         child: Text(words(['确定', 'Apply', '確定', 'ยืนยัน'])),
       ),
     ],

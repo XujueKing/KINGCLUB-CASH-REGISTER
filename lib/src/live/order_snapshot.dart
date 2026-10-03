@@ -18,6 +18,9 @@ int _positive(Object? value, [int max = 9007199254740991]) {
   return value;
 }
 
+int _amount(Object? value, [int max = 9007199254740991]) =>
+    value == 0 ? 0 : _positive(value, max);
+
 DateTime _time(Object? value) {
   if (value is! String ||
       !RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$')
@@ -51,11 +54,15 @@ class OrderItem {
   OrderItem(Map<String, dynamic> value, {String? storeRef})
     : thumbnailPath = productThumbnail(value['bottleMaterial'], storeRef ?? ''),
       productRef = _ref(value['productRef']),
+      expenseOwnerUserAccount =
+          (_map(value['snapshot'])['pricing']
+                  as Map?)?['expenseOwnerUserAccount']
+              as String?,
       pricingRef = _map(value['snapshot'])['pricing'] == null
           ? null
           : _ref(_map(_map(value['snapshot'])['pricing'])['selectionRef']),
       quantity = _positive(value['quantity'], 1000),
-      priceCents = _positive(value['priceCents'], 100000000),
+      priceCents = _amount(value['priceCents'], 100000000),
       originalPriceCents = _positive(
         _map(value['snapshot'])['pricing'] == null
             ? value['priceCents']
@@ -64,7 +71,7 @@ class OrderItem {
               )['originalUnitPriceCents'],
         100000000,
       ),
-      subtotalCents = _positive(value['subtotalCents']),
+      subtotalCents = _amount(value['subtotalCents']),
       servedQuantity = _servingCount(value, 'servedQuantity'),
       remainingQuantity = _servingCount(value, 'remainingQuantity'),
       refundedQuantity = _servingCount(value, 'refundedQuantity'),
@@ -80,13 +87,17 @@ class OrderItem {
     _positive(_map(value['snapshot'])['revision']);
     if (pricingRef != null) {
       final pricing = _map(_map(value['snapshot'])['pricing']);
-      if (pricing.length != 4 ||
+      if (pricing.length !=
+              (pricing.containsKey('expenseOwnerUserAccount') ? 5 : 4) ||
           pricingRef == productRef ||
-          _positive(pricing['unitPriceCents'], 100000000) != priceCents) {
+          _amount(pricing['unitPriceCents'], 100000000) != priceCents) {
         throw const FormatException();
       }
       _positive(pricing['originalUnitPriceCents'], 100000000);
       _ref(pricing['operatedBy']);
+      if (pricing.containsKey('expenseOwnerUserAccount')) {
+        _ref(pricing['expenseOwnerUserAccount']);
+      }
     }
     if (quantity * priceCents != subtotalCents) throw const FormatException();
     if ((refundedQuantity ?? 0) > quantity) throw const FormatException();
@@ -103,6 +114,7 @@ class OrderItem {
   }
   final String productRef;
   final String? pricingRef;
+  final String? expenseOwnerUserAccount;
   String get groupingRef =>
       pricingRef == null ? productRef : '$productRef/$pricingRef';
   bool get specialPrice => pricingRef != null;
@@ -144,7 +156,7 @@ class LiveOrder {
           : false,
       status = value['status'] as String,
       currency = value['currency'] as String,
-      totalCents = _positive(value['totalCents']),
+      totalCents = _amount(value['totalCents']),
       refund = value['refund'] == null
           ? null
           : OrderRefund(_map(value['refund'])),
@@ -175,7 +187,8 @@ class LiveOrder {
             (status != 'paid' ||
                 !cashierOrder ||
                 refund!.totalCents != totalCents)) ||
-        !{'pending', 'paid', 'expired'}.contains(status) ||
+        !{'pending', 'paid', 'expired', 'waived'}.contains(status) ||
+        ((status == 'waived') != (totalCents == 0)) ||
         !RegExp(r'^[A-Z]{3}$').hasMatch(currency) ||
         items.isEmpty ||
         items.length > 50 ||
@@ -346,10 +359,16 @@ class SessionOrderSummary {
   final Map<String, OrderSummaryBucket> buckets;
   factory SessionOrderSummary.parse(Object? raw, List<LiveOrder> orders) {
     final data = _map(raw), currency = data['currency'];
+    if (orders.any((order) => order.status == 'waived') &&
+        !data.containsKey('waived')) {
+      throw const FormatException();
+    }
     final refundKnown =
         data.containsKey('refunded') && data.containsKey('netPaid');
     final hasFullCount = data.containsKey('fullyRefundedOrderCount');
-    if (data.length != (refundKnown ? (hasFullCount ? 7 : 6) : 4) ||
+    if (data.length !=
+            (refundKnown ? (hasFullCount ? 7 : 6) : 4) +
+                (data.containsKey('waived') ? 1 : 0) ||
         (hasFullCount && !refundKnown) ||
         data.containsKey('refunded') != data.containsKey('netPaid') ||
         currency is! String ||
@@ -358,7 +377,12 @@ class SessionOrderSummary {
     }
     var total = 0, count = 0;
     final buckets = <String, OrderSummaryBucket>{};
-    for (final status in ['paid', 'pending', 'expired']) {
+    for (final status in [
+      'paid',
+      'pending',
+      'expired',
+      if (data.containsKey('waived')) 'waived',
+    ]) {
       final bucket = _map(data[status]);
       final n = bucket['orderCount'], cents = bucket['totalCents'];
       if (bucket.length != 2 ||
@@ -368,7 +392,9 @@ class SessionOrderSummary {
           cents < 0 ||
           n > 9007199254740991 ||
           cents > 9007199254740991 ||
-          (n == 0 ? cents != 0 : cents < n)) {
+          (status == 'waived'
+              ? cents != 0
+              : (n == 0 ? cents != 0 : cents < n))) {
         throw const FormatException();
       }
       total += cents;

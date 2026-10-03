@@ -48,6 +48,7 @@ class PriceAuth extends TableAuth {
     required String sessionRef,
     required String productRef,
     required int unitPriceCents,
+    String? expenseOwnerUserAccount,
     required List<Map<String, Object>> items,
   }) async {
     changed = items;

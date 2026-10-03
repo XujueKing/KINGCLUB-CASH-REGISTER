@@ -135,6 +135,28 @@ Future<OrderRequestResult> submit(
 );
 
 void main() {
+  test('complimentary draft retains expense owner and confirms a zero-money receipt', () {
+    final free = OrderSelection(
+      selection().single.product,
+      2,
+      unitPriceCents: 0,
+      selectionRef: 'TEST_GIFT',
+      expenseOwnerUserAccount: 'TEST_OWNER',
+    );
+    final pending = PendingOrder.prepare(
+      identity: identity,
+      context: m.parse(m.contextData()),
+      memberRef: 'member-000',
+      items: [free],
+      now: a.now,
+    );
+    expect(pending.totalCents, 0);
+    expect(
+      (pending.params['items'] as List).single['expenseOwnerUserAccount'],
+      'TEST_OWNER',
+    );
+    expect(PendingOrder.decode(pending.encode()).params, pending.params);
+  });
   test(
     'special batch receipt validates each price group and survives persistence',
     () {

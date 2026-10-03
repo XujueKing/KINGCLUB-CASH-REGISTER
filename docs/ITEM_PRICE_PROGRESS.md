@@ -1,3 +1,15 @@
+# Release status ? 2026-10-03
+
+Price, unit discount and complimentary items are deployed to KINGCLUB and installed on SUNMI DAB6264H90115 with matching certificate and preserved application data. The existing employee login and the item price dialog were verified on the device, including the complimentary expense-owner scan entry. The local test selection was removed without confirming an order or charging/refunding money.
+
+Pending selections and submitted unpaid items support price changes. Special-price selections remain separate from later regular-price additions. Complimentary items retain original price, operator, optional scanned expense owner and inventory history; they do not create cash receipts. Existing order, adjustment and inventory records are reused; no business tables were added.
+
+Backend migrations 289?291 only were applied after a verified KINGCLUB-only backup. Runtime health/readiness checks passed. Backend: 3562 full-suite tests plus 265 edge-case regression tests; cashier: 968 full-suite tests and 26 return regression tests; APP compatibility: 10 tests. APP source compatibility is committed separately; no iPhone build was installed in this release.
+
+The older entries below describe earlier stages and are superseded by this release status. The broader change from payment-time stock issue to actual-serving-time stock issue is still a separate unfinished item.
+
+---
+
 # 商品特价进度（2026-10-03）
 
 本批代码尚未安装到收银机，不能当作已上线。

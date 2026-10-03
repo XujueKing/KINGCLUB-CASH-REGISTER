@@ -12,6 +12,31 @@ OrderSnapshot parse(Object? raw, {String? after}) => OrderSnapshot.parse(
   afterOrder: after,
 );
 void main() {
+  test(
+    'complimentary goods remain visible and are neither paid nor refunded',
+    () {
+      final raw = orderFixture(), result = raw['result'] as Map;
+      result.remove('sessionSummary');
+      final order = (result['orders'] as List).first as Map;
+      order['status'] = 'waived';
+      order['totalCents'] = 0;
+      final item = (order['items'] as List).single as Map;
+      item['priceCents'] = 0;
+      item['subtotalCents'] = 0;
+      (item['snapshot'] as Map)['pricing'] = {
+        'originalUnitPriceCents': 100,
+        'unitPriceCents': 0,
+        'selectionRef': 'TEST_GIFT',
+        'operatedBy': 'TEST_STAFF',
+        'expenseOwnerUserAccount': 'TEST_OWNER',
+      };
+      final parsed = parse(raw).orders.first;
+      expect(parsed.status, 'waived');
+      expect(parsed.fullyRefunded, false);
+      expect(parsed.netPaidCents, 0);
+      expect(parsed.items.single.expenseOwnerUserAccount, 'TEST_OWNER');
+    },
+  );
   test('physical return hint cannot include never issued quantities', () {
     for (final value in [0, 1, 2, -1, '1', null]) {
       final raw = orderFixture();

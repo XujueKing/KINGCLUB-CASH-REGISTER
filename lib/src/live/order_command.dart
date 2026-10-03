@@ -22,11 +22,14 @@ class OrderSelection {
     this.quantity, {
     String paymentTiming = 'postpay',
     this.unitPriceCents,
+    this.expenseOwnerUserAccount,
     String? selectionRef,
   }) : selectionRef = selectionRef ?? product.reference {
     if ((unitPriceCents != null &&
             (unitPriceCents! < 0 || unitPriceCents! > 100000000)) ||
         !_ref(this.selectionRef) ||
+        (expenseOwnerUserAccount != null &&
+            (unitPriceCents != 0 || !_ref(expenseOwnerUserAccount))) ||
         (unitPriceCents != null && this.selectionRef == product.reference)) {
       throw const FormatException();
     }
@@ -41,6 +44,7 @@ class OrderSelection {
   final CatalogProduct product;
   final int quantity;
   final int? unitPriceCents;
+  final String? expenseOwnerUserAccount;
   final String selectionRef;
   int get priceCents => unitPriceCents ?? product.priceCents;
   bool get specialPrice => unitPriceCents != null;
@@ -136,6 +140,8 @@ class PendingOrder {
                 'expectedPriceCents': line.product.priceCents,
                 if (line.specialPrice) 'unitPriceCents': line.unitPriceCents,
                 if (line.specialPrice) 'selectionRef': line.selectionRef,
+                if (line.expenseOwnerUserAccount != null)
+                  'expenseOwnerUserAccount': line.expenseOwnerUserAccount,
               },
             )
             .toList(),
@@ -178,7 +184,12 @@ class PendingOrder {
       var total = 0;
       for (final row in rows) {
         final item = _map(row);
-        if (item.length != (item.containsKey('unitPriceCents') ? 6 : 4) ||
+        if (item.length !=
+                (item.containsKey('unitPriceCents') ? 6 : 4) +
+                    (item.containsKey('expenseOwnerUserAccount') ? 1 : 0) ||
+            (item.containsKey('expenseOwnerUserAccount') &&
+                (item['unitPriceCents'] != 0 ||
+                    !_ref(item['expenseOwnerUserAccount']))) ||
             (item.containsKey('unitPriceCents') &&
                 (!_integer(item['unitPriceCents'], 0, 100000000) ||
                     !_ref(item['selectionRef']) ||
@@ -202,6 +213,8 @@ class PendingOrder {
               'unitPriceCents': item['unitPriceCents'],
             if (item.containsKey('unitPriceCents'))
               'selectionRef': item['selectionRef'],
+            if (item.containsKey('expenseOwnerUserAccount'))
+              'expenseOwnerUserAccount': item['expenseOwnerUserAccount'],
           }),
         );
       }
@@ -245,7 +258,9 @@ class PendingOrder {
               saved['priceCents'] != line['expectedPriceCents'] ||
               saved['revision'] != line['expectedRevision'] ||
               saved['unitPriceCents'] != line['unitPriceCents'] ||
-              saved['selectionRef'] != line['selectionRef']) {
+              saved['selectionRef'] != line['selectionRef'] ||
+              saved['expenseOwnerUserAccount'] !=
+                  line['expenseOwnerUserAccount']) {
             throw const FormatException();
           }
         }

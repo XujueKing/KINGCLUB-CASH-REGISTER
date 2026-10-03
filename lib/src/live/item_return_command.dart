@@ -105,7 +105,7 @@ class PendingItemReturn {
           !_int(p['expectedTotalCents'], 1, 100000000) ||
           !_int(p['quantity'], 1, 1000) ||
           !_int(p['returnedServedQuantity'], 0, 1000) ||
-          !_int(v['unitPriceCents'], 1, 100000000) ||
+          !_int(v['unitPriceCents'], 0, 100000000) ||
           p['physicalReturnConfirmed'] != true) {
         throw const FormatException();
       }
@@ -187,8 +187,10 @@ class ItemReturnResult {
           result['remainingTotalCents'] !=
               p['expectedTotalCents'] -
                   p['quantity'] * command.unitPriceCents ||
-          result['orderStatus'] !=
-              (result['remainingTotalCents'] == 0 ? 'expired' : 'pending')) {
+          !(result['remainingTotalCents'] == 0
+                  ? const {'expired', 'waived'}
+                  : const {'pending'})
+              .contains(result['orderStatus'])) {
         throw const FormatException();
       }
       final stock = _map(result['stockReturn']);

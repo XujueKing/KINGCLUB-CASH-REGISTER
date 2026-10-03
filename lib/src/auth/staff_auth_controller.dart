@@ -1470,9 +1470,8 @@ class StaffAuthController extends ChangeNotifier {
         result['remainingQuantity'] != expectedQuantity - 1 ||
         result['remainingTotalCents'] is! int ||
         (result['remainingTotalCents'] as int) < 0 ||
-        (result['remainingTotalCents'] as int) >= expectedTotalCents ||
-        result['orderStatus'] !=
-            (result['remainingTotalCents'] == 0 ? 'expired' : 'pending')) {
+        (result['remainingTotalCents'] as int) > expectedTotalCents ||
+        !(result['remainingTotalCents'] == 0 ? const {'expired','waived'} : const {'pending'}).contains(result['orderStatus'])) {
       throw const CcsopFailure(
         'ORDER_REDUCTION_RECEIPT_INVALID',
         deliveryUncertain: true,
@@ -1485,6 +1484,7 @@ class StaffAuthController extends ChangeNotifier {
     required String sessionRef,
     required String productRef,
     required int unitPriceCents,
+    String? expenseOwnerUserAccount,
     required List<Map<String, Object>> items,
   }) async {
     final identity = _session, api = _api, epoch = _epoch;
@@ -1497,7 +1497,7 @@ class StaffAuthController extends ChangeNotifier {
     if (!identity.permissions.contains('orders.create')) {
       throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
     }
-    if (unitPriceCents < 1 ||
+    if (unitPriceCents < 0 ||
         unitPriceCents > 100000000 ||
         items.isEmpty ||
         items.length > 1000 ||
@@ -1531,6 +1531,7 @@ class StaffAuthController extends ChangeNotifier {
       'sessionRef': sessionRef,
       'productRef': productRef,
       'unitPriceCents': unitPriceCents,
+      if(expenseOwnerUserAccount != null) 'expenseOwnerUserAccount': expenseOwnerUserAccount,
     };
     final raw = await api.call('K261002001964', {
       ...scope,
@@ -1566,7 +1567,7 @@ class StaffAuthController extends ChangeNotifier {
             row['quantity'] != quantity ||
             row['remainingQuantity'] != quantity ||
             row['remainingTotalCents'] != expected ||
-            row['orderStatus'] != 'pending' ||
+            row['orderStatus'] != (expected == 0 ? 'waived' : 'pending') ||
             row['requestId'] is! String ||
             !uuidPattern.hasMatch(row['requestId'] as String) ||
             !refs.add(row['requestId'])) {

@@ -59,10 +59,16 @@ class TableBillPanel extends StatefulWidget {
   final Future<void> Function(
     String productRef,
     int unitPriceCents,
-    String selectionRef,
-  )?
+    String selectionRef, [
+    String? expenseOwnerUserAccount,
+  ])?
   onQuickAddSpecialProduct;
-  final void Function(String draftRef, int unitPriceCents, String selectionRef)?
+  final void Function(
+    String draftRef,
+    int unitPriceCents,
+    String selectionRef, [
+    String? expenseOwnerUserAccount,
+  ])?
   onRepriceDraft;
   @override
   State<TableBillPanel> createState() => _TableBillPanelState();
@@ -474,6 +480,7 @@ class _TableBillPanelState extends State<TableBillPanel>
     final generation = epoch, identity = widget.auth.session;
     var details = false;
     final first = unpaid.first.item;
+    var expenseOwner = first.expenseOwnerUserAccount;
     final price = await showItemPriceDialog(
       context,
       language: widget.language,
@@ -483,6 +490,9 @@ class _TableBillPanelState extends State<TableBillPanel>
           (draft?.quantity ?? 0),
       originalCents: first.originalPriceCents,
       currentCents: first.priceCents,
+      auth: widget.auth,
+      expenseOwnerUserAccount: expenseOwner,
+      onExpenseOwner: (value) => expenseOwner = value,
       onDetails: () => details = true,
     );
     if (!mounted ||
@@ -500,6 +510,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         sessionRef: widget.sessionRef,
         productRef: group.productRef,
         unitPriceCents: price,
+        expenseOwnerUserAccount: expenseOwner,
         items: [
           for (final line in unpaid)
             {
@@ -519,7 +530,12 @@ class _TableBillPanelState extends State<TableBillPanel>
           table == widget.tableRef &&
           session == widget.sessionRef &&
           draft != null) {
-        widget.onRepriceDraft?.call(draftRef, price, selectionRef);
+        widget.onRepriceDraft?.call(
+          draftRef,
+          price,
+          selectionRef,
+          expenseOwner,
+        );
       }
     } catch (_) {
       if (mounted &&
@@ -564,6 +580,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         item.remainingQuantity! > 0 &&
         {'open', 'clearing'}.contains(snapshot?.sessionStatus) &&
         (order.status == 'paid' ||
+            order.status == 'waived' ||
             (snapshot?.paymentTiming == 'postpay' &&
                 order.status == 'pending'));
     bool canRecall(LiveOrder order, OrderItem item) =>
@@ -576,6 +593,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         item.servingEpoch! < 1000000 &&
         {'open', 'clearing'}.contains(snapshot?.sessionStatus) &&
         (order.status == 'paid' ||
+            order.status == 'waived' ||
             (snapshot?.paymentTiming == 'postpay' &&
                 order.status == 'pending'));
     bool canReturnUnserved(LiveOrder order, OrderItem item) =>
@@ -762,10 +780,21 @@ class _TableBillPanelState extends State<TableBillPanel>
     final visible = orders
         .where(
           (o) =>
-              o.status != 'expired' && (filter == 'all' || o.status == filter),
+              o.status != 'expired' &&
+              (filter == 'all' ||
+                  o.status == filter ||
+                  (filter == 'gift' && o.items.any((i) => i.priceCents == 0))),
         )
         .toList();
-    final groups = groupBillProducts(visible);
+    final groups = groupBillProducts(visible)
+        .where(
+          (g) => filter == 'gift'
+              ? g.item.priceCents == 0
+              : (filter == 'paid' || filter == 'pending')
+              ? g.item.priceCents > 0
+              : true,
+        )
+        .toList();
     BillProductCard? draftFor(BillProductGroup group) => group.currency == 'CNY'
         ? drafts[group.item.pricingRef ?? group.productRef]
         : null;
@@ -794,7 +823,7 @@ class _TableBillPanelState extends State<TableBillPanel>
               onPressed: () => unawaited(load()),
               child: Text(t('tableBillRetry')),
             ),
-          if (filter == 'voucher' || filter == 'gift')
+          if (filter == 'voucher')
             Text(t('billSourceUnavailable'))
           else if (!loading && !failed && visible.isEmpty && drafts.isEmpty)
             Text(t('billNoItems')),
@@ -842,11 +871,14 @@ class _TableBillPanelState extends State<TableBillPanel>
                             group.productRef,
                             group.item.priceCents,
                             group.item.pricingRef!,
+                            group.item.expenseOwnerUserAccount,
                           )
                         : () => widget.onQuickAddProduct!(group.productRef))
                   : null,
               badges: status(
-                '${t('tableBillPaid')} ${group.paidQuantity} / ${t('tableBillUnpaid')} ${group.unpaidQuantity + (draftFor(group)?.quantity ?? 0)}',
+                group.item.priceCents == 0
+                    ? '${['免单', 'Complimentary', '免單', 'ฟรี'][widget.language.index]} ${group.waivedQuantity}'
+                    : '${t('tableBillPaid')} ${group.paidQuantity} / ${t('tableBillUnpaid')} ${group.unpaidQuantity + (draftFor(group)?.quantity ?? 0)}',
                 const Color(0xff216344),
               ),
               leadingBadge: group.quantity == 0

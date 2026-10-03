@@ -145,13 +145,15 @@ class BillDetailsDialog extends StatelessWidget {
                   runSpacing: 4,
                   children: [
                     Text(
-                      t(
-                        returned
-                            ? 'tableBillRefunded'
-                            : paid
-                            ? 'tableBillPaid'
-                            : 'tableBillUnpaid',
-                      ),
+                      item.priceCents == 0
+                          ? ['免单', 'Complimentary', '免單', 'ฟรี'][language.index]
+                          : t(
+                              returned
+                                  ? 'tableBillRefunded'
+                                  : paid
+                                  ? 'tableBillPaid'
+                                  : 'tableBillUnpaid',
+                            ),
                       style: TextStyle(
                         color: paid
                             ? const Color(0xff216344)
@@ -212,7 +214,7 @@ class BillDetailsDialog extends StatelessWidget {
                         : null,
                     child: Text(t('billRecall')),
                   ),
-                if (paid)
+                if (paid && item.priceCents > 0)
                   OutlinedButton(
                     key: ValueKey('bill-refund-${order.reference}-$state'),
                     onPressed: canRefund?.call(order, item) == true

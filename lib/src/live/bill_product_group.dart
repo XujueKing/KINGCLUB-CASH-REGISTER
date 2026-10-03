@@ -24,9 +24,16 @@ class BillProductGroup {
     (n, line) => n + line.item.activeQuantity * line.item.priceCents,
   );
   int get paidQuantity => active
-      .where((line) => line.order.status == 'paid')
+      .where((line) => line.order.status == 'paid' && line.item.priceCents > 0)
       .fold(0, (n, line) => n + line.item.activeQuantity);
-  int get unpaidQuantity => quantity - paidQuantity;
+  int get waivedQuantity => active
+      .where((line) => line.item.priceCents == 0)
+      .fold(0, (n, line) => n + line.item.activeQuantity);
+  int get unpaidQuantity => active
+      .where(
+        (line) => line.order.status == 'pending' && line.item.priceCents > 0,
+      )
+      .fold(0, (n, line) => n + line.item.activeQuantity);
   bool get servingKnown => active.every((line) => line.item.servingKnown);
   int get served =>
       active.fold(0, (n, line) => n + (line.item.servedQuantity ?? 0));

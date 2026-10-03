@@ -82,6 +82,8 @@ class CartDraft {
               'priceCents': i.product.priceCents,
               if (i.specialPrice) 'unitPriceCents': i.unitPriceCents,
               if (i.specialPrice) 'selectionRef': i.selectionRef,
+              if (i.expenseOwnerUserAccount != null)
+                'expenseOwnerUserAccount': i.expenseOwnerUserAccount,
             },
           )
           .toList(),
@@ -122,7 +124,12 @@ class CartDraft {
       var total = 0;
       for (final row in rows) {
         if (row is! Map<String, dynamic> ||
-            row.length != (row.containsKey('unitPriceCents') ? 6 : 4) ||
+            row.length !=
+                (row.containsKey('unitPriceCents') ? 6 : 4) +
+                    (row.containsKey('expenseOwnerUserAccount') ? 1 : 0) ||
+            (row.containsKey('expenseOwnerUserAccount') &&
+                (row['unitPriceCents'] != 0 ||
+                    !_ref(row['expenseOwnerUserAccount']))) ||
             (row.containsKey('unitPriceCents') &&
                 (row['unitPriceCents'] is! int ||
                     (row['unitPriceCents'] as int) < 0 ||
@@ -148,6 +155,8 @@ class CartDraft {
               'unitPriceCents': row['unitPriceCents'],
             if (row.containsKey('unitPriceCents'))
               'selectionRef': row['selectionRef'],
+            if (row.containsKey('expenseOwnerUserAccount'))
+              'expenseOwnerUserAccount': row['expenseOwnerUserAccount'],
           }),
         );
       }
@@ -229,6 +238,7 @@ class CartDraft {
           paymentTiming: context.paymentTiming,
           unitPriceCents: line['unitPriceCents'] as int?,
           selectionRef: line['selectionRef'] as String?,
+          expenseOwnerUserAccount: line['expenseOwnerUserAccount'] as String?,
         ),
       );
     }
