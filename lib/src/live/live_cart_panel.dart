@@ -642,13 +642,13 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                   TextButton(
                     key: const ValueKey('bill-opening-tag'),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: const Size(0, 30),
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      minimumSize: const Size(0, 20),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       backgroundColor: color.withValues(alpha: 0.10),
                       foregroundColor: color,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6),
                         side: BorderSide(color: color.withValues(alpha: 0.25)),
                       ),
                     ),
@@ -674,7 +674,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     ),
                     child: Text(
                       t('tableOpen'),
-                      style: const TextStyle(fontSize: 11),
+                      style: const TextStyle(fontSize: 10),
                     ),
                   ),
                 ],
