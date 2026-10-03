@@ -899,16 +899,24 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   Color tableColor(LiveTable table) => tableStatusColor(table);
 
   Widget tableCard(LiveTable table, String currency) {
+    final selected = focusedTableRef == table.reference;
     final session = table.session;
     final empty = table.status == 'active' && session == null;
     final textColor = empty ? const Color(0xFF263C30) : Colors.white;
     return Material(
       key: ValueKey('live-table-${table.reference}'),
+      elevation: selected ? 4 : 0,
+      shadowColor: const Color(0x99FFB300),
       color: tableColor(table),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(
-          color: empty ? const Color(0xFFABBCAF) : tableColor(table),
+          color: selected
+              ? const Color(0xFFFFB300)
+              : empty
+              ? const Color(0xFFABBCAF)
+              : tableColor(table),
+          width: selected ? 4 : 1,
         ),
       ),
       child: Ink(
