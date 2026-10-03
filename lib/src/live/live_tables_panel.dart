@@ -889,141 +889,152 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
           color: empty ? const Color(0xFFABBCAF) : tableColor(table),
         ),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: loading
-            ? null
-            : () => setState(() => focusedTableRef = table.reference),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: DefaultTextStyle(
-            style: TextStyle(color: textColor, fontSize: 13),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              table.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 23,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (session != null) ...[
-                              const SizedBox(height: 4),
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: tableStatusGradient(tableColor(table)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: loading
+              ? null
+              : () => setState(() => focusedTableRef = table.reference),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: DefaultTextStyle(
+              style: TextStyle(color: textColor, fontSize: 13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                tableOpeningLabel(
-                                  session,
-                                  widget.language,
-                                  snapshot?.observedAt ?? DateTime.now(),
-                                ),
+                                table.name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11),
+                                style: const TextStyle(
+                                  fontSize: 23,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (session != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  tableOpeningLabel(
+                                    session,
+                                    widget.language,
+                                    snapshot?.observedAt ?? DateTime.now(),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          width: 46,
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: LayoutBuilder(
+                                  builder: (context, bounds) {
+                                    final visible = table.maximumSeats.clamp(
+                                      0,
+                                      12,
+                                    );
+                                    final rows = (visible / 3).ceil().clamp(
+                                      1,
+                                      4,
+                                    );
+                                    final size =
+                                        ((bounds.maxHeight - (rows - 1) * 2) /
+                                                rows)
+                                            .clamp(4.0, 16.0) *
+                                        0.875;
+                                    return Wrap(
+                                      spacing: 2,
+                                      runSpacing: 2,
+                                      children: [
+                                        for (var i = 0; i < visible; i++)
+                                          Container(
+                                            key: ValueKey(
+                                              'table-seat-${table.reference}-$i',
+                                            ),
+                                            width: size,
+                                            height: size,
+                                            color: i < (session?.partySize ?? 0)
+                                                ? textColor.withValues(
+                                                    alpha: 0.9,
+                                                  )
+                                                : textColor.withValues(
+                                                    alpha: 0.18,
+                                                  ),
+                                          ),
+                                      ],
+                                    );
+                                  },
+                                ),
                               ),
                             ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                t(table.stateLabel),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if (table.tableMode != null &&
+                                table.tableMode != 'manual')
+                              Flexible(
+                                child: Text(
+                                  ' (${t('tableKind_${table.tableMode}')})',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                              ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 4),
-                      SizedBox(
-                        width: 46,
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: LayoutBuilder(
-                                builder: (context, bounds) {
-                                  final visible = table.maximumSeats.clamp(
-                                    0,
-                                    12,
-                                  );
-                                  final rows = (visible / 3).ceil().clamp(1, 4);
-                                  final size =
-                                      ((bounds.maxHeight - (rows - 1) * 2) /
-                                              rows)
-                                          .clamp(4.0, 16.0) *
-                                      0.875;
-                                  return Wrap(
-                                    spacing: 2,
-                                    runSpacing: 2,
-                                    children: [
-                                      for (var i = 0; i < visible; i++)
-                                        Container(
-                                          key: ValueKey(
-                                            'table-seat-${table.reference}-$i',
-                                          ),
-                                          width: size,
-                                          height: size,
-                                          color: i < (session?.partySize ?? 0)
-                                              ? textColor.withValues(alpha: 0.9)
-                                              : textColor.withValues(
-                                                  alpha: 0.18,
-                                                ),
-                                        ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
+                      Tooltip(
+                        message: t('tableConsumptionTotal'),
+                        child: Text(
+                          '${currency == 'CNY' ? '\u00a5' : currency} ${formatCents((session?.paidCents ?? 0) + (session?.pendingCents ?? 0))}',
+                          key: ValueKey('table-total-${table.reference}'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              t(table.stateLabel),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          if (table.tableMode != null &&
-                              table.tableMode != 'manual')
-                            Flexible(
-                              child: Text(
-                                ' (${t('tableKind_${table.tableMode}')})',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Tooltip(
-                      message: t('tableConsumptionTotal'),
-                      child: Text(
-                        '${currency == 'CNY' ? '\u00a5' : currency} ${formatCents((session?.paidCents ?? 0) + (session?.pendingCents ?? 0))}',
-                        key: ValueKey('table-total-${table.reference}'),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

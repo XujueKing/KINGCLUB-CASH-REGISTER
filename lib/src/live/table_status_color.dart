@@ -11,3 +11,19 @@ Color tableStatusColor(LiveTable table) => table.status != 'active'
     : table.session!.temporaryHold || table.session!.pendingCents > 0
     ? const Color(0xFFDC2626)
     : const Color(0xFF1D4ED8);
+
+LinearGradient tableStatusGradient(Color color) {
+  final start = switch (color.toARGB32()) {
+    0xFFFACC15 => const Color(0xFFFDE047),
+    0xFF15803D => const Color(0xFF22A65A),
+    0xFFDC2626 => const Color(0xFFF05252),
+    0xFF1D4ED8 => const Color(0xFF3B82F6),
+    0xFF64748B => const Color(0xFF8492A6),
+    _ => Colors.white,
+  };
+  return LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [start, color == Colors.white ? const Color(0xFFF0F3F1) : color],
+  );
+}

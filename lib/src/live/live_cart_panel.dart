@@ -605,7 +605,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
               constraints: const BoxConstraints(minWidth: 52, maxWidth: 82),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
               decoration: BoxDecoration(
-                color: color,
+                gradient: tableStatusGradient(color),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
