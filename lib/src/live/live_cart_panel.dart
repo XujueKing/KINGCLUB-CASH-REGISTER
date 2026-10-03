@@ -76,24 +76,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   int epoch = 0;
   int billRevision = 0;
   bool confirming = false;
-  bool sending = false;
-  final queuedAdds = <VoidCallback>[];
-  bool get acceptingAdds =>
-      editable ||
-      (sending &&
-          widget.contextVerified &&
-          ready &&
-          !stale &&
-          queuedAdds.length < 50);
-  void nextAddition() {
-    if (!mounted) return;
-    if (!editable) {
-      queuedAdds.clear();
-      return;
-    }
-    if (queuedAdds.isNotEmpty) queuedAdds.removeAt(0)();
-  }
-
+  bool get acceptingAdds => editable;
   bool refreshingSelection = false;
   bool refreshAgain = false;
   String? message;
@@ -158,7 +141,6 @@ class _LiveCartPanelState extends State<LiveCartPanel>
 
   void invalidate() {
     ++epoch;
-    queuedAdds.clear();
     if (!mounted) return;
     final dialog = activeDialog;
     if (dialog != null &&
@@ -369,10 +351,6 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   }
 
   void change(CatalogProduct product, int delta) {
-    if (sending && acceptingAdds && delta > 0) {
-      queuedAdds.add(() => change(product, delta));
-      return;
-    }
     if (!editable) return;
     final old = items[product.reference];
     final quantity = (old?.quantity ?? 0) + delta;
@@ -406,7 +384,6 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         dirty = true;
         message = null;
       });
-      if (widget.tablePanel != null) unawaited(submit());
     } catch (_) {
       setState(() {
         message = 'cartLimit';
@@ -420,11 +397,10 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     final original = List<OrderSelection>.unmodifiable(items.values);
     final orderContext = currentContext, memberRef = widget.memberRef;
     final draft = savedDraft;
-    // The table workspace records additions immediately; the durable request owns retries.
+    // Submit the selected batch once; the durable request owns retries.
     setState(() {
       busy = true;
       attempted = true;
-      sending = true;
       confirming = false;
       message = null;
     });
@@ -465,27 +441,23 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       if (mounted) {
         setState(() {
           busy = false;
-          sending = false;
           confirming = false;
         });
-        nextAddition();
       }
     }
   }
 
   Future<void> addExistingProduct(String productRef, {bool edit = true}) async {
-    if (sending && acceptingAdds && !edit) {
-      queuedAdds.add(
-        () => unawaited(addExistingProduct(productRef, edit: false)),
-      );
+    if (!editable) return;
+    final selected = items[productRef];
+    if (selected != null && !edit) {
+      change(selected.product, 1);
       return;
     }
-    if (!editable) return;
     final identity = widget.auth.session, generation = epoch;
     CatalogProduct? product;
     setState(() {
       busy = true;
-      sending = !edit;
       message = null;
     });
     try {
@@ -509,7 +481,6 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     } catch (_) {
       if (mounted && generation == epoch) {
         setState(() {
-          queuedAdds.clear();
           message = 'billAddUnavailable';
         });
       }
@@ -518,7 +489,6 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       if (mounted && generation == epoch) {
         setState(() {
           busy = false;
-          sending = false;
         });
       }
     }
@@ -843,13 +813,33 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                               t(menuOpen ? 'ordersBack' : 'tableOrderStart'),
                             ),
                           ),
+                    primaryAction:
+                        widget.tablePanel != null && (items.isNotEmpty || busy)
+                        ? FilledButton(
+                            key: const ValueKey('cart-submit'),
+                            onPressed: canSubmit
+                                ? () => unawaited(submit())
+                                : null,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xff17483b),
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: const Color(0xff17483b),
+                              disabledForegroundColor: Colors.white,
+                            ),
+                            child: Text(
+                              '${t(busy ? 'cartRecording' : 'cartConfirmOrder')} ¥${formatCents(total)}',
+                            ),
+                          )
+                        : null,
                     recording: busy,
                     beforeActions: widget.tablePanel == null
                         ? null
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              if (attempted && !busy)
+                              if (!busy &&
+                                  (attempted ||
+                                      (!ready && message == 'cartPending')))
                                 OutlinedButton(
                                   key: const ValueKey('cart-recovery'),
                                   onPressed: busy

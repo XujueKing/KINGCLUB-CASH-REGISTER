@@ -221,10 +221,10 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     auth.dispose();
   });
-  testWidgets('rapid additions queue while retaining the catalog and bill', (
+  testWidgets('rapid additions stay local until one batch confirmation', (
     tester,
   ) async {
-    final auth = CartAuth()..submitGate = Completer<OrderRequestResult>();
+    final auth = CartAuth();
     m.size(tester);
     await tester.pumpWidget(
       MaterialApp(
@@ -251,7 +251,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('catalog-add-p001')));
     await tester.pump();
-    expect(auth.submits, 1);
+    expect(auth.submits, 0);
     expect(
       identical(
         card,
@@ -265,24 +265,15 @@ void main() {
           .checkoutAllowed,
       isFalse,
     );
-    final gate = auth.submitGate!;
-    auth.submitGate = null;
-    final command = o.command();
-    gate.complete(
-      OrderRequestResult.parse(
-        {'result': o.receipt(command.params)},
-        command,
-        submission: true,
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(auth.submits, 3);
+    await tap(tester, 'cart-submit');
+    expect(auth.submits, 1);
+    expect(auth.sent!.single.quantity, 3);
     await tester.pumpWidget(const SizedBox());
     auth.dispose();
   });
 
   testWidgets(
-    'table workspace records each addition without confirmation and preserves the bill',
+    'table workspace reuses main action for batch confirmation and preserves the bill',
     (tester) async {
       final auth = CartAuth();
       m.size(tester);
@@ -305,6 +296,9 @@ void main() {
       expect(find.text('TABLE GRID'), findsOneWidget);
       await tap(tester, 'workspace-toggle-menu');
       await tap(tester, 'catalog-add-p001');
+      expect(auth.submits, 0);
+      expect(find.byKey(const ValueKey('cart-submit')), findsOneWidget);
+      await tap(tester, 'cart-submit');
       expect(auth.submits, 1);
       expect(find.byKey(const ValueKey('cart-recovery')), findsNothing);
       expect(auth.sent!.single.quantity, 1);
@@ -322,6 +316,8 @@ void main() {
       );
       await tap(tester, 'workspace-toggle-menu');
       await tap(tester, 'catalog-add-p001');
+      expect(auth.submits, 1);
+      await tap(tester, 'cart-submit');
       expect(auth.submits, 2);
       expect(auth.sent!.single.quantity, 1);
       await tester.pumpWidget(const SizedBox());
