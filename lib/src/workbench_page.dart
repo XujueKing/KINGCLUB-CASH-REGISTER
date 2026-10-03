@@ -58,14 +58,23 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             child: Column(
               children: [
                 const SizedBox(height: 20),
-                Image.asset(
-                  'assets/brand/kingclub-gold.png',
-                  key: const ValueKey('kingclub-logo'),
-                  semanticLabel: 'KINGCLUB',
+                SizedBox(
                   width: 76,
                   height: 64,
-                  fit: BoxFit.contain,
-                  cacheWidth: 228,
+                  child: Transform.scale(
+                    scale: 0.8,
+                    child: Image.asset(
+                      'assets/brand/kingclub-gold.png',
+                      key: const ValueKey('kingclub-logo'),
+                      semanticLabel: 'KINGCLUB',
+                      width: 76,
+                      height: 64,
+                      fit: BoxFit.contain,
+                      color: const Color(0xffb9c9c2),
+                      colorBlendMode: BlendMode.srcIn,
+                      cacheWidth: 228,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Expanded(
