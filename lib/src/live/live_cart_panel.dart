@@ -604,7 +604,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
             maxWidth: 82,
             minHeight: 48,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
             gradient: tableStatusGradient(color),
             borderRadius: BorderRadius.circular(12),
@@ -615,7 +615,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
             maxLines: 2,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 22,
               fontWeight: FontWeight.w800,
             ),
           ),
