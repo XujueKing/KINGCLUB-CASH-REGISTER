@@ -23,6 +23,7 @@ class OrderSelection {
     String paymentTiming = 'postpay',
     this.unitPriceCents,
     this.expenseOwnerUserAccount,
+    this.authorizationRef,
     String? selectionRef,
   }) : selectionRef = selectionRef ?? product.reference {
     if ((unitPriceCents != null &&
@@ -45,6 +46,7 @@ class OrderSelection {
   final int quantity;
   final int? unitPriceCents;
   final String? expenseOwnerUserAccount;
+  final String? authorizationRef;
   final String selectionRef;
   int get priceCents => unitPriceCents ?? product.priceCents;
   bool get specialPrice => unitPriceCents != null;
@@ -142,6 +144,8 @@ class PendingOrder {
                 if (line.specialPrice) 'selectionRef': line.selectionRef,
                 if (line.expenseOwnerUserAccount != null)
                   'expenseOwnerUserAccount': line.expenseOwnerUserAccount,
+                if (line.authorizationRef != null)
+                  'authorizationRef': line.authorizationRef,
               },
             )
             .toList(),
@@ -186,7 +190,8 @@ class PendingOrder {
         final item = _map(row);
         if (item.length !=
                 (item.containsKey('unitPriceCents') ? 6 : 4) +
-                    (item.containsKey('expenseOwnerUserAccount') ? 1 : 0) ||
+                    (item.containsKey('expenseOwnerUserAccount') ? 1 : 0) +
+                    (item.containsKey('authorizationRef') ? 1 : 0) ||
             (item.containsKey('expenseOwnerUserAccount') &&
                 (item['unitPriceCents'] != 0 ||
                     !_ref(item['expenseOwnerUserAccount']))) ||
@@ -215,6 +220,8 @@ class PendingOrder {
               'selectionRef': item['selectionRef'],
             if (item.containsKey('expenseOwnerUserAccount'))
               'expenseOwnerUserAccount': item['expenseOwnerUserAccount'],
+            if (item.containsKey('authorizationRef'))
+              'authorizationRef': item['authorizationRef'],
           }),
         );
       }
@@ -259,6 +266,7 @@ class PendingOrder {
               saved['revision'] != line['expectedRevision'] ||
               saved['unitPriceCents'] != line['unitPriceCents'] ||
               saved['selectionRef'] != line['selectionRef'] ||
+              saved['authorizationRef'] != line['authorizationRef'] ||
               saved['expenseOwnerUserAccount'] !=
                   line['expenseOwnerUserAccount']) {
             throw const FormatException();

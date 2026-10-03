@@ -84,6 +84,8 @@ class CartDraft {
               if (i.specialPrice) 'selectionRef': i.selectionRef,
               if (i.expenseOwnerUserAccount != null)
                 'expenseOwnerUserAccount': i.expenseOwnerUserAccount,
+              if (i.authorizationRef != null)
+                'authorizationRef': i.authorizationRef,
             },
           )
           .toList(),
@@ -126,7 +128,8 @@ class CartDraft {
         if (row is! Map<String, dynamic> ||
             row.length !=
                 (row.containsKey('unitPriceCents') ? 6 : 4) +
-                    (row.containsKey('expenseOwnerUserAccount') ? 1 : 0) ||
+                    (row.containsKey('expenseOwnerUserAccount') ? 1 : 0) +
+                    (row.containsKey('authorizationRef') ? 1 : 0) ||
             (row.containsKey('expenseOwnerUserAccount') &&
                 (row['unitPriceCents'] != 0 ||
                     !_ref(row['expenseOwnerUserAccount']))) ||
@@ -157,6 +160,8 @@ class CartDraft {
               'selectionRef': row['selectionRef'],
             if (row.containsKey('expenseOwnerUserAccount'))
               'expenseOwnerUserAccount': row['expenseOwnerUserAccount'],
+            if (row.containsKey('authorizationRef'))
+              'authorizationRef': row['authorizationRef'],
           }),
         );
       }
@@ -239,6 +244,7 @@ class CartDraft {
           unitPriceCents: line['unitPriceCents'] as int?,
           selectionRef: line['selectionRef'] as String?,
           expenseOwnerUserAccount: line['expenseOwnerUserAccount'] as String?,
+          authorizationRef: line['authorizationRef'] as String?,
         ),
       );
     }

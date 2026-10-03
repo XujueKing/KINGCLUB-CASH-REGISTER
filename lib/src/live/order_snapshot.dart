@@ -88,13 +88,16 @@ class OrderItem {
     if (pricingRef != null) {
       final pricing = _map(_map(value['snapshot'])['pricing']);
       if (pricing.length !=
-              (pricing.containsKey('expenseOwnerUserAccount') ? 5 : 4) ||
+              (pricing.containsKey('expenseOwnerUserAccount') ? 5 : 4) +
+                  (pricing.containsKey('authorization') ? 1 : 0) ||
           pricingRef == productRef ||
           _amount(pricing['unitPriceCents'], 100000000) != priceCents) {
         throw const FormatException();
       }
       _positive(pricing['originalUnitPriceCents'], 100000000);
       _ref(pricing['operatedBy']);
+      authorizationRef =
+          (pricing['authorization'] as Map?)?['authorizationRef'] as String?;
       if (pricing.containsKey('expenseOwnerUserAccount')) {
         _ref(pricing['expenseOwnerUserAccount']);
       }
@@ -115,6 +118,7 @@ class OrderItem {
   final String productRef;
   final String? pricingRef;
   final String? expenseOwnerUserAccount;
+  String? authorizationRef;
   String get groupingRef =>
       pricingRef == null ? productRef : '$productRef/$pricingRef';
   bool get specialPrice => pricingRef != null;

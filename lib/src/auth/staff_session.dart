@@ -12,6 +12,8 @@ const staffPermissions = {
   'orders.read',
   'table.open',
   'orders.create',
+  'price.adjust',
+  'price.waive',
   'orders.serve',
   'table.clear',
   'payment.cash',

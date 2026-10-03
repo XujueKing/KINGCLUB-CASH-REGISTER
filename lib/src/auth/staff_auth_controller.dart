@@ -1471,12 +1471,38 @@ class StaffAuthController extends ChangeNotifier {
         result['remainingTotalCents'] is! int ||
         (result['remainingTotalCents'] as int) < 0 ||
         (result['remainingTotalCents'] as int) > expectedTotalCents ||
-        !(result['remainingTotalCents'] == 0 ? const {'expired','waived'} : const {'pending'}).contains(result['orderStatus'])) {
+        !(result['remainingTotalCents'] == 0
+                ? const {'expired', 'waived'}
+                : const {'pending'})
+            .contains(result['orderStatus'])) {
       throw const CcsopFailure(
         'ORDER_REDUCTION_RECEIPT_INVALID',
         deliveryUncertain: true,
       );
     }
+  }
+
+  Future<String> authorizeItemPrice({
+    required Map<String, Object> scope,
+    required String identityCode,
+  }) async {
+    final identity = _session, api = _api, epoch = _epoch;
+    if (identity == null || api == null || !identity.expiresAt.isAfter(_now()))
+      throw const CcsopFailure('SESSION_REQUIRED');
+    final expected = <String, Object>{...scope, 'storeRef': identity.storeRef};
+    final raw = await api.call('K261003002002', {
+      'scope': expected,
+      'identityCode': identityCode,
+    });
+    _check(epoch);
+    final result = raw is Map ? raw['result'] : null;
+    if (result is! Map ||
+        result['authorizationRef'] is! String ||
+        !uuidPattern.hasMatch(result['authorizationRef'] as String) ||
+        result['scope'] is! Map ||
+        !expected.entries.every((e) => result['scope'][e.key] == e.value))
+      throw const FormatException();
+    return result['authorizationRef'] as String;
   }
 
   Future<String> repriceUnpaidItems({
@@ -1485,6 +1511,7 @@ class StaffAuthController extends ChangeNotifier {
     required String productRef,
     required int unitPriceCents,
     String? expenseOwnerUserAccount,
+    String? authorizationRef,
     required List<Map<String, Object>> items,
   }) async {
     final identity = _session, api = _api, epoch = _epoch;
@@ -1531,7 +1558,9 @@ class StaffAuthController extends ChangeNotifier {
       'sessionRef': sessionRef,
       'productRef': productRef,
       'unitPriceCents': unitPriceCents,
-      if(expenseOwnerUserAccount != null) 'expenseOwnerUserAccount': expenseOwnerUserAccount,
+      if (expenseOwnerUserAccount != null)
+        'expenseOwnerUserAccount': expenseOwnerUserAccount,
+      if (authorizationRef != null) 'authorizationRef': authorizationRef,
     };
     final raw = await api.call('K261002001964', {
       ...scope,

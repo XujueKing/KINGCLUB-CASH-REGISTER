@@ -43,12 +43,19 @@ class PriceAuth extends TableAuth {
   }
 
   @override
+  Future<String> authorizeItemPrice({
+    required Map<String, Object> scope,
+    required String identityCode,
+  }) async => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  @override
   Future<String> repriceUnpaidItems({
     required String tableRef,
     required String sessionRef,
     required String productRef,
     required int unitPriceCents,
     String? expenseOwnerUserAccount,
+    String? authorizationRef,
     required List<Map<String, Object>> items,
   }) async {
     changed = items;
@@ -85,14 +92,16 @@ void main() {
           find.byKey(const ValueKey('bill-group-CNY-test-product')),
         );
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('item-price-input')), findsOneWidget);
-        expect(find.text('¥ 6.00 × 4 = ¥ 24.00'), findsOneWidget);
-        await tester.enterText(
-          find.byKey(const ValueKey('item-price-input')),
-          '3.00',
-        );
+        expect(find.byKey(const ValueKey('discount-5')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('discount-5')));
         await tester.pump();
         await tester.tap(find.byKey(const ValueKey('item-price-save')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byType(TextField),
+          'KC:M:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.pumpAndSettle();
         expect(auth.price, 300);
         expect(auth.changed!.map((row) => row['orderRef']), [

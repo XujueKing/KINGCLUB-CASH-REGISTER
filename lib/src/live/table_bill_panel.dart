@@ -61,6 +61,7 @@ class TableBillPanel extends StatefulWidget {
     int unitPriceCents,
     String selectionRef, [
     String? expenseOwnerUserAccount,
+    String? authorizationRef,
   ])?
   onQuickAddSpecialProduct;
   final void Function(
@@ -68,6 +69,7 @@ class TableBillPanel extends StatefulWidget {
     int unitPriceCents,
     String selectionRef, [
     String? expenseOwnerUserAccount,
+    String? authorizationRef,
   ])?
   onRepriceDraft;
   @override
@@ -481,6 +483,7 @@ class _TableBillPanelState extends State<TableBillPanel>
     var details = false;
     final first = unpaid.first.item;
     var expenseOwner = first.expenseOwnerUserAccount;
+    String? authorization;
     final price = await showItemPriceDialog(
       context,
       language: widget.language,
@@ -493,6 +496,12 @@ class _TableBillPanelState extends State<TableBillPanel>
       auth: widget.auth,
       expenseOwnerUserAccount: expenseOwner,
       onExpenseOwner: (value) => expenseOwner = value,
+      authorizationScope: {
+        'tableRef': widget.tableRef,
+        'sessionRef': widget.sessionRef,
+        'productRef': group.productRef,
+      },
+      onAuthorization: (value) => authorization = value,
       onDetails: () => details = true,
     );
     if (!mounted ||
@@ -511,6 +520,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         productRef: group.productRef,
         unitPriceCents: price,
         expenseOwnerUserAccount: expenseOwner,
+        authorizationRef: authorization,
         items: [
           for (final line in unpaid)
             {
@@ -535,6 +545,7 @@ class _TableBillPanelState extends State<TableBillPanel>
           price,
           selectionRef,
           expenseOwner,
+          authorization,
         );
       }
     } catch (_) {
@@ -872,6 +883,7 @@ class _TableBillPanelState extends State<TableBillPanel>
                             group.item.priceCents,
                             group.item.pricingRef!,
                             group.item.expenseOwnerUserAccount,
+                            group.item.authorizationRef,
                           )
                         : () => widget.onQuickAddProduct!(group.productRef))
                   : null,

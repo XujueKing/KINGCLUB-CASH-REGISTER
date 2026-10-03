@@ -19,6 +19,11 @@ import 'staff_session_test.dart' as a;
 
 class CartAuth extends m.MemberAuth {
   @override
+  Future<String> authorizeItemPrice({
+    required Map<String, Object> scope,
+    required String identityCode,
+  }) async => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  @override
   Future<List<CartDraft>> cartDrafts() async => [];
   int submits = 0;
   bool failSubmit = false, failJournal = false, unknown = false;
@@ -296,11 +301,16 @@ void main() {
       await show(tester, auth);
       await tap(tester, 'catalog-add-p001');
       await tap(tester, 'draft-card-p001');
-      await tester.enterText(
-        find.byKey(const ValueKey('item-price-input')),
-        '5.00',
-      );
+      await tester.tap(find.text('改单价'));
+      await tester.pumpAndSettle();
+      await tap(tester, 'price-key-5');
       await tap(tester, 'item-price-save');
+      await tester.enterText(
+        find.byType(TextField),
+        'KC:M:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
       await tap(tester, 'catalog-add-p001');
       final bill = tester.widget<TableBillPanel>(find.byType(TableBillPanel));
       expect(bill.draftCents, 1734);

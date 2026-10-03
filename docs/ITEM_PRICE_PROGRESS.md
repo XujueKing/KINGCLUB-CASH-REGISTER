@@ -1,3 +1,5 @@
+最新：触屏折扣、数字键盘与服务器扫码授权已发布；当前操作要求见 TOUCH_PRICE_AUTHORIZATION.md。
+
 # Release status ? 2026-10-03
 
 Price, unit discount and complimentary items are deployed to KINGCLUB and installed on SUNMI DAB6264H90115 with matching certificate and preserved application data. The existing employee login and the item price dialog were verified on the device, including the complimentary expense-owner scan entry. The local test selection was removed without confirming an order or charging/refunding money.

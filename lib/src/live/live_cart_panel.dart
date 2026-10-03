@@ -362,6 +362,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     String? selectionRef,
     int? unitPriceCents,
     String? expenseOwnerUserAccount,
+    String? authorizationRef,
   }) {
     if (!editable) return;
     if (delta > 0 && !canAdd(product)) return;
@@ -390,6 +391,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         unitPriceCents: old?.unitPriceCents ?? unitPriceCents,
         expenseOwnerUserAccount:
             old?.expenseOwnerUserAccount ?? expenseOwnerUserAccount,
+        authorizationRef: old?.authorizationRef ?? authorizationRef,
         paymentTiming: currentContext.paymentTiming,
       );
       final nextTotal =
@@ -471,6 +473,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     String? selectionRef,
     int? unitPriceCents,
     String? expenseOwnerUserAccount,
+    String? authorizationRef,
   }) async {
     if (!editable) return;
     final selected = items[selectionRef ?? productRef];
@@ -481,6 +484,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         selectionRef: selectionRef,
         unitPriceCents: unitPriceCents,
         expenseOwnerUserAccount: expenseOwnerUserAccount,
+        authorizationRef: authorizationRef,
       );
       return;
     }
@@ -534,6 +538,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       selectionRef: selectionRef,
       unitPriceCents: unitPriceCents,
       expenseOwnerUserAccount: expenseOwnerUserAccount,
+      authorizationRef: authorizationRef,
     );
     if (widget.tablePanel == null &&
         edit &&
@@ -554,6 +559,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     if (original == null) return;
     final generation = epoch;
     var expenseOwner = original.expenseOwnerUserAccount;
+    String? authorization;
     final price = await showItemPriceDialog(
       context,
       language: widget.language,
@@ -564,6 +570,12 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       auth: widget.auth,
       expenseOwnerUserAccount: expenseOwner,
       onExpenseOwner: (value) => expenseOwner = value,
+      authorizationScope: {
+        'tableRef': currentContext.tableRef,
+        'sessionRef': currentContext.sessionRef,
+        'productRef': product.reference,
+      },
+      onAuthorization: (value) => authorization = value,
     );
     if (price == null ||
         !mounted ||
@@ -593,6 +605,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         selectionRef: nextKey,
         unitPriceCents: price,
         expenseOwnerUserAccount: expenseOwner,
+        authorizationRef: authorization,
       );
       dirty = true;
       message = null;
@@ -799,17 +812,29 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                 Expanded(
                   child: TableBillPanel(
                     onQuickAddSpecialProduct: acceptingAdds
-                        ? (ref, price, selectionRef, [expenseOwner]) =>
-                              addExistingProduct(
-                                ref,
-                                edit: false,
-                                selectionRef: selectionRef,
-                                unitPriceCents: price,
-                                expenseOwnerUserAccount: expenseOwner,
-                              )
+                        ? (
+                            ref,
+                            price,
+                            selectionRef, [
+                            expenseOwner,
+                            authorization,
+                          ]) => addExistingProduct(
+                            ref,
+                            edit: false,
+                            selectionRef: selectionRef,
+                            unitPriceCents: price,
+                            expenseOwnerUserAccount: expenseOwner,
+                            authorizationRef: authorization,
+                          )
                         : null,
                     onRepriceDraft:
-                        (draftRef, price, selectionRef, [expenseOwner]) {
+                        (
+                          draftRef,
+                          price,
+                          selectionRef, [
+                          expenseOwner,
+                          authorization,
+                        ]) {
                           final item = items[draftRef];
                           if (item == null || !editable) return;
                           setState(() {
@@ -821,6 +846,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                               selectionRef: selectionRef,
                               unitPriceCents: price,
                               expenseOwnerUserAccount: expenseOwner,
+                              authorizationRef: authorization,
                             );
                             dirty = true;
                           });

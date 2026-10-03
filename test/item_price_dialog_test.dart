@@ -38,6 +38,49 @@ void main() {
       expect(result, 0);
     },
   );
+  testWidgets('touch discounts and keypad work without a system keyboard', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showItemPriceDialog(
+              context,
+              language: UiLanguage.zh,
+              name: 'Product',
+              quantity: 2,
+              originalCents: 10000,
+              currentCents: 10000,
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('discount-8.5')));
+    await tester.pump();
+    expect(find.text('¥ 85.00 × 2 = ¥ 170.00'), findsOneWidget);
+    await tester.tap(find.text('改单价'));
+    await tester.pumpAndSettle();
+    for (final key in ['1', '2', '.', '3', '4']) {
+      await tester.tap(find.byKey(ValueKey('price-key-$key')));
+      await tester.pump();
+    }
+    expect(find.text('¥ 12.34 × 2 = ¥ 24.68'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('item-price-reset')));
+    await tester.pump();
+    expect(find.text('¥ 100.00 × 2 = ¥ 200.00'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   test('unit prices use exact cents, including an explicit zero waiver', () {
     expect(parseUnitPrice('0'), 0);
     expect(parseUnitPrice('12.3'), 1230);
