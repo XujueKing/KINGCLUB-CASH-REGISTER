@@ -905,18 +905,16 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     final textColor = empty ? const Color(0xFF263C30) : Colors.white;
     return Material(
       key: ValueKey('live-table-${table.reference}'),
-      elevation: selected ? 4 : 0,
-      shadowColor: const Color(0x99FFB300),
       color: tableColor(table),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(
           color: selected
-              ? const Color(0xFFFFB300)
+              ? Colors.black
               : empty
               ? const Color(0xFFABBCAF)
               : tableColor(table),
-          width: selected ? 4 : 1,
+          width: selected ? 2 : 1,
         ),
       ),
       child: Ink(
