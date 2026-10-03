@@ -791,19 +791,23 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                               t(menuOpen ? 'ordersBack' : 'tableOrderStart'),
                             ),
                           ),
+                    primaryAction:
+                        widget.tablePanel != null && (items.isNotEmpty || busy)
+                        ? FilledButton(
+                            key: const ValueKey('cart-submit'),
+                            onPressed: canSubmit
+                                ? () => unawaited(submit())
+                                : null,
+                            child: Text(
+                              '${t('cartConfirmOrder')} \u00a5${formatCents(total)}',
+                            ),
+                          )
+                        : null,
                     beforeActions: widget.tablePanel == null
                         ? null
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              if (items.isNotEmpty || busy)
-                                FilledButton(
-                                  key: const ValueKey('cart-submit'),
-                                  onPressed: canSubmit
-                                      ? () => unawaited(submit())
-                                      : null,
-                                  child: Text(t('cartSubmit')),
-                                ),
                               if (attempted)
                                 OutlinedButton(
                                   key: const ValueKey('cart-recovery'),

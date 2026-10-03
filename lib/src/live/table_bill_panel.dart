@@ -36,6 +36,7 @@ class TableBillPanel extends StatefulWidget {
     this.draftCards = const {},
     this.onQuickAddProduct,
     this.orderAction,
+    this.primaryAction,
     this.beforeActions,
   });
   final StaffAuthController auth;
@@ -45,7 +46,7 @@ class TableBillPanel extends StatefulWidget {
   final bool checkoutAllowed, fillHeight;
   final bool changesAllowed;
   final Widget? leading;
-  final Widget? orderAction, beforeActions;
+  final Widget? orderAction, primaryAction, beforeActions;
   final int draftCents;
   final Widget Function(Widget filter)? headerBuilder;
   final Future<void> Function(String productRef)? onAddProduct;
@@ -709,17 +710,27 @@ class _TableBillPanelState extends State<TableBillPanel>
             ),
         ],
         if (widget.beforeActions != null) widget.beforeActions!,
-        if (widget.orderAction != null || (canRead && canPay))
+        if (widget.orderAction != null ||
+            widget.primaryAction != null ||
+            (canRead && canPay))
           Row(
             children: [
               if (widget.orderAction != null)
-                Expanded(child: widget.orderAction!),
-              if (widget.orderAction != null && canRead && canPay)
+                Expanded(flex: 2, child: widget.orderAction!),
+              if (widget.orderAction != null &&
+                  (widget.primaryAction != null || (canRead && canPay)))
                 const SizedBox(width: 10),
-              if (canRead && canPay)
+              if (widget.primaryAction != null)
+                Expanded(flex: 3, child: widget.primaryAction!)
+              else if (canRead && canPay)
                 Expanded(
+                  flex: 3,
                   child: FilledButton(
                     key: const ValueKey('table-bill-checkout'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                    ),
                     onPressed:
                         !loading &&
                             !failed &&
@@ -727,11 +738,17 @@ class _TableBillPanelState extends State<TableBillPanel>
                             widget.checkoutAllowed &&
                             !reducing &&
                             pending != null &&
-                            pending.orderCount > 0
+                            pending.orderCount > 0 &&
+                            pending.totalCents > 0
                         ? pay
                         : null,
                     child: Text(
-                      '${t('tableCheckoutTitle')}${pending != null && pending.totalCents > 0 ? ' ¥${formatCents(pending.totalCents)}' : ''}',
+                      pending != null &&
+                              pending.totalCents == 0 &&
+                              !loading &&
+                              !failed
+                          ? t('billSettled')
+                          : '${t('tableCheckoutTitle')}${pending != null && pending.totalCents > 0 ? ' ¥${formatCents(pending.totalCents)}' : ''}',
                     ),
                   ),
                 ),

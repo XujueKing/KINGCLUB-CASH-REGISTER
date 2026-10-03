@@ -136,6 +136,36 @@ void main() {
     ),
   );
   testWidgets(
+    'primary checkout shows server due in red then settled when paid',
+    (tester) async {
+      final auth = BillAuth();
+      await tester.pumpWidget(page(auth, 0));
+      await tester.pumpAndSettle();
+      final finder = find.byKey(const ValueKey('table-bill-checkout'));
+      var button = tester.widget<FilledButton>(finder);
+      expect(button.onPressed, isNotNull);
+      expect(
+        button.style!.backgroundColor!.resolve({}),
+        const Color(0xFFDC2626),
+      );
+      expect(
+        find.descendant(of: finder, matching: find.textContaining('12.00')),
+        findsOneWidget,
+      );
+      auth.paid = true;
+      await tester.pumpWidget(page(auth, 1));
+      await tester.pumpAndSettle();
+      button = tester.widget<FilledButton>(finder);
+      expect(button.onPressed, isNull);
+      expect(
+        find.descendant(of: finder, matching: find.text('Settled')),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
     'same product draft and paid lines form one card with original totals',
     (tester) async {
       final auth = BillAuth()..paid = true;

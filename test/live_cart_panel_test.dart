@@ -232,6 +232,16 @@ void main() {
       await tap(tester, 'workspace-toggle-menu');
       expect(find.text('TABLE GRID'), findsNothing);
       await tap(tester, 'catalog-add-p001');
+      final submitButton = find.byKey(const ValueKey('cart-submit'));
+      final menuButton = find.byKey(const ValueKey('workspace-toggle-menu'));
+      expect(submitButton, findsOneWidget);
+      expect(find.byKey(const ValueKey('table-bill-checkout')), findsNothing);
+      expect(find.textContaining('12.34'), findsWidgets);
+      expect(tester.getRect(submitButton).top, tester.getRect(menuButton).top);
+      expect(
+        tester.getSize(submitButton).width,
+        greaterThan(tester.getSize(menuButton).width),
+      );
       final total = tester
           .widget<TableBillPanel>(find.byType(TableBillPanel))
           .draftCents;
