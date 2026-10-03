@@ -2755,6 +2755,7 @@ class StaffAuthController extends ChangeNotifier {
     required List<String> memberRefs,
     required bool arrivalConfirmed,
     required bool reservationChecked,
+    Map<String, dynamic>? selectedRule,
   }) => _openingOperation(() async {
     final identity = _openingIdentity(), epoch = _epoch;
     final pending = PendingOpening.prepare(
@@ -2764,6 +2765,7 @@ class StaffAuthController extends ChangeNotifier {
       memberRefs: memberRefs,
       arrivalConfirmed: arrivalConfirmed,
       reservationChecked: reservationChecked,
+      selectedRule: selectedRule,
     );
     await _openingJournal.save(pending, identity);
     _check(epoch);

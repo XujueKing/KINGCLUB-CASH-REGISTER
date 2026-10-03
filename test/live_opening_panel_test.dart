@@ -52,6 +52,7 @@ class OpeningAuth extends StaffAuthController {
     required List<String> memberRefs,
     required bool arrivalConfirmed,
     required bool reservationChecked,
+    Map<String, dynamic>? selectedRule,
   }) async {
     submits++;
     expect(partySize, 2);
@@ -168,9 +169,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('live-table-test-table')));
       await tester.pumpAndSettle();
-      await tap(tester, const ValueKey('opening-table-test-table'));
-      expect(find.byKey(const ValueKey('opening-party-size')), findsOneWidget);
-      await tester.tap(find.text(tr(UiLanguage.zh, 'ordersBack')));
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byType(ChoiceChip), findsNWidgets(4));
+      await tester.tap(find.text(tr(UiLanguage.zh, 'cancel')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('table-tools')));
       await tester.pumpAndSettle();

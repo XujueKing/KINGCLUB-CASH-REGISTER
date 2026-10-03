@@ -35,6 +35,7 @@ class PendingOpening {
     required List<String> memberRefs,
     required bool arrivalConfirmed,
     required bool reservationChecked,
+    Map<String, dynamic>? selectedRule,
   }) {
     if (!session.permissions.contains('table.open') ||
         context.storeRef != session.storeRef ||
@@ -57,6 +58,7 @@ class PendingOpening {
       'employeeRef': session.employeeRef,
       'deviceId': session.deviceId,
       'params': {
+        'selectedRule': ?selectedRule,
         'storeRef': session.storeRef,
         'tableId': context.tableId,
         'requestId': id,
@@ -102,7 +104,7 @@ class PendingOpening {
         device is! String ||
         !uuidPattern.hasMatch(device) ||
         p is! Map<String, dynamic> ||
-        p.length != 11) {
+        p.length != (p.containsKey('selectedRule') ? 12 : 11)) {
       throw const FormatException();
     }
     bool ref(Object? value) =>
@@ -144,6 +146,22 @@ class PendingOpening {
         confirmation['arrivalConfirmed'] != true ||
         confirmation['reservationChecked'] != true) {
       throw const FormatException();
+    }
+    final selected = p['selectedRule'];
+    if (p.containsKey('selectedRule')) {
+      if (selected is! Map<String, dynamic>) throw const FormatException();
+      final mode = selected['mode'];
+      final field = mode == 'minimum_people'
+          ? 'minimumPeople'
+          : mode == 'minimum_spend'
+          ? 'minimumSpendCents'
+          : null;
+      if (!{'manual', 'aa', 'minimum_people', 'minimum_spend'}.contains(mode) ||
+          selected.length != (field == null ? 1 : 2) ||
+          (field != null &&
+              (selected[field] is! int || (selected[field] as int) <= 0))) {
+        throw const FormatException();
+      }
     }
     return PendingOpening._(
       base as String,

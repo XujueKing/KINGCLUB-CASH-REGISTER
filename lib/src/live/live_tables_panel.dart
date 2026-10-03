@@ -1,3 +1,5 @@
+import 'quick_opening_dialog.dart';
+
 import 'dart:async';
 
 import 'table_calendar_panel.dart';
@@ -874,6 +876,26 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       ),
   ];
 
+  Future<void> selectTable(LiveTable table) async {
+    if (table.status == 'active' &&
+        table.session == null &&
+        widget.auth.session?.permissions.contains('table.open') == true) {
+      final opened = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => QuickOpeningDialog(
+          auth: widget.auth,
+          table: table,
+          language: widget.language,
+        ),
+      );
+      if (!mounted || opened != true) return;
+      await load();
+      if (!mounted) return;
+    }
+    setState(() => focusedTableRef = table.reference);
+  }
+
   Color tableColor(LiveTable table) => tableStatusColor(table);
 
   Widget tableCard(LiveTable table, String currency) {
@@ -896,9 +918,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: loading
-              ? null
-              : () => setState(() => focusedTableRef = table.reference),
+          onTap: loading ? null : () => unawaited(selectTable(table)),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: DefaultTextStyle(

@@ -2,6 +2,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/product_thumbnail.dart';
 
 void main() {
+  test('rotating signatures reuse the image cache but different assets stay separate', () {
+    final first = ProductNetworkImage(
+      'https://service.invalid/attachments/a?token=first',
+    );
+    final second = ProductNetworkImage(
+      'https://service.invalid/attachments/a?token=second',
+    );
+    expect(first, second);
+    expect(first.hashCode, second.hashCode);
+    expect(
+      first,
+      isNot(
+        ProductNetworkImage(
+          'https://service.invalid/attachments/b?token=second',
+        ),
+      ),
+    );
+    expect(
+      first,
+      isNot(
+        ProductNetworkImage('https://other.invalid/attachments/a?token=second'),
+      ),
+    );
+  });
   test('thumbnail retains the business gateway prefix', () {
     expect(
       productThumbnailUri(
