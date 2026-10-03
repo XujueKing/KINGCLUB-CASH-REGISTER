@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/table_bill_panel.dart';
@@ -14,6 +16,7 @@ class ReductionAuth extends TableAuth {
   int quantity = 2, served = 0, calls = 0;
   Completer<void>? reductionGate;
   bool uncertain = false;
+  bool conflictOnce = false;
   @override
   Future<Object?> readOrders({
     required String tableRef,
@@ -66,6 +69,10 @@ class ReductionAuth extends TableAuth {
     required int expectedTotalCents,
   }) async {
     calls++;
+    if (conflictOnce) {
+      conflictOnce = false;
+      throw const CcsopFailure('ORDER_REDUCTION_STATE_CHANGED');
+    }
     expect(orderRef, 'D00000000001');
     expect(expectedQuantity, quantity);
     expect(expectedServedQuantity, served);
@@ -95,6 +102,18 @@ void main() {
   }
 
   Finder getMinus() => find.byKey(const ValueKey('cart-minus-test-product'));
+  testWidgets(
+    'confirmed state conflict refreshes and retries without technical snackbar',
+    (tester) async {
+      final auth = ReductionAuth()..conflictOnce = true;
+      await mount(tester, auth);
+      await tester.tap(getMinus());
+      await tester.pumpAndSettle();
+      expect(auth.calls, 2);
+      expect(auth.quantity, 1);
+      expect(find.byType(SnackBar), findsNothing);
+    },
+  );
   testWidgets(
     'submitted unpaid quantities reduce to the paid floor on the same card',
     (tester) async {

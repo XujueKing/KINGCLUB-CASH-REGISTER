@@ -101,6 +101,7 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   void reset({bool useCache = false}) {
     epoch++;
+    activeRead = null;
     queuedReductions.clear();
     verifiedSnapshot = false;
     setState(() {
@@ -146,7 +147,23 @@ class _TableBillPanelState extends State<TableBillPanel>
     reset();
   }
 
-  Future<void> load({bool more = false}) async {
+  Future<void>? activeRead;
+  Future<void> load({bool more = false, bool fresh = false}) async {
+    final previous = activeRead;
+    if (previous != null) {
+      await previous;
+      if (!fresh || !mounted) return;
+    }
+    final work = readBill(more: more);
+    activeRead = work;
+    try {
+      await work;
+    } finally {
+      if (identical(activeRead, work)) activeRead = null;
+    }
+  }
+
+  Future<void> readBill({bool more = false}) async {
     if (!mounted ||
         !foreground ||
         !canRead ||
@@ -312,13 +329,17 @@ class _TableBillPanelState extends State<TableBillPanel>
             (line.item.remainingQuantity ?? 0) > 0,
       );
 
-  Future<void> reduceGroup(BillProductGroup group) async {
+  Future<void> reduceGroup(
+    BillProductGroup group, {
+    bool retryConflict = true,
+  }) async {
     if (failed || !canReduce(group)) return;
     if (reducing) {
       if (queuedReductions.length < 50) queuedReductions.add(group.productRef);
       return;
     }
     var succeeded = false;
+    var stateConflict = false;
     final identity = widget.auth.session,
         table = widget.tableRef,
         session = widget.sessionRef;
@@ -348,7 +369,12 @@ class _TableBillPanelState extends State<TableBillPanel>
       );
       succeeded = true;
     } catch (error) {
-      if (mounted &&
+      stateConflict =
+          retryConflict &&
+          error is CcsopFailure &&
+          error.code == 'ORDER_REDUCTION_STATE_CHANGED';
+      if (!stateConflict &&
+          mounted &&
           identical(identity, widget.auth.session) &&
           table == widget.tableRef &&
           session == widget.sessionRef) {
@@ -370,9 +396,22 @@ class _TableBillPanelState extends State<TableBillPanel>
       }
     } finally {
       if (mounted) {
-        await load();
+        await load(fresh: true);
         if (mounted) {
           setState(() => reducing = false);
+          if (stateConflict &&
+              !failed &&
+              identical(identity, widget.auth.session) &&
+              table == widget.tableRef &&
+              session == widget.sessionRef) {
+            final next = groupBillProducts(orders)
+                .where((g) => g.productRef == group.productRef && canReduce(g))
+                .firstOrNull;
+            if (next != null) {
+              unawaited(reduceGroup(next, retryConflict: false));
+              return;
+            }
+          }
           if (!succeeded ||
               failed ||
               !identical(identity, widget.auth.session) ||
