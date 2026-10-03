@@ -1,3 +1,8 @@
+import 'table_discount_dialog.dart';
+import '../hardware/receipt_document_renderer.dart';
+import '../hardware/receipt_output_panel.dart';
+import '../hardware/receipt_print_identity.dart';
+
 import 'dart:async';
 import 'dart:math';
 
@@ -11,6 +16,7 @@ import 'table_checkout_result.dart';
 import 'table_receipt_dialog.dart';
 import 'table_snapshot.dart';
 import 'payment_code_field.dart';
+import '../hardware/scanner_input.dart';
 
 class TableCheckoutDialog extends StatefulWidget {
   const TableCheckoutDialog({
@@ -20,10 +26,12 @@ class TableCheckoutDialog extends StatefulWidget {
     required this.sessionRef,
     required this.language,
     this.originalRequestId,
+    this.paidCents = 0,
   });
   final StaffAuthController auth;
   final String tableRef, sessionRef;
   final UiLanguage language;
+  final int paidCents;
 
   /// Recovery entry must remain bound to the selected durable original request.
   final String? originalRequestId;
@@ -34,6 +42,7 @@ class TableCheckoutDialog extends StatefulWidget {
 class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     with WidgetsBindingObserver {
   final input = TextEditingController();
+  StreamSubscription<String>? scanner;
   TableCheckoutQuote? quote;
   TableCheckoutCommand? command;
   TableCheckoutAdmission? admission;
@@ -43,6 +52,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   bool cancelled = false;
   bool cancellationNeedsQuery = false, confirmationOpen = false;
   int epoch = 0;
+  Route<dynamic>? unpaidPrintRoute;
   Timer? expiry;
   Timer? authorityExpiry;
   Stopwatch? freshness;
@@ -51,16 +61,20 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       ? 'member_balance'
       : choice;
   String? get account => channel == 'member_balance' ? choice : null;
-  List<String>
-  get choices => ['wechat', 'alipay', 'cash', 'platform_cash', 'store_balance']
-      .where(
-        (value) =>
-            widget.auth.session?.permissions.contains(
-              'payment.${['platform_cash', 'store_balance'].contains(value) ? 'balance' : value}',
-            ) ==
-            true,
-      )
-      .toList();
+  List<String> get choices =>
+      ['wechat', 'alipay', 'cash', 'pos', 'platform_cash', 'store_balance']
+          .where(
+            (value) =>
+                widget.auth.session?.permissions.contains(
+                  'payment.${['platform_cash', 'store_balance'].contains(value)
+                      ? 'balance'
+                      : value == 'pos'
+                      ? 'cash'
+                      : value}',
+                ) ==
+                true,
+          )
+          .toList();
   String label(String value) => t(
     value == 'cash'
         ? 'receiptCash'
@@ -108,11 +122,29 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     widget.auth.addListener(invalidate);
     WidgetsBinding.instance.addObserver(this);
+    scanner = ScannerInput.codes.listen((code) {
+      if (!mounted ||
+          !foreground ||
+          busy ||
+          confirmationOpen ||
+          ModalRoute.of(context)?.isCurrent != true ||
+          ['cash', 'pos'].contains(command?.channel) ||
+          admission?.paymentStatus != 'prepared') {
+        return;
+      }
+      input.text = code;
+      unawaited(collect());
+    });
     if (foreground) unawaited(load());
   }
 
   void invalidate() {
     epoch++;
+    final printRoute = unpaidPrintRoute;
+    unpaidPrintRoute = null;
+    if (printRoute != null && printRoute.isActive && mounted) {
+      Navigator.of(context).removeRoute(printRoute);
+    }
     expiry?.cancel();
     authorityExpiry?.cancel();
     freshness?.stop();
@@ -138,6 +170,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
     invalidate();
+    if (foreground) unawaited(load());
   }
 
   @override
@@ -159,6 +192,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     expiry?.cancel();
     authorityExpiry?.cancel();
     freshness?.stop();
+    scanner?.cancel();
     input.dispose();
     widget.auth.removeListener(invalidate);
     WidgetsBinding.instance.removeObserver(this);
@@ -178,9 +212,13 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       authorityExpiry?.cancel();
       authorityExpiry = Timer(remaining, invalidate);
       final pending = <TableCheckoutCommand>[];
-      for (final c in ['wechat', 'alipay', 'cash', 'member_balance']) {
+      for (final c in ['wechat', 'alipay', 'cash', 'pos', 'member_balance']) {
         if (widget.auth.session?.permissions.contains(
-              'payment.${c == 'member_balance' ? 'balance' : c}',
+              'payment.${c == 'member_balance'
+                  ? 'balance'
+                  : c == 'pos'
+                  ? 'cash'
+                  : c}',
             ) ==
             true) {
           pending.addAll(await widget.auth.pendingTableCheckouts(c));
@@ -215,6 +253,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     } finally {
       if (current(e)) setState(() => busy = false);
     }
+    if (current(e) && ready && command == null) await readQuote();
   }
 
   Future<void> readQuote() async {
@@ -224,7 +263,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     final watch = Stopwatch()..start();
     setState(() {
       busy = true;
-      quote = null;
+      freshness = null;
       message = '';
     });
     try {
@@ -243,9 +282,8 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       });
       expiry = Timer(remaining, () {
         if (current(e)) {
-          setState(() {
-            quote = null;
-          });
+          // Keep the displayed bill; freshness still gates every payment.
+          setState(() {});
         }
       });
     } catch (error) {
@@ -443,20 +481,26 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     }
   }
 
-  Future<void> collect({bool recover = false,bool close = false}) async {
+  Future<void> collect({bool recover = false, bool close = false}) async {
     final original = command;
     if (!foreground ||
         busy ||
         cancelled ||
         original == null ||
-        (admission?.observed != true&&!(close&&result?.canCloseUnpaid==true&&result!.matches(original)))) {
+        (admission?.observed != true &&
+            !(close &&
+                result?.canCloseUnpaid == true &&
+                result!.matches(original)))) {
       return;
     }
     final e = epoch, text = input.text;
-    if (!recover && !close &&
+    if (!recover &&
+        !close &&
         !await confirmAction(
           'tableCheckoutCollect',
-          'tableCheckoutCollectConsent',
+          original.channel == 'pos'
+              ? 'checkoutPosConsent'
+              : 'tableCheckoutCollectConsent',
           original,
         )) {
       return;
@@ -469,7 +513,12 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       admission = null;
     });
     try {
-      final next = close ? await widget.auth.closeTableProvider(original,stillCurrent:()=>current(e)) : recover
+      final next = close
+          ? await widget.auth.closeTableProvider(
+              original,
+              stillCurrent: () => current(e),
+            )
+          : recover
           ? await widget.auth.recoverTableCheckout(
               original,
               stillCurrent: () => current(e),
@@ -520,228 +569,496 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     }
   }
 
+  Future<void> discount({bool waive = false}) async {
+    if (busy || !foreground || command != null) return;
+    await readQuote();
+    if (!mounted || !fresh || quote == null) return;
+    final changed = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => TableDiscountDialog(
+        auth: widget.auth,
+        quote: quote!,
+        language: widget.language,
+        requestId: newRequest(),
+        waive: waive,
+      ),
+    );
+    if (!mounted) return;
+    if (changed != null && changed['totalCents'] == 0) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    quote = null;
+    freshness = null;
+    await readQuote();
+  }
+
+  Future<void> printUnpaid() async {
+    if (busy || !foreground || command != null) return;
+    await readQuote();
+    final q = quote, identity = widget.auth.session, generation = epoch;
+    if (!mounted || !fresh || q == null || identity == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        if (!current(generation) || !identical(identity, widget.auth.session))
+          return const SizedBox.shrink();
+        unpaidPrintRoute = ModalRoute.of(context);
+        return AlertDialog(
+          title: Text(t('checkoutUnpaidTicket')),
+          content: SizedBox(
+            width: 550,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(t('checkoutNotPaymentProof')),
+                  for (final line in q.lines)
+                    ListTile(
+                      dense: true,
+                      title: Text(line.name(widget.language)),
+                      trailing: Text(
+                        '× ${line.quantity}  ￥ ${formatCents(line.quantity * line.priceCents)}',
+                      ),
+                    ),
+                  ReceiptOutputPanel(
+                    plan: ReceiptRasterPlan.unpaid(
+                      q,
+                      language: widget.language,
+                      widthDots: 576,
+                    ),
+                    language: widget.language,
+                    identity: ReceiptPrintIdentity.unpaid(
+                      base: identity.base.toString(),
+                      storeRef: q.storeRef,
+                      fingerprint: q.fingerprint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(t('printerInspectClose')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> startCollection() async {
+    if (busy || !foreground || !ready || command != null) return;
+    if (!fresh) await readQuote();
+    if (!mounted || !fresh || busy) return;
+    await prepare();
+    if (!mounted || admission?.paymentStatus != 'prepared') return;
+    if (channel == 'cash') input.clear();
+  }
+
+  Widget amount(String title, int? cents, {bool prominent = false}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(title, style: const TextStyle(fontSize: 14, color: Colors.black54)),
+      const SizedBox(height: 8),
+      Text(
+        cents == null ? '—' : '￥ ${formatCents(cents)}',
+        style: TextStyle(
+          fontSize: prominent ? 32 : 24,
+          fontWeight: FontWeight.w700,
+          color: prominent ? const Color(0xffbd3039) : null,
+        ),
+      ),
+    ],
+  );
+
+  Widget cashPad() => Column(
+    children: [
+      TextField(
+        controller: input,
+        readOnly: true,
+        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        decoration: InputDecoration(labelText: t('cashReceived')),
+      ),
+      const SizedBox(height: 12),
+      for (final row in const [
+        ['1', '2', '3'],
+        ['4', '5', '6'],
+        ['7', '8', '9'],
+        ['.', '0', '⌫'],
+      ])
+        Row(
+          children: [
+            for (final digit in row)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: OutlinedButton(
+                    onPressed: busy
+                        ? null
+                        : () {
+                            final value = input.text;
+                            if (digit == '⌫') {
+                              input.text = value.isEmpty
+                                  ? ''
+                                  : value.substring(0, value.length - 1);
+                            } else if (value.length < 10 &&
+                                !(digit == '.' && value.contains('.')) &&
+                                !(value.contains('.') &&
+                                    value.split('.').last.length >= 2)) {
+                              input.text = digit == '.' && value.isEmpty
+                                  ? '0.'
+                                  : value + digit;
+                            }
+                            setState(() {});
+                          },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(digit, style: const TextStyle(fontSize: 22)),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      TextButton(
+        onPressed: busy
+            ? null
+            : () => setState(() {
+                input.text = formatCents(command!.totalCents);
+              }),
+        child: Text(t('checkoutExactCash')),
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     final original = command, q = quote;
+    final originalDue = original?.totalCents ?? q?.totalCents;
+    final due = result?.settled == true ? 0 : originalDue;
+    final paid =
+        widget.paidCents + (result?.settled == true ? originalDue ?? 0 : 0);
     return Dialog(
       child: SizedBox(
-        width: 760,
-        height: 680,
+        width: 880,
+        height: 630,
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 children: [
-                  Expanded(child: Text(t('tableCheckoutTitle'))),
-                  TextButton(
-                    onPressed: () =>
-                        Navigator.of(context).pop(result?.settled == true),
-                    child: Text(t('printerInspectClose')),
+                  Expanded(
+                    child: Text(
+                      t('tableCheckoutTitle'),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: busy
+                        ? null
+                        : () =>
+                              Navigator.of(context)
+                                  .pop(result?.settled == true),
+                    icon: const Icon(Icons.close),
                   ),
                 ],
               ),
-              if (busy && !confirmationOpen) const LinearProgressIndicator(),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: amount(
+                      t('checkoutTotal'),
+                      due == null ? null : due + paid,
+                    ),
+                  ),
+                  Expanded(child: amount(t('checkoutPaid'), paid)),
+                  Expanded(
+                    child: amount(t('checkoutDue'), due, prominent: true),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
               Expanded(
                 child: !foreground
                     ? const SizedBox.shrink()
-                    : SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text('${widget.tableRef} · ${widget.sessionRef}'),
-                            Text(t('tableCheckoutNotice')),
-                            if (!ready)
-                              TextButton(
-                                onPressed: busy
-                                    ? null
-                                    : () => unawaited(load()),
-                                child: Text(t('ordersRefresh')),
-                              ),
-                            if (ready && original == null) ...[
-                              DropdownButton<String>(
-                                value: choice,
-                                isExpanded: true,
-                                items: choices
-                                    .map(
-                                      (v) => DropdownMenuItem(
-                                        value: v,
-                                        child: Text(label(v)),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: busy
-                                    ? null
-                                    : (v) {
-                                        if (v != null) {
-                                          setState(() {
-                                            choice = v;
-                                            quote = null;
-                                            expiry?.cancel();
-                                          });
-                                        }
-                                      },
-                              ),
-                              OutlinedButton(
-                                onPressed: busy
-                                    ? null
-                                    : () => unawaited(readQuote()),
-                                child: Text(t('tableCheckoutQuote')),
-                              ),
-                              if (q != null) ...[
-                                Text(
-                                  'CNY ${formatCents(q.totalCents)} · ${q.allocations.length} ${t('tableReceiptOrders')}',
-                                ),
-                                SizedBox(
-                                  height: 260,
-                                  child: ListView.builder(
-                                    key: const ValueKey(
-                                      'table-checkout-bill-lines',
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (command == null)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton.icon(
+                                      onPressed: busy || quote == null
+                                          ? null
+                                          : printUnpaid,
+                                      icon: const Icon(Icons.print_outlined),
+                                      label: Text(t('checkoutUnpaidTicket')),
                                     ),
-                                    itemCount: q.allocations.length,
-                                    itemBuilder: (context, index) {
-                                      final a = q.allocations[index];
-                                      return ExpansionTile(
-                                        key: ValueKey(
-                                          '${q.fingerprint}-${a.orderRef}',
-                                        ),
-                                        title: Text(
-                                          '${a.orderRef} · CNY ${formatCents(a.totalCents)}',
-                                        ),
-                                        initiallyExpanded:
-                                            q.allocations.length == 1,
-                                        children: [
-                                          for (final line
-                                              in q.linesByOrder[a.orderRef]!)
-                                            ListTile(
-                                              title: Text(
-                                                line.name(widget.language),
-                                              ),
-                                              subtitle: Text(
-                                                '${line.specification(widget.language)} · ${line.quantity} × CNY ${formatCents(line.priceCents)}',
-                                              ),
-                                              trailing: Text(
-                                                'CNY ${formatCents(line.quantity * line.priceCents)}',
-                                              ),
-                                            ),
-                                        ],
-                                      );
-                                    },
                                   ),
+                                if (command == null &&
+                                    widget.auth.session?.permissions.contains(
+                                          'orders.create',
+                                        ) ==
+                                        true)
+                                  Wrap(
+                                    spacing: 8,
+                                    children: [
+                                      OutlinedButton(
+                                        onPressed: busy || quote == null
+                                            ? null
+                                            : () => discount(),
+                                        child: Text(t('checkoutDiscount')),
+                                      ),
+                                      OutlinedButton(
+                                        onPressed: busy || quote == null
+                                            ? null
+                                            : () => discount(waive: true),
+                                        child: Text(t('checkoutWaive')),
+                                      ),
+                                    ],
+                                  ),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    for (final value in choices)
+                                      ChoiceChip(
+                                        label: Text(label(value)),
+                                        selected: choice == value,
+                                        onSelected: busy || original != null
+                                            ? null
+                                            : (_) {
+                                                setState(() {
+                                                  choice = value;
+                                                  freshness = null;
+                                                  input.clear();
+                                                });
+                                                unawaited(readQuote());
+                                              },
+                                      ),
+                                  ],
                                 ),
-                                FilledButton(
-                                  onPressed: busy || !fresh
-                                      ? null
-                                      : () => unawaited(prepare()),
-                                  child: Text(t('tableCheckoutPrepare')),
+                                const SizedBox(height: 12),
+                                Expanded(
+                                  child: q == null
+                                      ? const SizedBox.shrink()
+                                      : ListView(
+                                          key: const ValueKey(
+                                            'table-checkout-bill-lines',
+                                          ),
+                                          children: [
+                                            for (final line in q.lines)
+                                              ListTile(
+                                                dense: true,
+                                                contentPadding: EdgeInsets.zero,
+                                                title: Text(
+                                                  line.name(widget.language),
+                                                ),
+                                                subtitle: Text(
+                                                  '${line.specification(widget.language)} × ${line.quantity}',
+                                                ),
+                                                trailing: Text(
+                                                  '￥ ${formatCents(line.quantity * line.priceCents)}',
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                ),
+                                Text(
+                                  t('checkoutCouponUnavailable'),
+                                  style: const TextStyle(
+                                    color: Colors.black45,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
-                            ],
-                            if (original != null) ...[
-                              Text(
-                                label(original.accountType ?? original.channel),
-                              ),
-                              Text('CNY ${formatCents(original.totalCents)}'),
-                              if (result?.settled == true &&
-                                  widget.auth.session?.permissions.contains(
-                                        'orders.read',
-                                      ) ==
-                                      true)
-                                OutlinedButton(
-                                  key: const ValueKey(
-                                    'checkout-settled-receipt',
-                                  ),
-                                  onPressed: busy || !foreground
-                                      ? null
-                                      : openReceipt,
-                                  child: Text(t('tableReceiptTitle')),
-                                ),
-                              if (result?.resolved != true)
-                                SelectableText(original.requestId),
-                              if (result?.settled != true && !cancelled) ...[
-                                OutlinedButton(
-                                  onPressed: busy
-                                      ? null
-                                      : () => unawaited(
-                                          cancelOriginal(queryOnly: true),
-                                        ),
-                                  child: Text(t('tableCheckoutCancelQuery')),
-                                ),
-                                OutlinedButton(
-                                  onPressed: busy
-                                      ? null
-                                      : () => unawaited(queryAdmission()),
-                                  child: Text(t('tableCheckoutQuery')),
-                                ),
-                                if (!cancellationNeedsQuery &&
-                                    (admission == null ||
-                                        admission?.observed == false)) ...[
-                                  OutlinedButton(
-                                    onPressed: busy
-                                        ? null
-                                        : () => unawaited(prepare(retry: true)),
-                                    child: Text(t('tableCheckoutRetryPrepare')),
-                                  ),
-                                ],
-                                if(result?.canCloseUnpaid==true&&command?.channel=='alipay')
-                                  OutlinedButton(onPressed:busy?null:()=>unawaited(collect(close:true)),child:Text(t('provider_close_attempt'))),
-                                if (admission?.observed == true) ...[
-                                  OutlinedButton(
-                                    onPressed: busy
-                                        ? null
-                                        : () =>
-                                              unawaited(collect(recover: true)),
-                                    child: Text(t('tableCheckoutRecover')),
-                                  ),
-                                  if (admission?.paymentStatus ==
-                                      'prepared') ...[
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          SizedBox(
+                            width: 310,
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (!ready)
                                     OutlinedButton(
-                                      onPressed: busy
-                                          ? null
-                                          : () => unawaited(cancelOriginal()),
-                                      child: Text(t('tableCheckoutCancel')),
+                                      onPressed: busy ? null : load,
+                                      child: Text(t('ordersRefresh')),
                                     ),
-                                    if (original.channel != 'cash')
-                                      PaymentCodeField(
-                                        controller: input,
-                                        enabled: !busy,
-                                        label: t('tableCheckoutCode'),
-                                      )
-                                    else
-                                      TextField(
-                                        controller: input,
-                                        enabled: !busy,
-                                        obscureText: original.channel != 'cash',
-                                        enableSuggestions: false,
-                                        autocorrect: false,
-                                        enableIMEPersonalizedLearning: false,
-                                        keyboardType: original.channel == 'cash'
-                                            ? const TextInputType.numberWithOptions(
-                                                decimal: true,
-                                              )
-                                            : TextInputType.visiblePassword,
-                                        decoration: InputDecoration(
-                                          labelText: t(
-                                            original.channel == 'cash'
-                                                ? 'cashReceived'
-                                                : 'tableCheckoutCode',
+                                  if (ready && original == null)
+                                    FilledButton(
+                                      onPressed: busy || q == null
+                                          ? null
+                                          : startCollection,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                        ),
+                                        child: Text(t('checkoutStart')),
+                                      ),
+                                    ),
+                                  if (original != null &&
+                                      result?.settled == true)
+                                    OutlinedButton(
+                                      key: const ValueKey(
+                                        'checkout-settled-receipt',
+                                      ),
+                                      onPressed: busy ? null : openReceipt,
+                                      child: Text(t('tableReceiptTitle')),
+                                    ),
+                                  if (original != null &&
+                                      result?.settled != true &&
+                                      !cancelled) ...[
+                                    if (admission?.paymentStatus ==
+                                            'prepared' &&
+                                        !cancellationNeedsQuery) ...[
+                                      if (original.channel == 'cash')
+                                        cashPad()
+                                      else if (original.channel == 'pos')
+                                        TextField(
+                                          controller: input,
+                                          enabled: !busy,
+                                          decoration: InputDecoration(
+                                            labelText: t(
+                                              'checkoutPosReference',
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        PaymentCodeField(
+                                          controller: input,
+                                          enabled: !busy,
+                                          label: t('tableCheckoutCode'),
+                                        ),
+                                      OutlinedButton(
+                                        onPressed: busy
+                                            ? null
+                                            : () => unawaited(
+                                                collect(recover: true),
+                                              ),
+                                        child: Text(t('tableCheckoutRecover')),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      FilledButton(
+                                        onPressed: busy
+                                            ? null
+                                            : () => unawaited(collect()),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                          ),
+                                          child: Text(
+                                            t('tableCheckoutCollect'),
                                           ),
                                         ),
                                       ),
-                                    FilledButton(
-                                      onPressed: busy
-                                          ? null
-                                          : () => unawaited(collect()),
-                                      child: Text(t('tableCheckoutCollect')),
-                                    ),
+                                      OutlinedButton(
+                                        onPressed: busy
+                                            ? null
+                                            : () => unawaited(cancelOriginal()),
+                                        child: Text(t('tableCheckoutCancel')),
+                                      ),
+                                    ] else ...[
+                                      OutlinedButton(
+                                        onPressed: busy
+                                            ? null
+                                            : () => unawaited(queryAdmission()),
+                                        child: Text(t('tableCheckoutQuery')),
+                                      ),
+                                      if (admission?.observed == true)
+                                        OutlinedButton(
+                                          onPressed: busy
+                                              ? null
+                                              : () => unawaited(
+                                                  collect(recover: true),
+                                                ),
+                                          child: Text(
+                                            t('tableCheckoutRecover'),
+                                          ),
+                                        ),
+                                      if (!cancellationNeedsQuery &&
+                                          (admission == null ||
+                                              !admission!.observed))
+                                        OutlinedButton(
+                                          onPressed: busy
+                                              ? null
+                                              : () => unawaited(
+                                                  prepare(retry: true),
+                                                ),
+                                          child: Text(
+                                            t('tableCheckoutRetryPrepare'),
+                                          ),
+                                        ),
+                                      if (cancellationNeedsQuery ||
+                                          admission?.paymentStatus ==
+                                              'closed' ||
+                                          admission == null)
+                                        OutlinedButton(
+                                          onPressed: busy
+                                              ? null
+                                              : () => unawaited(
+                                                  cancelOriginal(
+                                                    queryOnly: true,
+                                                  ),
+                                                ),
+                                          child: Text(
+                                            t('tableCheckoutCancelQuery'),
+                                          ),
+                                        ),
+                                      if (result?.canCloseUnpaid == true &&
+                                          original.channel == 'alipay')
+                                        OutlinedButton(
+                                          onPressed: busy
+                                              ? null
+                                              : () => unawaited(
+                                                  collect(close: true),
+                                                ),
+                                          child: Text(
+                                            t('provider_close_attempt'),
+                                          ),
+                                        ),
+                                    ],
                                   ],
+                                  if (busy && !confirmationOpen)
+                                    const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: Center(
+                                        child: SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (message.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: Text(message),
+                                    ),
                                 ],
-                              ],
-                            ],
-                            if (message.isNotEmpty) Text(message),
-                          ],
-                        ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
               ),
             ],

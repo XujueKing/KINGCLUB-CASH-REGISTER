@@ -1,3 +1,5 @@
+import '../live/table_checkout_command.dart';
+
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
@@ -141,6 +143,27 @@ class ReceiptRasterPlan {
       t('receiptPaperNotice'),
     ];
     return ReceiptRasterPlan._paginate(header, blocks, widthDots, fontFamily);
+  }
+
+  factory ReceiptRasterPlan.unpaid(
+    TableCheckoutQuote quote, {
+    required UiLanguage language,
+    required int widthDots,
+  }) {
+    String t(String key) => tr(language, key);
+    return ReceiptRasterPlan._paginate(
+      ['KINGCLUB', t('checkoutUnpaidTicket'), t('checkoutNotPaymentProof')],
+      [
+        quote.tableRef,
+        quote.quotedAt.toLocal().toString(),
+        for (final line in quote.lines)
+          '${line.name(language)} × ${line.quantity}    ￥ ${formatCents(line.quantity * line.priceCents)}',
+        '${t('checkoutDue')}: ￥ ${formatCents(quote.totalCents)}',
+        t('checkoutNotPaymentProof'),
+      ],
+      widthDots,
+      null,
+    );
   }
 
   static ReceiptRasterPlan _paginate(

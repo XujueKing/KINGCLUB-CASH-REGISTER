@@ -105,7 +105,13 @@ int _integer(Object? raw, int max) {
 }
 
 void _account(Object? channel, Object? account) {
-  if (!['wechat', 'alipay', 'cash', 'member_balance'].contains(channel) ||
+  if (![
+        'wechat',
+        'alipay',
+        'cash',
+        'pos',
+        'member_balance',
+      ].contains(channel) ||
       (channel == 'member_balance'
           ? !['platform_cash', 'store_balance'].contains(account)
           : account != null)) {
@@ -403,8 +409,11 @@ class TableCheckoutCommand {
       employeeRef == session.employeeRef &&
       deviceId == session.deviceId &&
       storeRef == session.storeRef;
-  String get permission =>
-      channel == 'member_balance' ? 'payment.balance' : 'payment.$channel';
+  String get permission => channel == 'member_balance'
+      ? 'payment.balance'
+      : channel == 'pos'
+      ? 'payment.cash'
+      : 'payment.$channel';
   factory TableCheckoutCommand.decode(Object? raw) {
     try {
       final row = _object(raw, [

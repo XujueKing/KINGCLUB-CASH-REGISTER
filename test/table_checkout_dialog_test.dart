@@ -244,7 +244,6 @@ void main() {
     (tester) async {
       final auth = CheckoutDialogAuth()..quoteUnavailable = true;
       await mount(tester, auth);
-      await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuote')));
       await tester.pumpAndSettle();
       expect(
         find.text(tr(UiLanguage.zh, 'tableCheckoutUnavailable')),
@@ -260,13 +259,12 @@ void main() {
   ) async {
     final auth = CheckoutDialogAuth();
     await mount(tester, auth);
-    await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuote')));
     await tester.pumpAndSettle();
     expect(auth.preparations, 0);
     expect(auth.collections, 0);
     final button = find.widgetWithText(
       FilledButton,
-      tr(UiLanguage.zh, 'tableCheckoutPrepare'),
+      tr(UiLanguage.zh, 'checkoutStart'),
     );
     expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
     expect(find.byType(CheckboxListTile), findsNothing);

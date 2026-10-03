@@ -40,6 +40,24 @@ class ReceiptPrintIdentity {
       throw const FormatException('RECEIPT_PRINT_SCOPE_INVALID');
     }
   }
+  ReceiptPrintIdentity.unpaid({
+    required this.base,
+    required this.storeRef,
+    required String fingerprint,
+  }) : orderRef = 'unpaid:$fingerprint',
+       isTable = false {
+    final uri = Uri.tryParse(base);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        !RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(storeRef) ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(fingerprint)) {
+      throw const FormatException('RECEIPT_PRINT_SCOPE_INVALID');
+    }
+  }
   final bool isTable;
   final String base, storeRef, orderRef;
   String get canonical => jsonEncode([

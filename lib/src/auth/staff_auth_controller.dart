@@ -92,7 +92,7 @@ class StaffAuthController extends ChangeNotifier {
   bool _tableCollectionBusy = false;
 
   StaffSession _tableCheckoutIdentity(String channel) {
-    if (!['wechat', 'alipay', 'cash', 'member_balance'].contains(channel)) {
+    if (!['wechat', 'alipay', 'cash', 'pos', 'member_balance'].contains(channel)) {
       throw const CcsopFailure('TABLE_CHECKOUT_CHANNEL_INVALID');
     }
     final identity = _session;
@@ -105,7 +105,7 @@ class StaffAuthController extends ChangeNotifier {
     }
     final permission = channel == 'member_balance'
         ? 'payment.balance'
-        : 'payment.$channel';
+        : channel == 'pos' ? 'payment.cash' : 'payment.$channel';
     if (!identity.permissions.contains(permission))
       throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
     return identity;
@@ -231,7 +231,7 @@ class StaffAuthController extends ChangeNotifier {
       }
     } else if (cashReceivedCents != null ||
         payerCode == null ||
-        !validProviderCode(command.channel, payerCode)) {
+        !(command.channel == 'pos' ? RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(payerCode) : validProviderCode(command.channel, payerCode))) {
       throw const CcsopFailure('PAYMENT_CODE_INVALID');
     }
     return _resolveTableCollection(
@@ -308,6 +308,9 @@ class StaffAuthController extends ChangeNotifier {
             'receivedCents': cashReceivedCents,
             'cashReceivedConfirmed': true,
           });
+      } else if (command.channel == 'pos') {
+        interfaceId = firstSend ? 'K261004002004' : 'K261004002005';
+        if (firstSend) params.addAll({'externalReference': payerCode, 'posReceivedConfirmed': true});
       } else if (command.channel == 'member_balance') {
         interfaceId = firstSend ? 'K260930001944' : 'K260930001945';
         params['accountType'] = command.accountType;
@@ -1506,6 +1509,25 @@ class StaffAuthController extends ChangeNotifier {
         !expected.entries.every((e) => result['scope'][e.key] == e.value))
       throw const FormatException();
     return result['authorizationRef'] as String;
+  }
+
+  Future<Map<String, dynamic>> adjustTableBill(Map<String, Object> request, {String? identityCode, bool queryOnly = false}) async {
+    final identity = _session, api = _api, epoch = _epoch;
+    if (identity == null || api == null || _busy || !identity.expiresAt.isAfter(_now())) {
+      throw const CcsopFailure('SESSION_REQUIRED');
+    }
+    if (!identity.permissions.contains('orders.create')) throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    final raw = await api.call('K261004002006', {...request, 'storeRef': identity.storeRef,
+      'queryOnly': queryOnly, if (identityCode != null) 'identityCode': identityCode});
+    _check(epoch);
+    final result = raw is Map ? raw['result'] : null;
+    if (result is! Map || result['requestId'] != request['requestId'] || !['applied', 'not_observed'].contains(result['state'])) {
+      throw const CcsopFailure('ITEM_PRICE_STATE_CHANGED');
+    }
+    if (result['state'] == 'applied' && ['totalCents','discountCents','changedLines'].any((key) => result[key] is! int || (result[key] as int) < 0)) {
+      throw const CcsopFailure('ITEM_PRICE_STATE_CHANGED');
+    }
+    return Map<String, dynamic>.from(result);
   }
 
   Future<String> repriceUnpaidItems({

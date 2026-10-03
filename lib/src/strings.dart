@@ -6,6 +6,27 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'checkoutDiscount': '整单打折|Bill discount|整單打折|ส่วนลดทั้งบิล',
+  'checkoutWaive': '整单免单|Waive bill|整單免單|ยกเว้นทั้งบิล',
+  'checkoutDiscountScope': '仅调整本桌未付款商品，按当前单价计算|Applies to unpaid items at current unit prices|僅調整本桌未付款商品，按當前單價計算|ปรับเฉพาะสินค้าที่ยังไม่ชำระตามราคาต่อหน่วยปัจจุบัน',
+  'checkoutManagerScan': '请负责人出示 KING 会员码授权|Scan an authorized manager’s KING member code|請負責人出示 KING 會員碼授權|สแกนรหัสสมาชิก KING ของผู้จัดการที่มีสิทธิ์',
+  'checkoutDiscountFailed': '未能确认结果，请查询原操作；未执行的可刷新负责人会员码重扫|Result unconfirmed. Check the original operation before retrying with a fresh manager code.|未能確認結果，請查詢原操作；未執行的可刷新負責人會員碼重掃|ยังยืนยันผลไม่ได้ โปรดตรวจสอบรายการเดิมก่อนสแกนรหัสใหม่',
+  'checkoutDiscountQuery': '查询优惠结果|Check discount result|查詢優惠結果|ตรวจสอบผลส่วนลด',
+
+  'checkoutUnpaidTicket': '打印未付款小票|Print unpaid bill|列印未付款小票|พิมพ์ใบแจ้งยอดยังไม่ชำระ',
+  'checkoutNotPaymentProof': '未付款 · 非收款凭证|UNPAID · Not proof of payment|未付款 · 非收款憑證|ยังไม่ชำระ · ไม่ใช่หลักฐานการชำระเงิน',
+
+  'provider_pos': 'POS 刷卡|POS card|POS 刷卡|บัตรผ่าน POS',
+  'checkoutPosReference': 'POS 凭证号|POS receipt reference|POS 憑證號|เลขอ้างอิง POS',
+  'checkoutPosConsent': '请确认独立 POS 已刷卡成功，金额一致。本操作仅记录收款。|Confirm the independent POS payment succeeded for this amount. This records the receipt only.|請確認獨立 POS 已刷卡成功，金額一致。本操作僅記錄收款。|ยืนยันว่าชำระผ่าน POS สำเร็จและยอดตรงกัน การทำรายการนี้บันทึกการรับชำระเท่านั้น',
+
+  'checkoutTotal': '总额|Total|總額|ยอดรวม',
+  'checkoutPaid': '已付|Paid|已付|ชำระแล้ว',
+  'checkoutDue': '应收|Due|應收|ยอดที่ต้องชำระ',
+  'checkoutStart': '开始收款|Start collection|開始收款|เริ่มรับชำระ',
+  'checkoutExactCash': '实收等于应收|Exact amount|實收等於應收|รับเงินพอดี',
+  'checkoutCouponUnavailable': '打折券：规则待配置|Discount vouchers: rules pending|打折券：規則待配置|คูปองส่วนลด: รอกำหนดเงื่อนไข',
+
   'reserveTable': '预留桌位|Reserve table|預留桌位|จองโต๊ะ',
   'reserveGuest': '客人称呼|Guest name|客人稱呼|ชื่อลูกค้า',
   'reservePeople': '人数|Guests|人數|จำนวนคน',

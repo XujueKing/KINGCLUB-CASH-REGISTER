@@ -309,6 +309,11 @@ class _TableBillPanelState extends State<TableBillPanel>
             return const SizedBox.shrink();
           }
           return TableCheckoutDialog(
+            paidCents:
+                (snapshot?.sessionSummary?.buckets['netPaid'] ??
+                        snapshot?.sessionSummary?.buckets['paid'])
+                    ?.totalCents ??
+                0,
             auth: widget.auth,
             language: widget.language,
             tableRef: tableRef,
