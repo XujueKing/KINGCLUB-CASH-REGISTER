@@ -828,6 +828,7 @@ class _TableBillPanelState extends State<TableBillPanel>
               'table-bill-refunded',
             ),
         ],
+        const SizedBox(height: 10),
         if (widget.beforeActions != null) widget.beforeActions!,
         if (widget.orderAction != null ||
             widget.primaryAction != null ||
