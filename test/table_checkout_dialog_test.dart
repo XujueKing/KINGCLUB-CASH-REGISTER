@@ -487,6 +487,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(auth.collections, 1);
       expect(auth.saved, isNotNull);
+      // Server still says prepared: restore scanning, but never resubmit the old code.
+      expect(find.byType(TextField), findsOneWidget);
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, isEmpty);
       expect(
         find.text(tr(UiLanguage.zh, 'tableCheckoutReview')),
         findsOneWidget,
@@ -494,6 +497,24 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+  testWidgets('failed send with pending server state never restores collection', (tester) async {
+    final auth = CheckoutDialogAuth()..saved = fixture.command();
+    await mount(tester, auth);
+    await tester.tap(find.text(tr(UiLanguage.zh, 'tableCheckoutQuery')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'TEST_ONLY_CODE');
+    final button = find.widgetWithText(FilledButton, tr(UiLanguage.zh, 'tableCheckoutCollect'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    auth.admissionStatus = 'pending';
+    await tester.tap(find.byKey(const ValueKey('table-checkout-confirm-action')));
+    await tester.pumpAndSettle();
+    expect(auth.collections, 1);
+    expect(find.byType(TextField), findsNothing);
+    expect(auth.saved, isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets(
     'saved original recovers without a code or automatic collection',
     (tester) async {

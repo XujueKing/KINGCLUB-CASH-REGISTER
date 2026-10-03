@@ -593,6 +593,16 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         });
       }
     } catch (error) {
+      // A failed send must be classified by the server's original request.
+      // Restore scanning only when it is still prepared; never retry this code.
+      if (current(e)) {
+        try {
+          final latest = await widget.auth.lookupTableCheckout(original);
+          if (current(e)) setState(() => admission = latest);
+        } catch (_) {
+          // Keep recovery-only controls when the original state is unavailable.
+        }
+      }
       final soldOut =
           error is CcsopFailure &&
           [
@@ -604,17 +614,26 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
           error.code == 'ORDERING_POSTPAY_OUT_OF_STOCK';
       if (current(e)) {
         setState(
-          () => message = t(
-            soldOut
-                ? (original.channel == 'cash'
-                      ? (postpayShortage
-                            ? 'postpayCashStockUnavailable'
-                            : 'cashStockUnavailable')
-                      : (postpayShortage
-                            ? 'postpayStockUnavailable'
-                            : 'paymentStockUnavailable'))
-                : 'tableCheckoutReview',
-          ),
+          () => message =
+              error is CcsopFailure &&
+                  error.code == 'CASHIER_TABLE_ORDER_EXPIRED'
+              ? [
+                  '订单已超时，未扣款。请取消本次收款后重新下单。',
+                  'Order expired; no charge. Cancel this collection and place a new order.',
+                  '訂單已逾時，未扣款。請取消本次收款後重新下單。',
+                  'คำสั่งซื้อหมดเวลา ยังไม่เรียกเก็บเงิน โปรดยกเลิกการรับชำระนี้แล้วสั่งใหม่',
+                ][widget.language.index]
+              : t(
+                  soldOut
+                      ? (original.channel == 'cash'
+                            ? (postpayShortage
+                                  ? 'postpayCashStockUnavailable'
+                                  : 'cashStockUnavailable')
+                            : (postpayShortage
+                                  ? 'postpayStockUnavailable'
+                                  : 'paymentStockUnavailable'))
+                      : 'tableCheckoutReview',
+                ),
         );
       }
     } finally {
