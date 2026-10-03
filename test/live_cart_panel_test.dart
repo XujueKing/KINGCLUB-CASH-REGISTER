@@ -223,11 +223,11 @@ void main() {
       final pending = add('p001');
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);
-      await tap(tester, 'draft-dialog-plus');
       expect(auth.submits, 0);
       Navigator.of(tester.element(find.byType(AlertDialog))).pop();
       await tester.pumpAndSettle();
       await pending;
+      await tap(tester, 'cart-plus-p001');
       expect(
         tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
         4690,
@@ -260,6 +260,33 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     auth.dispose();
   });
+  testWidgets(
+    'special price stays on its row and shares stock with normal additions',
+    (tester) async {
+      final auth = CartAuth()..available = 2;
+      await show(tester, auth);
+      await tap(tester, 'catalog-add-p001');
+      await tap(tester, 'draft-card-p001');
+      await tester.enterText(
+        find.byKey(const ValueKey('item-price-input')),
+        '5.00',
+      );
+      await tap(tester, 'item-price-save');
+      await tap(tester, 'catalog-add-p001');
+      final bill = tester.widget<TableBillPanel>(find.byType(TableBillPanel));
+      expect(bill.draftCents, 1734);
+      expect(find.text('特价'), findsOneWidget);
+      expect(find.byKey(const ValueKey('draft-card-p001')), findsOneWidget);
+      await tap(tester, 'catalog-add-p001');
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        1734,
+      );
+      expect(auth.submits, 0);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   testWidgets('rapid additions stay local until one batch confirmation', (
     tester,
   ) async {

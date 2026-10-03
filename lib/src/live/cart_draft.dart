@@ -80,6 +80,8 @@ class CartDraft {
               'quantity': i.quantity,
               'revision': i.product.revision,
               'priceCents': i.product.priceCents,
+              if (i.specialPrice) 'unitPriceCents': i.unitPriceCents,
+              if (i.specialPrice) 'selectionRef': i.selectionRef,
             },
           )
           .toList(),
@@ -120,30 +122,51 @@ class CartDraft {
       var total = 0;
       for (final row in rows) {
         if (row is! Map<String, dynamic> ||
-            row.length != 4 ||
+            row.length != (row.containsKey('unitPriceCents') ? 6 : 4) ||
+            (row.containsKey('unitPriceCents') &&
+                (row['unitPriceCents'] is! int ||
+                    (row['unitPriceCents'] as int) < 0 ||
+                    (row['unitPriceCents'] as int) > 100000000 ||
+                    !_ref(row['selectionRef']) ||
+                    row['selectionRef'] == row['productRef'])) ||
             !_ref(row['productRef']) ||
             !_int(row['quantity'], 1000) ||
             !_int(row['revision'], 4294967295) ||
             !_int(row['priceCents'], 100000000)) {
           throw const FormatException();
         }
-        total += (row['quantity'] as int) * (row['priceCents'] as int);
+        total +=
+            (row['quantity'] as int) *
+            ((row['unitPriceCents'] ?? row['priceCents']) as int);
         lines.add(
           Map.unmodifiable({
             'productRef': row['productRef'],
             'quantity': row['quantity'],
             'revision': row['revision'],
             'priceCents': row['priceCents'],
+            if (row.containsKey('unitPriceCents'))
+              'unitPriceCents': row['unitPriceCents'],
+            if (row.containsKey('unitPriceCents'))
+              'selectionRef': row['selectionRef'],
           }),
         );
       }
       if (total > 100000000 ||
-          lines.map((e) => e['productRef']).toSet().length != lines.length) {
+          lines
+                  .map((e) => e['selectionRef'] ?? e['productRef'])
+                  .toSet()
+                  .length !=
+              lines.length) {
         throw const FormatException();
       }
       lines.sort(
         (a, b) =>
-            (a['productRef'] as String).compareTo(b['productRef'] as String),
+            (a['productRef'] as String).compareTo(b['productRef'] as String) !=
+                0
+            ? (a['productRef'] as String).compareTo(b['productRef'] as String)
+            : ((a['selectionRef'] ?? a['productRef']) as String).compareTo(
+                (b['selectionRef'] ?? b['productRef']) as String,
+              ),
       );
       return CartDraft._(
         Map.unmodifiable({
@@ -187,13 +210,16 @@ class CartDraft {
     }
     final byRef = {for (final p in products) p.reference: p};
     final result = <OrderSelection>[];
+    final quantities = <String, int>{};
     for (final line in lines) {
       final p = byRef[line['productRef']];
+      final ref = line['productRef'] as String;
+      quantities[ref] = (quantities[ref] ?? 0) + (line['quantity'] as int);
       if (p == null ||
           p.revision != line['revision'] ||
           p.priceCents != line['priceCents'] ||
           (context.paymentTiming == 'postpay' &&
-              (!p.inventoryKnown || p.available < (line['quantity'] as int)))) {
+              (!p.inventoryKnown || p.available < quantities[ref]!))) {
         throw const CcsopFailure('CART_DRAFT_CATALOG_CHANGED');
       }
       result.add(
@@ -201,6 +227,8 @@ class CartDraft {
           p,
           line['quantity'] as int,
           paymentTiming: context.paymentTiming,
+          unitPriceCents: line['unitPriceCents'] as int?,
+          selectionRef: line['selectionRef'] as String?,
         ),
       );
     }

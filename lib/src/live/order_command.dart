@@ -21,7 +21,15 @@ class OrderSelection {
     this.product,
     this.quantity, {
     String paymentTiming = 'postpay',
-  }) {
+    this.unitPriceCents,
+    String? selectionRef,
+  }) : selectionRef = selectionRef ?? product.reference {
+    if ((unitPriceCents != null &&
+            (unitPriceCents! < 0 || unitPriceCents! > 100000000)) ||
+        !_ref(this.selectionRef) ||
+        (unitPriceCents != null && this.selectionRef == product.reference)) {
+      throw const FormatException();
+    }
     if (!{'prepay', 'postpay'}.contains(paymentTiming) ||
         quantity < 1 ||
         quantity > 1000 ||
@@ -32,6 +40,10 @@ class OrderSelection {
   }
   final CatalogProduct product;
   final int quantity;
+  final int? unitPriceCents;
+  final String selectionRef;
+  int get priceCents => unitPriceCents ?? product.priceCents;
+  bool get specialPrice => unitPriceCents != null;
 }
 
 /// Original immutable command, not an order receipt. Never contains authentication secrets.
@@ -122,6 +134,8 @@ class PendingOrder {
                 'quantity': line.quantity,
                 'expectedRevision': line.product.revision,
                 'expectedPriceCents': line.product.priceCents,
+                if (line.specialPrice) 'unitPriceCents': line.unitPriceCents,
+                if (line.specialPrice) 'selectionRef': line.selectionRef,
               },
             )
             .toList(),
@@ -164,7 +178,11 @@ class PendingOrder {
       var total = 0;
       for (final row in rows) {
         final item = _map(row);
-        if (item.length != 4 ||
+        if (item.length != (item.containsKey('unitPriceCents') ? 6 : 4) ||
+            (item.containsKey('unitPriceCents') &&
+                (!_integer(item['unitPriceCents'], 0, 100000000) ||
+                    !_ref(item['selectionRef']) ||
+                    item['selectionRef'] == item['productRef'])) ||
             !_ref(item['productRef']) ||
             !_integer(item['quantity'], 1, 1000) ||
             !_integer(item['expectedRevision'], 1, 4294967295) ||
@@ -172,23 +190,37 @@ class PendingOrder {
           throw const FormatException();
         }
         total +=
-            (item['quantity'] as int) * (item['expectedPriceCents'] as int);
+            (item['quantity'] as int) *
+            ((item['unitPriceCents'] ?? item['expectedPriceCents']) as int);
         items.add(
           Map.unmodifiable({
             'productRef': item['productRef'],
             'quantity': item['quantity'],
             'expectedRevision': item['expectedRevision'],
             'expectedPriceCents': item['expectedPriceCents'],
+            if (item.containsKey('unitPriceCents'))
+              'unitPriceCents': item['unitPriceCents'],
+            if (item.containsKey('unitPriceCents'))
+              'selectionRef': item['selectionRef'],
           }),
         );
       }
       if (total > 100000000 ||
-          items.map((i) => i['productRef']).toSet().length != items.length) {
+          items
+                  .map((i) => i['selectionRef'] ?? i['productRef'])
+                  .toSet()
+                  .length !=
+              items.length) {
         throw const FormatException();
       }
       items.sort(
         (a, b) =>
-            (a['productRef'] as String).compareTo(b['productRef'] as String),
+            (a['productRef'] as String).compareTo(b['productRef'] as String) !=
+                0
+            ? (a['productRef'] as String).compareTo(b['productRef'] as String)
+            : ((a['selectionRef'] ?? a['productRef']) as String).compareTo(
+                (b['selectionRef'] ?? b['productRef']) as String,
+              ),
       );
       final draft = v.containsKey('cartDraft')
           ? CartDraft.decode(v['cartDraft'])
@@ -211,7 +243,9 @@ class PendingOrder {
           if (saved['productRef'] != line['productRef'] ||
               saved['quantity'] != line['quantity'] ||
               saved['priceCents'] != line['expectedPriceCents'] ||
-              saved['revision'] != line['expectedRevision']) {
+              saved['revision'] != line['expectedRevision'] ||
+              saved['unitPriceCents'] != line['unitPriceCents'] ||
+              saved['selectionRef'] != line['selectionRef']) {
             throw const FormatException();
           }
         }
@@ -270,7 +304,48 @@ class OrderRequestResult {
       }
       if (state != 'confirmed') throw const FormatException();
       final receipt = submission ? result : _map(result['receipt']);
-      if (receipt.length != 11 ||
+      final requestLines = pending.params['items'] as List;
+      final ordinary = requestLines.where(
+        (line) => !line.containsKey('unitPriceCents'),
+      );
+      final expectedAmounts = <int>[
+        if (ordinary.isNotEmpty)
+          ordinary.fold<int>(
+            0,
+            (sum, line) =>
+                sum +
+                (line['quantity'] as int) * (line['expectedPriceCents'] as int),
+          ),
+        for (final line in requestLines.where(
+          (line) => line.containsKey('unitPriceCents'),
+        ))
+          (line['quantity'] as int) * (line['unitPriceCents'] as int),
+      ];
+      final batch = receipt['batchOrders'];
+      if (expectedAmounts.length > 1) {
+        if (batch is! List ||
+            batch.length != expectedAmounts.length ||
+            receipt['batchTotalCents'] != pending.totalCents) {
+          throw const FormatException();
+        }
+        final refs = <String>{};
+        for (var i = 0; i < batch.length; i++) {
+          final row = _map(batch[i]);
+          if (row.length != 2 ||
+              row['orderRef'] is! String ||
+              !RegExp(r'^D[0-9]{11}$').hasMatch(row['orderRef'] as String) ||
+              !refs.add(row['orderRef'] as String) ||
+              row['totalCents'] != expectedAmounts[i]) {
+            throw const FormatException();
+          }
+        }
+        if (batch.first['orderRef'] != receipt['orderRef']) {
+          throw const FormatException();
+        }
+      } else if (batch != null || receipt.containsKey('batchTotalCents')) {
+        throw const FormatException();
+      }
+      if (receipt.length != (expectedAmounts.length > 1 ? 13 : 11) ||
           receipt['requestId'] != pending.requestId ||
           receipt['storeRef'] != pending.storeRef ||
           receipt['tableRef'] != pending.tableRef ||
@@ -287,7 +362,7 @@ class OrderRequestResult {
                   'issued',
                 ].contains(receipt['inventoryState'])) ||
           receipt['totalCents'] is! int ||
-          receipt['totalCents'] != pending.totalCents ||
+          receipt['totalCents'] != expectedAmounts.first ||
           receipt['orderRef'] is! String ||
           !RegExp(r'^D[0-9]{11}$').hasMatch(receipt['orderRef'] as String)) {
         throw const FormatException();

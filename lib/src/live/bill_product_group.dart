@@ -2,6 +2,8 @@ import 'order_snapshot.dart';
 
 class BillProductGroup {
   BillProductGroup(this.productRef, this.currency);
+  String get groupingRef => item.groupingRef;
+  bool get specialPrice => item.specialPrice;
   final String productRef, currency;
   final lines = <({LiveOrder order, OrderItem item})>[];
   OrderItem get item => lines.first.item;
@@ -39,7 +41,7 @@ List<BillProductGroup> groupBillProducts(List<LiveOrder> orders) {
   for (final order in orders) {
     if (order.status == 'expired') continue;
     for (final item in order.items) {
-      final key = '${order.currency}/${item.productRef}';
+      final key = '${order.currency}/${item.groupingRef}';
       (groups.putIfAbsent(
         key,
         () => BillProductGroup(item.productRef, order.currency),

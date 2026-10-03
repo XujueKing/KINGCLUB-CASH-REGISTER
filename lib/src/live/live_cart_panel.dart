@@ -1,3 +1,4 @@
+import 'item_price_dialog.dart';
 import 'bill_product_card.dart';
 
 import 'dart:async';
@@ -98,7 +99,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       editable && items.isNotEmpty && (savedDraft == null || !dirty);
   int get total => items.values.fold(
     0,
-    (sum, item) => sum + item.quantity * item.product.priceCents,
+    (sum, item) => sum + item.quantity * item.priceCents,
   );
 
   @override
@@ -211,9 +212,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           restoredContext = result.context;
           items
             ..clear()
-            ..addEntries(
-              result.items.map((i) => MapEntry(i.product.reference, i)),
-            );
+            ..addEntries(result.items.map((i) => MapEntry(i.selectionRef, i)));
           draftLoaded = true;
           dirty = false;
           message = 'cartDraftRestored';
@@ -323,9 +322,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         restoredContext = result.context;
         items
           ..clear()
-          ..addEntries(
-            result.items.map((i) => MapEntry(i.product.reference, i)),
-          );
+          ..addEntries(result.items.map((i) => MapEntry(i.selectionRef, i)));
         stale = false;
         ready = true;
         message = null;
@@ -350,19 +347,24 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     if (state != AppLifecycleState.resumed) invalidate();
   }
 
+  int selectedQuantity(CatalogProduct product) => items.values
+      .where((item) => item.product.reference == product.reference)
+      .fold(0, (sum, item) => sum + item.quantity);
+
   bool canAdd(CatalogProduct product) =>
       product.inventoryKnown &&
-      (items[product.reference]?.quantity ?? 0) < product.available &&
-      (items[product.reference]?.quantity ?? 0) < 1000;
+      selectedQuantity(product) < product.available &&
+      selectedQuantity(product) < 1000;
 
-  void change(CatalogProduct product, int delta) {
+  void change(CatalogProduct product, int delta, {String? selectionRef}) {
     if (!editable) return;
     if (delta > 0 && !canAdd(product)) return;
-    final old = items[product.reference];
+    final key = selectionRef ?? product.reference;
+    final old = items[key];
     final quantity = (old?.quantity ?? 0) + delta;
     if (quantity <= 0) {
       setState(() {
-        items.remove(product.reference);
+        items.remove(key);
         dirty = true;
         message = null;
       });
@@ -378,15 +380,17 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       final next = OrderSelection(
         product,
         quantity,
+        selectionRef: key,
+        unitPriceCents: old?.unitPriceCents,
         paymentTiming: currentContext.paymentTiming,
       );
       final nextTotal =
           total -
-          (old == null ? 0 : old.quantity * old.product.priceCents) +
-          next.quantity * product.priceCents;
+          (old == null ? 0 : old.quantity * old.priceCents) +
+          next.quantity * next.priceCents;
       if (nextTotal > 100000000) throw const FormatException();
       setState(() {
-        items[product.reference] = next;
+        items[key] = next;
         dirty = true;
         message = null;
       });
@@ -513,54 +517,52 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     }
   }
 
-  Future<void> editDraftItem(CatalogProduct product) async {
+  int priceSequence = 0;
+  Future<void> editDraftItem(
+    CatalogProduct product, {
+    String? selectionRef,
+  }) async {
     if (!editable) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, redraw) {
-          final quantity = items[product.reference]?.quantity ?? 0;
-          return AlertDialog(
-            title: Text(product.name(widget.language)),
-            content: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  key: const ValueKey('draft-dialog-minus'),
-                  onPressed: editable && quantity > 0
-                      ? () {
-                          change(product, -1);
-                          redraw(() {});
-                        }
-                      : null,
-                  icon: const Icon(Icons.remove),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text('$quantity'),
-                ),
-                IconButton(
-                  key: const ValueKey('draft-dialog-plus'),
-                  onPressed: editable && canAdd(product)
-                      ? () {
-                          change(product, 1);
-                          redraw(() {});
-                        }
-                      : null,
-                  icon: const Icon(Icons.add),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: Text(t('billDone')),
-              ),
-            ],
-          );
-        },
-      ),
+    final key = selectionRef ?? product.reference;
+    final original = items[key];
+    if (original == null) return;
+    final generation = epoch;
+    final price = await showItemPriceDialog(
+      context,
+      language: widget.language,
+      name: product.name(widget.language),
+      quantity: original.quantity,
+      originalCents: product.priceCents,
+      currentCents: original.priceCents,
     );
+    if (price == null ||
+        !mounted ||
+        generation != epoch ||
+        !editable ||
+        !identical(items[key], original)) {
+      return;
+    }
+    if (total -
+            original.quantity * original.priceCents +
+            original.quantity * price >
+        100000000) {
+      return;
+    }
+    final nextKey = original.specialPrice
+        ? key
+        : 'price-${DateTime.now().microsecondsSinceEpoch}-${priceSequence++}';
+    setState(() {
+      items.remove(key);
+      items[nextKey] = OrderSelection(
+        product,
+        original.quantity,
+        paymentTiming: currentContext.paymentTiming,
+        selectionRef: nextKey,
+        unitPriceCents: price,
+      );
+      dirty = true;
+      message = null;
+    });
   }
 
   Widget billHeader(Widget filter) {
@@ -772,10 +774,13 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     draftCards: {
                       for (final item
                           in attempted ? <OrderSelection>[] : items.values)
-                        item.product.reference: BillProductCard(
-                          key: ValueKey('draft-card-${item.product.reference}'),
+                        item.selectionRef: BillProductCard(
+                          key: ValueKey('draft-card-${item.selectionRef}'),
                           onTap: editable
-                              ? () => editDraftItem(item.product)
+                              ? () => editDraftItem(
+                                  item.product,
+                                  selectionRef: item.selectionRef,
+                                )
                               : null,
                           language: widget.language,
                           name: item.product.name(widget.language),
@@ -783,21 +788,29 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                             widget.language,
                           ),
                           quantity: item.quantity,
-                          priceCents: item.product.priceCents,
-                          totalCents: item.quantity * item.product.priceCents,
+                          priceCents: item.priceCents,
+                          specialPrice: item.specialPrice,
+                          totalCents: item.quantity * item.priceCents,
                           base: widget.auth.session?.base,
                           thumbnailPath: item.product.thumbnailPath,
                           quantityControls: true,
-                          productRef: item.product.reference,
+                          productRef: item.selectionRef,
                           onMinus: editable
-                              ? () => change(item.product, -1)
+                              ? () => change(
+                                  item.product,
+                                  -1,
+                                  selectionRef: item.selectionRef,
+                                )
                               : null,
                           onPlus:
                               editable &&
                                   item.product.inventoryKnown &&
-                                  item.quantity < item.product.available &&
-                                  item.quantity < 1000
-                              ? () => change(item.product, 1)
+                                  canAdd(item.product)
+                              ? () => change(
+                                  item.product,
+                                  1,
+                                  selectionRef: item.selectionRef,
+                                )
                               : null,
                           badges: Text(
                             '${t('tableBillPaid')} 0 / ${t('tableBillUnpaid')} ${item.quantity}',

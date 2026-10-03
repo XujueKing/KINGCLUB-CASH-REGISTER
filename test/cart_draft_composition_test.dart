@@ -70,8 +70,6 @@ void main() {
           expect(journal['entries'].single['cartDraft'], draft.encode());
         };
         await ui.tap(tester, 'cart-submit');
-        expect(api.calls, isEmpty);
-        await ui.tap(tester, 'cart-confirm');
         expect(api.calls.single.$1, 'K260929001912');
         expect(await auth.cartDrafts(), isEmpty);
         expect(ui.enabled(tester), false);
@@ -87,7 +85,7 @@ void main() {
           expect(await auth.pendingOrders(), isEmpty);
           expect(
             find.text(tr(UiLanguage.zh, 'orderRecoveryConfirmed')),
-            findsOneWidget,
+            findsNothing,
           );
         }
         expect(tester.takeException(), isNull);

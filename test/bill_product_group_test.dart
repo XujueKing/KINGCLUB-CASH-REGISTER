@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/bill_product_group.dart';
 import 'package:kingclub_cash_register/src/live/order_snapshot.dart';
 import 'package:kingclub_cash_register/src/live/workspace_read_cache.dart';
+
 import 'support/order_fixture.dart';
 
 LiveOrder order(String ref, String status, int served, {int price = 600}) {
@@ -18,6 +19,30 @@ LiveOrder order(String ref, String status, int served, {int price = 600}) {
 }
 
 void main() {
+  test(
+    'special price identity keeps the same SKU separate from normal orders',
+    () {
+      final data =
+          orderFixture()['result']['orders'][0] as Map<String, dynamic>;
+      data['orderRef'] = 'D00000000003';
+      data['items'][0]['snapshot']['pricing'] = {
+        'originalUnitPriceCents': 800,
+        'unitPriceCents': 600,
+        'selectionRef': 'price-test',
+        'operatedBy': 'E00000000001',
+      };
+      final groups = groupBillProducts([
+        order('D00000000001', 'pending', 0),
+        order('D00000000002', 'paid', 0),
+        LiveOrder(data),
+      ]);
+      expect(groups.length, 2);
+      expect(groups.singleWhere((g) => g.specialPrice).quantity, 2);
+      expect(groups.singleWhere((g) => !g.specialPrice).quantity, 4);
+      data['items'][0]['snapshot']['pricing']['unitPriceCents'] = 500;
+      expect(() => LiveOrder(data), throwsFormatException);
+    },
+  );
   test('item refund keeps gross history but removes returned units from active bill', () {
     final data = orderFixture()['result']['orders'][0] as Map<String, dynamic>;
     data.addAll({

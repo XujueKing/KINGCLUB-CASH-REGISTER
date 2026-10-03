@@ -125,7 +125,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('prepay allows selection with unknown stock; postpay blocks it', (
+  testWidgets('unknown stock blocks both card and plus in either payment timing', (
     tester,
   ) async {
     final auth = ViewAuth();
@@ -149,27 +149,18 @@ void main() {
       final button = find.byKey(const ValueKey('catalog-add-p001'));
       expect(
         tester.widget<IconButton>(button).onPressed,
-        timing == 'prepay' ? isNotNull : isNull,
+        isNull,
       );
       final card = find.byKey(const ValueKey('catalog-select-p001'));
       expect(
         tester.widget<InkWell>(card).onTap,
-        timing == 'prepay' ? isNotNull : isNull,
+        isNull,
       );
       await tester.tap(card);
-      if (timing == 'prepay') {
-        expect(selections, 1);
-        await tester.tap(button);
-        expect(
-          selections,
-          2,
-          reason: 'the plus button must not bubble to the card',
-        );
-      } else {
-        expect(selections, 0);
-      }
+      await tester.tap(button);
+      expect(selections, 0);
     }
-    expect(selections, 2);
+    expect(selections, 0);
     await tester.pumpWidget(const SizedBox());
   });
 

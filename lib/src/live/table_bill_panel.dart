@@ -335,7 +335,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   }) async {
     if (failed || !canReduce(group)) return;
     if (reducing) {
-      if (queuedReductions.length < 50) queuedReductions.add(group.productRef);
+      if (queuedReductions.length < 50) queuedReductions.add(group.groupingRef);
       return;
     }
     var succeeded = false;
@@ -405,7 +405,9 @@ class _TableBillPanelState extends State<TableBillPanel>
               table == widget.tableRef &&
               session == widget.sessionRef) {
             final next = groupBillProducts(orders)
-                .where((g) => g.productRef == group.productRef && canReduce(g))
+                .where(
+                  (g) => g.groupingRef == group.groupingRef && canReduce(g),
+                )
                 .firstOrNull;
             if (next != null) {
               unawaited(reduceGroup(next, retryConflict: false));
@@ -422,7 +424,7 @@ class _TableBillPanelState extends State<TableBillPanel>
             while (queuedReductions.isNotEmpty) {
               final ref = queuedReductions.removeAt(0);
               final next = groupBillProducts(orders)
-                  .where((g) => g.productRef == ref && canReduce(g))
+                  .where((g) => g.groupingRef == ref && canReduce(g))
                   .firstOrNull;
               if (next != null) {
                 unawaited(reduceGroup(next));
@@ -656,7 +658,9 @@ class _TableBillPanelState extends State<TableBillPanel>
         .toList();
     final groups = groupBillProducts(visible);
     BillProductCard? draftFor(BillProductGroup group) =>
-        group.currency == 'CNY' ? drafts[group.productRef] : null;
+        group.currency == 'CNY' && !group.specialPrice
+        ? drafts[group.productRef]
+        : null;
     final canPay = [
       'payment.cash',
       'payment.wechat',
@@ -670,7 +674,10 @@ class _TableBillPanelState extends State<TableBillPanel>
           widget.leading!,
         for (final entry in drafts.entries)
           if (!groups.any(
-            (g) => g.currency == 'CNY' && g.productRef == entry.key,
+            (g) =>
+                g.currency == 'CNY' &&
+                !g.specialPrice &&
+                g.productRef == entry.key,
           ))
             entry.value,
         if (canRead) ...[
@@ -686,7 +693,9 @@ class _TableBillPanelState extends State<TableBillPanel>
             Text(t('billNoItems')),
           for (final group in groups)
             BillProductCard(
-              key: ValueKey('bill-group-${group.currency}-${group.productRef}'),
+              key: ValueKey(
+                'bill-group-${group.currency}-${group.groupingRef}',
+              ),
               language: widget.language,
               name: group.item.name(widget.language),
               specification: group.item.specification(widget.language),
@@ -702,8 +711,9 @@ class _TableBillPanelState extends State<TableBillPanel>
               thumbnailPath: group.item.thumbnailPath,
               base: widget.auth.session?.base,
               onTap: () => openGroup(group),
+              specialPrice: group.specialPrice,
               quantityControls: true,
-              productRef: group.productRef,
+              productRef: group.groupingRef,
               onMinus: !failed && !checkout
                   ? (draftFor(group) != null
                         ? draftFor(group)!.onMinus

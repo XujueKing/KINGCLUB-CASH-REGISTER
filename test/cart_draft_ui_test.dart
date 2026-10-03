@@ -156,8 +156,6 @@ void main() {
       expect(ui.enabled(tester), true);
       expect(auth.submits, 0);
       await ui.tap(tester, 'cart-submit');
-      expect(auth.submits, 0);
-      await ui.tap(tester, 'cart-confirm');
       expect(auth.sentDraft!.signature, original.signature);
       expect(auth.submits, 1);
       await tester.pumpWidget(const SizedBox());

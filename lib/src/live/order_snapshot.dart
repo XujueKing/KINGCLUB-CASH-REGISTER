@@ -51,6 +51,9 @@ class OrderItem {
   OrderItem(Map<String, dynamic> value, {String? storeRef})
     : thumbnailPath = productThumbnail(value['bottleMaterial'], storeRef ?? ''),
       productRef = _ref(value['productRef']),
+      pricingRef = _map(value['snapshot'])['pricing'] == null
+          ? null
+          : _ref(_map(_map(value['snapshot'])['pricing'])['selectionRef']),
       quantity = _positive(value['quantity'], 1000),
       priceCents = _positive(value['priceCents'], 100000000),
       subtotalCents = _positive(value['subtotalCents']),
@@ -67,6 +70,16 @@ class OrderItem {
       names = _localized(_map(value['snapshot'])['names']),
       specifications = _localized(_map(value['snapshot'])['specifications']) {
     _positive(_map(value['snapshot'])['revision']);
+    if (pricingRef != null) {
+      final pricing = _map(_map(value['snapshot'])['pricing']);
+      if (pricing.length != 4 ||
+          pricingRef == productRef ||
+          _positive(pricing['unitPriceCents'], 100000000) != priceCents) {
+        throw const FormatException();
+      }
+      _positive(pricing['originalUnitPriceCents'], 100000000);
+      _ref(pricing['operatedBy']);
+    }
     if (quantity * priceCents != subtotalCents) throw const FormatException();
     if ((refundedQuantity ?? 0) > quantity) throw const FormatException();
     if (returnableUnservedQuantity != null &&
@@ -81,6 +94,10 @@ class OrderItem {
     }
   }
   final String productRef;
+  final String? pricingRef;
+  String get groupingRef =>
+      pricingRef == null ? productRef : '$productRef/$pricingRef';
+  bool get specialPrice => pricingRef != null;
   final String? thumbnailPath;
   final int quantity, priceCents, subtotalCents;
   // Both absent means an older server did not provide delivery progress, never zero delivered.

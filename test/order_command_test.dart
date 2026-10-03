@@ -135,18 +135,103 @@ Future<OrderRequestResult> submit(
 );
 
 void main() {
-  test('table order without member survives persistence and binds its receipt', () {
-    final context = m.parse({...m.contextData(), 'tableOrderAllowed': true});
-    final pending = PendingOrder.prepare(identity: identity, context: context,
-      memberRef: null, items: selection(), now: a.now);
-    final restored = PendingOrder.decode(jsonDecode(jsonEncode(pending.encode())));
-    expect(restored.memberRef, isNull);
-    expect(restored.signature, pending.signature);
-    expect(OrderRequestResult.parse({'result': receipt(restored.params)}, restored,
-      submission: true).state, OrderRequestState.confirmed);
-    expect(() => PendingOrder.prepare(identity: identity, context: m.parse(m.contextData()),
-      memberRef: null, items: selection(), now: a.now), fails('ORDERING_CONTEXT_CHANGED'));
-  });
+  test(
+    'special batch receipt validates each price group and survives persistence',
+    () {
+      final p = selection().first.product;
+      final pending = PendingOrder.prepare(
+        identity: identity,
+        context: m.parse(m.contextData()),
+        memberRef: 'member-000',
+        now: a.now,
+        items: [
+          OrderSelection(p, 1),
+          OrderSelection(p, 2, unitPriceCents: 321, selectionRef: 'price-test'),
+        ],
+      );
+      final restored = PendingOrder.decode(jsonDecode(pending.signature));
+      expect(restored.totalCents, p.priceCents + 642);
+      final valid = {
+        ...receipt(pending.params),
+        'totalCents': p.priceCents,
+        'batchTotalCents': p.priceCents + 642,
+        'batchOrders': [
+          {'orderRef': 'D00000000001', 'totalCents': p.priceCents},
+          {'orderRef': 'D00000000002', 'totalCents': 642},
+        ],
+      };
+      expect(
+        () => OrderRequestResult.parse(
+          {'result': valid},
+          restored,
+          submission: true,
+        ),
+        returnsNormally,
+      );
+      for (final patch in [
+        {'batchTotalCents': p.priceCents + 643},
+        {
+          'batchOrders': [
+            {'orderRef': 'D00000000001', 'totalCents': p.priceCents},
+            {'orderRef': 'D00000000001', 'totalCents': 642},
+          ],
+        },
+        {
+          'batchOrders': [
+            {'orderRef': 'D00000000001', 'totalCents': p.priceCents},
+            {'orderRef': 'D00000000002', 'totalCents': 643},
+          ],
+        },
+      ]) {
+        expect(
+          () => OrderRequestResult.parse(
+            {
+              'result': {...valid, ...patch},
+            },
+            restored,
+            submission: true,
+          ),
+          throwsA(anything),
+        );
+      }
+    },
+  );
+  test(
+    'table order without member survives persistence and binds its receipt',
+    () {
+      final context = m.parse({...m.contextData(), 'tableOrderAllowed': true});
+      final pending = PendingOrder.prepare(
+        identity: identity,
+        context: context,
+        memberRef: null,
+        items: selection(),
+        now: a.now,
+      );
+      final restored = PendingOrder.decode(
+        jsonDecode(jsonEncode(pending.encode())),
+      );
+      expect(restored.memberRef, isNull);
+      expect(restored.signature, pending.signature);
+      expect(
+        OrderRequestResult.parse(
+          {'result': receipt(restored.params)},
+          restored,
+          submission: true,
+        ).state,
+        OrderRequestState.confirmed,
+      );
+      expect(
+        () => PendingOrder.prepare(
+          identity: identity,
+          context: m.parse(m.contextData()),
+          memberRef: null,
+          items: selection(),
+          now: a.now,
+        ),
+        fails('ORDERING_CONTEXT_CHANGED'),
+      );
+    },
+  );
   test(
     'prepay selection ignores inventory snapshots but retains quantity limits',
     () {

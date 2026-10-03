@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/cart_draft.dart';
 import 'package:kingclub_cash_register/src/live/cart_draft_store.dart';
 import 'package:kingclub_cash_register/src/live/catalog_snapshot.dart';
+import 'package:kingclub_cash_register/src/live/order_command.dart';
 
 import 'staff_session_test.dart' as a;
 import 'order_command_test.dart' as o;
@@ -39,6 +40,45 @@ class Storage extends a.TestStorage {
 }
 
 void main() {
+  test(
+    'special variants survive persistence without exceeding shared SKU stock',
+    () {
+      final p = product();
+      final value = CartDraft.capture(
+        identity: o.identity,
+        context: m.parse(m.contextData()),
+        memberRef: 'member-000',
+        now: a.now,
+        items: [
+          OrderSelection(p, 2),
+          OrderSelection(p, 2, unitPriceCents: 123, selectionRef: 'price-test'),
+        ],
+      );
+      final saved = CartDraft.decode(copy(value));
+      final restored = saved.restore(
+        identity: o.identity,
+        context: m.parse(m.contextData()),
+        products: [p],
+        now: a.now,
+      );
+      expect(restored.map((i) => i.selectionRef).toSet(), {
+        p.reference,
+        'price-test',
+      });
+      expect(restored.singleWhere((i) => i.specialPrice).priceCents, 123);
+      expect(
+        () => saved.restore(
+          identity: o.identity,
+          context: m.parse(m.contextData()),
+          products: [
+            product({'available': 3}),
+          ],
+          now: a.now,
+        ),
+        throwsA(anything),
+      );
+    },
+  );
   test('prepay restores unchanged products despite stock shortage or unknown stock', () {
     final rawContext = m.contextData();
     (rawContext['session'] as Map)['paymentTiming'] = 'prepay';

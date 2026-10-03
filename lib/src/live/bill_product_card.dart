@@ -24,6 +24,7 @@ class BillProductCard extends StatelessWidget {
     this.onPlus,
     this.onMinus,
     this.productRef,
+    this.specialPrice = false,
   });
   final UiLanguage language;
   final String name, specification;
@@ -38,6 +39,7 @@ class BillProductCard extends StatelessWidget {
   final bool quantityControls;
   final VoidCallback? onPlus, onMinus;
   final String? productRef;
+  final bool specialPrice;
   Widget quantityButton(bool plus) => GestureDetector(
     behavior: HitTestBehavior.opaque,
     onTap: () {},
@@ -124,15 +126,46 @@ class BillProductCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xff203d32),
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xff203d32),
+                                ),
+                              ),
+                            ),
+                            if (specialPrice) ...[
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFE8AC),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  [
+                                    '特价',
+                                    'Special',
+                                    '特價',
+                                    'ราคาพิเศษ',
+                                  ][language.index],
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF805500),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 3),
                         Text(
