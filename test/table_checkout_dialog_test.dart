@@ -44,6 +44,7 @@ class CheckoutDialogAuth extends StaffAuthController {
   late StaffSession identity;
   TableCheckoutCommand? saved;
   int preparations = 0, collections = 0, recoveries = 0;
+  bool losePreparationResponse = false;
   int cancellations = 0;
   int cancellationQueries = 0;
   String? requestedReceipt;
@@ -140,6 +141,7 @@ class CheckoutDialogAuth extends StaffAuthController {
     expect(stillCurrent!(), true);
     saved = command;
     preparations++;
+    if (losePreparationResponse) throw const CcsopFailure('TRANSPORT_FAILED');
     return TableCheckoutAdmission.parse(
       admission.admissionFixture(command),
       command,
@@ -215,6 +217,19 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('lost preparation response queries the same request and restores scanning without collection', (tester) async {
+    final auth = CheckoutDialogAuth()..losePreparationResponse = true;
+    await mount(tester, auth);
+    await tester.tap(find.text(tr(UiLanguage.zh, 'checkoutStart')));
+    await tester.pumpAndSettle();
+    expect(auth.preparations, 1);
+    expect(auth.saved, isNotNull);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(auth.collections, 0);
+    expect(find.text(tr(UiLanguage.zh, 'tableCheckoutReview')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('session refresh reloads quote without leaving a blank checkout', (tester) async {
     final auth = CheckoutDialogAuth();

@@ -426,7 +426,20 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       );
       if (current(e)) setState(() => admission = next);
     } catch (_) {
-      if (current(e)) setState(() => message = t('tableCheckoutReview'));
+      if (!current(e)) return;
+      // Preparation may commit before its response is lost. Query the SAME
+      // request once; this never prepares again or sends a payment code.
+      try {
+        final observed = await widget.auth.lookupTableCheckout(original);
+        if (current(e)) {
+          setState(() {
+            admission = observed;
+            message = observed.observed ? '' : t('tableCheckoutMissing');
+          });
+        }
+      } catch (_) {
+        if (current(e)) setState(() => message = t('tableCheckoutReview'));
+      }
     } finally {
       if (current(e)) setState(() => busy = false);
     }

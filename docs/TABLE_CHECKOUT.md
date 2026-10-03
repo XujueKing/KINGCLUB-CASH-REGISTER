@@ -21,3 +21,8 @@ The V1 missing totals were caused by the server compact request registration rej
 ### Session refresh and business-day checkout fix (2026-10-04)
 
 Employee-session refresh now reloads the quote or restores the original durable checkout instead of leaving the dialog cleared. An ended/changed table session closes the old checkout route, including after the 06:00 business-day rollover. Initial quote failures offer a read-only retry and no longer claim that an unsubmitted payment needs reconciliation. Existing payment uncertainty handling is unchanged. All 17 checkout dialog tests passed, including session refresh, quote retry and ended-session navigation.
+
+
+### Preparation response recovery
+
+When preparation fails after the original request was persisted, the dialog automatically queries that same request once. A confirmed prepared result restores the scanner immediately; unknown/missing results retain the original recovery controls. This never retries preparation or submits payment automatically. All 18 dialog tests passed.
