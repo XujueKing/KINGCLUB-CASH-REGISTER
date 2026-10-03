@@ -265,7 +265,14 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       widget.auth.addListener(invalidate);
     }
     if (!identical(oldWidget.auth, widget.auth) ||
-        !identical(oldWidget.orderContext, widget.orderContext) ||
+        oldWidget.orderContext.storeRef != widget.orderContext.storeRef ||
+        oldWidget.orderContext.tableRef != widget.orderContext.tableRef ||
+        oldWidget.orderContext.sessionRef != widget.orderContext.sessionRef ||
+        oldWidget.orderContext.paymentTiming !=
+            widget.orderContext.paymentTiming ||
+        oldWidget.orderContext.currency != widget.orderContext.currency ||
+        oldWidget.orderContext.tableOrderAllowed !=
+            widget.orderContext.tableOrderAllowed ||
         oldWidget.memberRef != widget.memberRef) {
       invalidate();
     } else if (oldWidget.revision != widget.revision && !attempted) {

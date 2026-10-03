@@ -158,6 +158,20 @@ bool enabled(WidgetTester tester) =>
     null;
 
 void main() {
+  testWidgets('fresh same-session context does not lock continued ordering', (
+    tester,
+  ) async {
+    final auth = CartAuth();
+    await show(tester, auth);
+    await show(tester, auth); // New parsed object, same table and session.
+    expect(find.text(tr(UiLanguage.zh, 'cartStale')), findsNothing);
+    await tap(tester, 'catalog-add-p001');
+    expect(enabled(tester), isTrue);
+    await tap(tester, 'cart-submit');
+    expect(auth.submits, 1);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
   testWidgets(
     'reorder reads current price and uses confirmed original submit flow',
     (tester) async {
