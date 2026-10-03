@@ -614,14 +614,14 @@ class _TableBillPanelState extends State<TableBillPanel>
   );
 
   Widget amount(String label, int cents, String key) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
+    padding: const EdgeInsets.symmetric(vertical: 2),
     child: Row(
       key: ValueKey(key),
       children: [
-        Expanded(child: Text(t(label))),
+        Expanded(child: Text(t(label), style: const TextStyle(fontSize: 12))),
         Text(
           'CNY ${formatCents(cents)}',
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ],
     ),
@@ -768,11 +768,24 @@ class _TableBillPanelState extends State<TableBillPanel>
             paid.totalCents + pending.totalCents + widget.draftCents,
             'table-bill-total',
           ),
-          amount('billPaidAmount', paid.totalCents, 'table-bill-paid'),
-          amount(
-            'billUnpaidAmount',
-            pending.totalCents + widget.draftCents,
-            'table-bill-pending',
+          Row(
+            children: [
+              Expanded(
+                child: amount(
+                  'billPaidAmount',
+                  paid.totalCents,
+                  'table-bill-paid',
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: amount(
+                  'billUnpaidAmount',
+                  pending.totalCents + widget.draftCents,
+                  'table-bill-pending',
+                ),
+              ),
+            ],
           ),
           if ((summary?.buckets['refunded']?.totalCents ?? 0) > 0)
             amount(

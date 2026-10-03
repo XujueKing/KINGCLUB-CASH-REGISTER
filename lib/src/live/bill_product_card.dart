@@ -80,7 +80,7 @@ class BillProductCard extends StatelessWidget {
   );
   @override
   Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.symmetric(vertical: 7),
+    margin: const EdgeInsets.symmetric(vertical: 4),
     decoration: BoxDecoration(
       color: Colors.white,
       border: Border.all(color: const Color(0xffd7e2dc)),
@@ -92,7 +92,7 @@ class BillProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -115,7 +115,7 @@ class BillProductCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 9),
+                const SizedBox(height: 5),
               ],
               Row(
                 children: [
@@ -126,10 +126,10 @@ class BillProductCard extends StatelessWidget {
                       children: [
                         Text(
                           name,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: Color(0xff203d32),
                           ),
@@ -137,7 +137,7 @@ class BillProductCard extends StatelessWidget {
                         const SizedBox(height: 3),
                         Text(
                           specification,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
@@ -156,7 +156,7 @@ class BillProductCard extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 2),
                       if (quantityControls)
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -180,7 +180,7 @@ class BillProductCard extends StatelessWidget {
                       Text(
                         '¥${formatCents(totalCents)}',
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
