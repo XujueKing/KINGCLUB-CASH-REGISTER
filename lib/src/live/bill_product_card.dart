@@ -80,7 +80,7 @@ class BillProductCard extends StatelessWidget {
   );
   @override
   Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.symmetric(vertical: 4),
+    margin: const EdgeInsets.symmetric(vertical: 2),
     decoration: BoxDecoration(
       color: Colors.white,
       border: Border.all(color: const Color(0xffd7e2dc)),
