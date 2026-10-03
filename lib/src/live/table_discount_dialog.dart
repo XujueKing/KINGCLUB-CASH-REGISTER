@@ -175,6 +175,19 @@ class _TableDiscountDialogState extends State<TableDiscountDialog>
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(t('checkoutDiscountScope')),
+            if (pending != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  rate == 0
+                      ? t('checkoutWaive')
+                      : '${rate / 10}% × ${t('checkoutDue')}',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             const SizedBox(height: 20),
             if (!scanning && pending == null)
               Wrap(
