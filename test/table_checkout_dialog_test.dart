@@ -114,7 +114,7 @@ class CheckoutDialogAuth extends StaffAuthController {
       throw const CcsopFailure('CASHIER_TABLE_CHECKOUT_NOT_ENABLED');
     }
     final raw = fixture.tableQuoteFixture();
-    (raw['result'] as Map)['accountType'] = accountType;
+    raw['result'] = <String, dynamic>{...raw['result'], 'accountType': accountType, 'channel': channel};
     return TableCheckoutQuote.parse(
       raw,
       storeRef: 'test-store',
@@ -210,6 +210,34 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('cash touch keys enter yuan, normalize zero and replace exact amount', (tester) async {
+    final auth = CheckoutDialogAuth(permissions: ['workbench.read', 'payment.cash']);
+    await mount(tester, auth);
+    await tester.tap(find.text(tr(UiLanguage.zh, 'checkoutStart')));
+    await tester.pumpAndSettle();
+    expect(auth.preparations, 1);
+    expect(find.byKey(const ValueKey('cash-amount-input')), findsOneWidget);
+    String amount() => tester.widget<TextField>(find.byKey(const ValueKey('cash-amount-input'))).controller!.text;
+    Future<void> key(String digit) async {
+      final button = find.widgetWithText(OutlinedButton, digit);
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pump();
+    }
+    await key('0'); await key('2'); await key('0');
+    expect(amount(), '20');
+    await key('.'); await key('5'); await key('6'); await key('7');
+    expect(amount(), '20.56');
+    await key('⌫'); await key('8');
+    expect(amount(), '20.58');
+    final exact = find.text(tr(UiLanguage.zh, 'checkoutExactCash'));
+    await tester.ensureVisible(exact); await tester.tap(exact); await tester.pump();
+    await key('5'); await key('0');
+    expect(amount(), '50');
+    expect(auth.collections, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('explicit whole-table close is one button and retains original uncertainty',(tester) async {
     final auth=ExplicitCloseAuth();await mount(tester,auth);

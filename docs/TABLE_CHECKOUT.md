@@ -11,3 +11,8 @@
 ## 发布记录
 
 2026-10-04 已发布独立收银镜像 cashier-checkout-20261004，KINGCLUB 备份校验通过，迁移仅 295/297，运行检查通过；隔离构建 npm run verify 通过，340 个测试文件、3600 项测试通过。收银端 66 项收款/账单相关测试及负责人扫码与未知优惠恢复测试通过。目标 SUNMI 保留数据升级，签名匹配，原登录与桌台读取正常。未发起真实收款、刷卡、免单或打印验证。Flutter 分析无错误和警告，仍有既有及新增样式建议未清理。
+
+
+### Checkout amount correction (2026-10-04)
+
+The V1 missing totals were caused by the server compact request registration rejecting accountType=null on non-balance channels. Backend migration 298 corrects the five affected contracts without changing domain validation. Read-only device verification confirmed totals display again. Cash touch input also normalizes leading zero and allows replacing an exact-amount shortcut; 14 dialog tests pass. The reported physical touch mismatch is still awaiting a reproducible button/location example; no hardware calibration change has been made.

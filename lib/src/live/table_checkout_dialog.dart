@@ -50,6 +50,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   String choice = 'wechat', message = '';
   bool foreground = true, busy = false, ready = false;
   bool cancelled = false;
+  bool replaceCash = false;
   bool cancellationNeedsQuery = false, confirmationOpen = false;
   int epoch = 0;
   Route<dynamic>? unpaidPrintRoute;
@@ -287,6 +288,13 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         }
       });
     } catch (error) {
+      // Log only a bounded error identifier, never request or payment data.
+      final failureCode = error is CcsopFailure
+          ? error.code
+          : error.runtimeType.toString();
+      if (RegExp(r'^[A-Za-z0-9_]{1,100}$').hasMatch(failureCode)) {
+        debugPrint('cashier_checkout_quote: $failureCode');
+      }
       if (current(e)) {
         setState(
           () => message = t(
@@ -656,7 +664,10 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     if (!mounted || !fresh || busy) return;
     await prepare();
     if (!mounted || admission?.paymentStatus != 'prepared') return;
-    if (channel == 'cash') input.clear();
+    if (channel == 'cash') {
+      input.clear();
+      replaceCash = false;
+    }
   }
 
   Widget amount(String title, int? cents, {bool prominent = false}) => Column(
@@ -678,6 +689,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   Widget cashPad() => Column(
     children: [
       TextField(
+        key: const ValueKey('cash-amount-input'),
         controller: input,
         readOnly: true,
         style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -700,18 +712,28 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                     onPressed: busy
                         ? null
                         : () {
-                            final value = input.text;
+                            var value = input.text;
                             if (digit == '⌫') {
                               input.text = value.isEmpty
                                   ? ''
                                   : value.substring(0, value.length - 1);
-                            } else if (value.length < 10 &&
-                                !(digit == '.' && value.contains('.')) &&
-                                !(value.contains('.') &&
-                                    value.split('.').last.length >= 2)) {
-                              input.text = digit == '.' && value.isEmpty
-                                  ? '0.'
-                                  : value + digit;
+                              replaceCash = false;
+                            } else {
+                              if (replaceCash) value = '';
+                              if (digit == '.') {
+                                if (!value.contains('.')) {
+                                  input.text = value.isEmpty ? '0.' : '$value.';
+                                }
+                              } else if (!(value.contains('.') &&
+                                  value.split('.').last.length >= 2)) {
+                                final next =
+                                    (value == '0' ? '' : value) + digit;
+                                if (RegExp(r'^\d{1,7}(\.\d{0,2})?$')
+                                    .hasMatch(next)) {
+                                  input.text = next;
+                                }
+                              }
+                              replaceCash = false;
                             }
                             setState(() {});
                           },
@@ -729,6 +751,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
             ? null
             : () => setState(() {
                 input.text = formatCents(command!.totalCents);
+                replaceCash = true;
               }),
         child: Text(t('checkoutExactCash')),
       ),
