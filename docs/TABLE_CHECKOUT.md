@@ -16,3 +16,8 @@
 ### Checkout amount correction (2026-10-04)
 
 The V1 missing totals were caused by the server compact request registration rejecting accountType=null on non-balance channels. Backend migration 298 corrects the five affected contracts without changing domain validation. Read-only device verification confirmed totals display again. Cash touch input also normalizes leading zero and allows replacing an exact-amount shortcut; 14 dialog tests pass. The reported physical touch mismatch is still awaiting a reproducible button/location example; no hardware calibration change has been made.
+
+
+### Session refresh and business-day checkout fix (2026-10-04)
+
+Employee-session refresh now reloads the quote or restores the original durable checkout instead of leaving the dialog cleared. An ended/changed table session closes the old checkout route, including after the 06:00 business-day rollover. Initial quote failures offer a read-only retry and no longer claim that an unsubmitted payment needs reconciliation. Existing payment uncertainty handling is unchanged. All 17 checkout dialog tests passed, including session refresh, quote retry and ended-session navigation.

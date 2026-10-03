@@ -55,6 +55,9 @@ class CheckoutDialogAuth extends StaffAuthController {
   String admissionStatus = 'prepared';
   bool cancellationConfirmed = true;
   bool quoteUnavailable = false;
+  String? quoteError;
+  int quoteReads = 0;
+  void sessionRefreshed() => notifyListeners();
   Completer<void>? cancellationWait;
   Future<TableCheckoutCancellation> cancellationResult(
     TableCheckoutCommand command,
@@ -110,6 +113,8 @@ class CheckoutDialogAuth extends StaffAuthController {
     required String channel,
     required String? accountType,
   }) async {
+    quoteReads++;
+    if (quoteError != null) throw CcsopFailure(quoteError!);
     if (quoteUnavailable) {
       throw const CcsopFailure('CASHIER_TABLE_CHECKOUT_NOT_ENABLED');
     }
@@ -210,6 +215,50 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('session refresh reloads quote without leaving a blank checkout', (tester) async {
+    final auth = CheckoutDialogAuth();
+    await mount(tester, auth);
+    expect(auth.quoteReads, 1);
+    auth.sessionRefreshed();
+    await tester.pumpAndSettle();
+    expect(auth.quoteReads, 2);
+    expect(find.text(tr(UiLanguage.zh, 'checkoutStart')), findsOneWidget);
+    expect(auth.preparations, 0);
+    expect(auth.collections, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('failed quote retries without creating a payment request', (tester) async {
+    final auth = CheckoutDialogAuth()..quoteError = 'TRANSPORT_FAILED';
+    await mount(tester, auth);
+    expect(find.text(tr(UiLanguage.zh, 'tableCheckoutReview')), findsNothing);
+    auth.quoteError = null;
+    await tester.tap(find.text(tr(UiLanguage.zh, 'ordersRefresh')));
+    await tester.pumpAndSettle();
+    expect(auth.quoteReads, 2);
+    expect(find.text(tr(UiLanguage.zh, 'checkoutStart')), findsOneWidget);
+    expect(auth.preparations, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('ended table session closes the old checkout route', (tester) async {
+    final auth = CheckoutDialogAuth()..quoteError = 'CASHIER_TABLE_CHECKOUT_SCOPE_CHANGED';
+    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+      onPressed: () => showDialog<void>(context: context, builder: (_) => TableCheckoutDialog(
+        auth: auth, tableRef: 'TEST_TABLE', sessionRef: 'TEST_SESSION', language: UiLanguage.zh)),
+      child: const Text('open'),
+    ))));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TableCheckoutDialog), findsNothing);
+    expect(find.text('open'), findsOneWidget);
+    expect(auth.preparations, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('cash touch keys enter yuan, normalize zero and replace exact amount', (tester) async {
     final auth = CheckoutDialogAuth(permissions: ['workbench.read', 'payment.cash']);

@@ -121,7 +121,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     foreground =
         WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-    widget.auth.addListener(invalidate);
+    widget.auth.addListener(authChanged);
     WidgetsBinding.instance.addObserver(this);
     scanner = ScannerInput.codes.listen((code) {
       if (!mounted ||
@@ -138,6 +138,22 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     });
     if (foreground) unawaited(load());
   }
+
+  void authChanged() {
+    invalidate();
+    // Restore the original durable request after the session refresh finishes.
+    // Merely clearing the dialog here left a blank checkout until a manual tap.
+    if (foreground && !widget.auth.busy && widget.auth.session != null) {
+      unawaited(load());
+    }
+  }
+
+  String get billReadFailure => [
+    '????????????',
+    'Could not load the bill. Please retry.',
+    '????????????',
+    '??????????????????? ????????????????',
+  ][widget.language.index];
 
   void invalidate() {
     epoch++;
@@ -181,9 +197,9 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         old.tableRef != widget.tableRef ||
         old.sessionRef != widget.sessionRef ||
         old.originalRequestId != widget.originalRequestId) {
-      old.auth.removeListener(invalidate);
-      widget.auth.addListener(invalidate);
-      invalidate();
+      old.auth.removeListener(authChanged);
+      widget.auth.addListener(authChanged);
+      authChanged();
     }
   }
 
@@ -195,7 +211,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     freshness?.stop();
     scanner?.cancel();
     input.dispose();
-    widget.auth.removeListener(invalidate);
+    widget.auth.removeListener(authChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -250,7 +266,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         });
       }
     } catch (_) {
-      if (current(e)) setState(() => message = t('tableCheckoutReview'));
+      if (current(e)) setState(() => message = billReadFailure);
     } finally {
       if (current(e)) setState(() => busy = false);
     }
@@ -296,14 +312,30 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         debugPrint('cashier_checkout_quote: $failureCode');
       }
       if (current(e)) {
-        setState(
-          () => message = t(
-            error is CcsopFailure &&
+        if (error is CcsopFailure &&
+            error.code == 'CASHIER_TABLE_CHECKOUT_SCOPE_CHANGED') {
+          setState(() {
+            quote = null;
+            message = [
+              '?????????????????????',
+              'This table session has ended or changed. Return to tables.',
+              '?????????????????????',
+              '????????????????????????????? ???????????????????',
+            ][widget.language.index];
+          });
+          // Do not leave an old-business-day payment dialog above the new table.
+          if (ModalRoute.of(context)?.isCurrent == true) {
+            unawaited(Navigator.of(context).maybePop());
+          }
+        } else {
+          setState(
+            () => message =
+                error is CcsopFailure &&
                     error.code == 'CASHIER_TABLE_CHECKOUT_NOT_ENABLED'
-                ? 'tableCheckoutUnavailable'
-                : 'tableCheckoutReview',
-          ),
-        );
+                ? t('tableCheckoutUnavailable')
+                : billReadFailure,
+          );
+        }
       }
     } finally {
       if (current(e)) setState(() => busy = false);
@@ -927,14 +959,22 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                     ),
                                   if (ready && original == null)
                                     FilledButton(
-                                      onPressed: busy || q == null
+                                      onPressed: busy
                                           ? null
+                                          : q == null
+                                          ? readQuote
                                           : startCollection,
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
                                           vertical: 14,
                                         ),
-                                        child: Text(t('checkoutStart')),
+                                        child: Text(
+                                          t(
+                                            q == null
+                                                ? 'ordersRefresh'
+                                                : 'checkoutStart',
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   if (original != null &&
