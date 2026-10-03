@@ -1690,6 +1690,9 @@ class StaffAuthController extends ChangeNotifier {
         return Map<String, String?>.unmodifiable({
           'userAccount': row['userAccount'] as String,
           'nickname': row['nickname'] as String?,
+          'avatarBase64': row['avatarBase64'] is String
+              ? row['avatarBase64'] as String
+              : null,
           'linkedBy': row['linkedBy'] as String,
           'linkedAt': row['linkedAt'] as String,
         });

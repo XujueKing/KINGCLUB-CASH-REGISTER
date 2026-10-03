@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -237,59 +239,172 @@ class TableMembersPanelState extends State<TableMembersPanel>
   );
 }
 
-class TableMembersButton extends StatelessWidget {
+class TableMembersButton extends StatefulWidget {
   const TableMembersButton({
     super.key,
     required this.auth,
     required this.language,
     required this.tableRef,
     required this.sessionRef,
+    this.revision = 0,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef, sessionRef;
+  final int revision;
   @override
-  Widget build(BuildContext context) => TextButton.icon(
+  State<TableMembersButton> createState() => _TableMembersButtonState();
+}
+
+class _TableMembersButtonState extends State<TableMembersButton> {
+  List<Map<String, String?>> members = [];
+  Uint8List? avatar;
+  int epoch = 0;
+  @override
+  void initState() {
+    super.initState();
+    widget.auth.addListener(reset);
+    unawaited(load());
+  }
+
+  void reset() {
+    epoch++;
+    if (mounted)
+      setState(() {
+        members = [];
+        avatar = null;
+      });
+  }
+
+  @override
+  void didUpdateWidget(covariant TableMembersButton old) {
+    super.didUpdateWidget(old);
+    final changed =
+        old.auth != widget.auth ||
+        old.tableRef != widget.tableRef ||
+        old.sessionRef != widget.sessionRef;
+    if (old.auth != widget.auth) {
+      old.auth.removeListener(reset);
+      widget.auth.addListener(reset);
+    }
+    if (changed) {
+      epoch++;
+      members = [];
+      avatar = null;
+    }
+    if (changed || old.revision != widget.revision) unawaited(load());
+  }
+
+  Future<void> load() async {
+    final generation = ++epoch;
+    try {
+      final rows = await widget.auth.tableMembers(
+        tableRef: widget.tableRef,
+        sessionRef: widget.sessionRef,
+      );
+      if (!mounted || generation != epoch) return;
+      Uint8List? bytes;
+      try {
+        final raw = rows.isEmpty ? null : rows.first['avatarBase64'];
+        if (raw != null) bytes = base64Decode(raw);
+      } catch (_) {}
+      setState(() {
+        members = rows;
+        avatar = bytes;
+      });
+    } catch (_) {
+      /* Retain this session's last successful image without flashing. */
+    }
+  }
+
+  @override
+  void dispose() {
+    epoch++;
+    widget.auth.removeListener(reset);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IconButton(
     key: const ValueKey('table-members-open'),
-    style: TextButton.styleFrom(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      minimumSize: const Size(0, 32),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    ),
-    onPressed: () => showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          [
-            '关联会员',
-            'Linked members',
-            '關聯會員',
-            'สมาชิกที่เชื่อมโยง',
-          ][language.index],
-        ),
-        content: SizedBox(
-          width: 440,
-          child: SingleChildScrollView(
-            child: TableMembersPanel(
-              auth: auth,
-              language: language,
-              tableRef: tableRef,
-              sessionRef: sessionRef,
+    tooltip: [
+      '关联会员',
+      'Linked members',
+      '關聯會員',
+      'สมาชิกที่เชื่อมโยง',
+    ][widget.language.index],
+    onPressed: () async {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            [
+              '关联会员',
+              'Linked members',
+              '關聯會員',
+              'สมาชิกที่เชื่อมโยง',
+            ][widget.language.index],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: SingleChildScrollView(
+              child: TableMembersPanel(
+                auth: widget.auth,
+                language: widget.language,
+                tableRef: widget.tableRef,
+                sessionRef: widget.sessionRef,
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(
+                ['完成', 'Done', '完成', 'เสร็จสิ้น'][widget.language.index],
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(['完成', 'Done', '完成', 'เสร็จสิ้น'][language.index]),
+      );
+      if (mounted) await load();
+    },
+    icon: Badge(
+      isLabelVisible: members.length > 1,
+      label: Text('${members.length}'),
+      child: ClipOval(
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: ColoredBox(
+            color: members.isEmpty
+                ? const Color(0xffdedede)
+                : const Color(0xffd5e5df),
+            child: avatar == null
+                ? fallback()
+                : Image.memory(
+                    avatar!,
+                    gaplessPlayback: true,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, error, stack) => fallback(),
+                  ),
           ),
-        ],
+        ),
       ),
     ),
-    icon: const Icon(Icons.qr_code_scanner, size: 16),
-    label: Text(
-      ['关联会员', 'Members', '關聯會員', 'สมาชิก'][language.index],
-      style: const TextStyle(fontSize: 11),
-    ),
   );
+  Widget fallback() => members.isEmpty
+      ? const Icon(Icons.person, color: Color(0xff9e9e9e), size: 23)
+      : Center(
+          child: Text(
+            (members.first['nickname'] ?? members.first['userAccount'] ?? '')
+                .characters
+                .take(1)
+                .toString(),
+            style: const TextStyle(
+              color: Color(0xff204c40),
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        );
 }

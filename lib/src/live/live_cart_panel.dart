@@ -729,41 +729,18 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                       ),
                     ),
                   ),
-                  TableMembersButton(
-                    auth: widget.auth,
-                    language: widget.language,
-                    tableRef: currentContext.tableRef,
-                    sessionRef: currentContext.sessionRef,
-                  ),
                 ],
               ),
             ],
           ),
         ),
         filter,
-        PopupMenuButton<String>(
-          key: const ValueKey('cart-draft-menu'),
-          padding: EdgeInsets.zero,
-          icon: const Icon(Icons.more_vert, size: 18),
-          constraints: const BoxConstraints(minWidth: 160),
-          onSelected: (action) => unawaited(draftOperation(action)),
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'save',
-              enabled: editable && items.isNotEmpty && dirty,
-              child: Text(t('cartDraftSave')),
-            ),
-            PopupMenuItem(
-              value: 'restore',
-              enabled: draftAction && savedDraft != null && !dirty,
-              child: Text(t('cartDraftRestore')),
-            ),
-            PopupMenuItem(
-              value: 'discard',
-              enabled: draftAction && savedDraft != null,
-              child: Text(t('cartDraftDiscard')),
-            ),
-          ],
+        TableMembersButton(
+          auth: widget.auth,
+          language: widget.language,
+          tableRef: currentContext.tableRef,
+          sessionRef: currentContext.sessionRef,
+          revision: widget.revision,
         ),
       ],
     );
