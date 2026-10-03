@@ -409,10 +409,10 @@ class _TableBillPanelState extends State<TableBillPanel>
                 .firstOrNull;
             if (next != null) {
               unawaited(reduceGroup(next, retryConflict: false));
-              return;
+            } else {
+              queuedReductions.clear();
             }
-          }
-          if (!succeeded ||
+          } else if (!succeeded ||
               failed ||
               !identical(identity, widget.auth.session) ||
               table != widget.tableRef ||
