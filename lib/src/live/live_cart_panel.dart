@@ -76,6 +76,24 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   int epoch = 0;
   int billRevision = 0;
   bool confirming = false;
+  bool sending = false;
+  final queuedAdds = <VoidCallback>[];
+  bool get acceptingAdds =>
+      editable ||
+      (sending &&
+          widget.contextVerified &&
+          ready &&
+          !stale &&
+          queuedAdds.length < 50);
+  void nextAddition() {
+    if (!mounted) return;
+    if (!editable) {
+      queuedAdds.clear();
+      return;
+    }
+    if (queuedAdds.isNotEmpty) queuedAdds.removeAt(0)();
+  }
+
   bool refreshingSelection = false;
   bool refreshAgain = false;
   String? message;
@@ -140,6 +158,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
 
   void invalidate() {
     ++epoch;
+    queuedAdds.clear();
     if (!mounted) return;
     final dialog = activeDialog;
     if (dialog != null &&
@@ -350,6 +369,10 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   }
 
   void change(CatalogProduct product, int delta) {
+    if (sending && acceptingAdds && delta > 0) {
+      queuedAdds.add(() => change(product, delta));
+      return;
+    }
     if (!editable) return;
     final old = items[product.reference];
     final quantity = (old?.quantity ?? 0) + delta;
@@ -401,6 +424,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     setState(() {
       busy = true;
       attempted = true;
+      sending = true;
       confirming = false;
       message = null;
     });
@@ -441,18 +465,27 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       if (mounted) {
         setState(() {
           busy = false;
+          sending = false;
           confirming = false;
         });
+        nextAddition();
       }
     }
   }
 
   Future<void> addExistingProduct(String productRef, {bool edit = true}) async {
+    if (sending && acceptingAdds && !edit) {
+      queuedAdds.add(
+        () => unawaited(addExistingProduct(productRef, edit: false)),
+      );
+      return;
+    }
     if (!editable) return;
     final identity = widget.auth.session, generation = epoch;
     CatalogProduct? product;
     setState(() {
       busy = true;
+      sending = !edit;
       message = null;
     });
     try {
@@ -475,11 +508,19 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       if (product == null) throw const FormatException();
     } catch (_) {
       if (mounted && generation == epoch) {
-        setState(() => message = 'billAddUnavailable');
+        setState(() {
+          queuedAdds.clear();
+          message = 'billAddUnavailable';
+        });
       }
       return;
     } finally {
-      if (mounted && generation == epoch) setState(() => busy = false);
+      if (mounted && generation == epoch) {
+        setState(() {
+          busy = false;
+          sending = false;
+        });
+      }
     }
     if (!mounted ||
         !editable ||
@@ -716,7 +757,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           child: widget.tablePanel != null && !menuOpen
               ? widget.tablePanel!
               : AbsorbPointer(
-                  absorbing: !editable,
+                  absorbing: !acceptingAdds,
                   child: LiveCatalogPanel(
                     header: widget.menuHeader,
                     paymentTiming: currentContext.paymentTiming,
@@ -741,7 +782,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                 Expanded(
                   child: TableBillPanel(
                     onAddProduct: editable ? addExistingProduct : null,
-                    onQuickAddProduct: editable
+                    onQuickAddProduct: acceptingAdds
                         ? (ref) => addExistingProduct(ref, edit: false)
                         : null,
                     // Once sent, only server orders contribute to consumption.
@@ -849,7 +890,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     tableRef: widget.orderContext.tableRef,
                     sessionRef: widget.orderContext.sessionRef,
                     revision: widget.revision + billRevision,
-                    changesAllowed: editable && widget.contextVerified,
+                    changesAllowed: acceptingAdds && widget.contextVerified,
                     checkoutAllowed:
                         widget.contextVerified &&
                         !busy &&

@@ -63,6 +63,8 @@ class _TableBillPanelState extends State<TableBillPanel>
   OrderSnapshot? snapshot;
   bool loading = false, failed = false, foreground = true, checkout = false;
   bool reducing = false;
+  bool verifiedSnapshot = false;
+  final queuedReductions = <String>[];
   int epoch = 0;
   final inventory = <String, CatalogProduct>{};
   String t(String key) => tr(widget.language, key);
@@ -98,6 +100,8 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   void reset({bool useCache = false}) {
     epoch++;
+    queuedReductions.clear();
+    verifiedSnapshot = false;
     setState(() {
       orders = [];
       snapshot = null;
@@ -154,7 +158,6 @@ class _TableBillPanelState extends State<TableBillPanel>
     setState(() {
       loading = true;
       failed = false;
-      inventory.clear();
     });
     try {
       var after = cursor;
@@ -190,6 +193,7 @@ class _TableBillPanelState extends State<TableBillPanel>
       setState(() {
         orders = collected;
         snapshot = next;
+        verifiedSnapshot = true;
         loading = false;
       });
       if (widget.onQuickAddProduct != null) unawaited(loadInventory(ticket));
@@ -224,7 +228,13 @@ class _TableBillPanelState extends State<TableBillPanel>
         if (cursor == null) break;
         if (!seen.add(cursor)) throw const FormatException();
       }
-      if (mounted && ticket == epoch) setState(() => inventory.addAll(found));
+      if (mounted && ticket == epoch) {
+        setState(() {
+          inventory
+            ..clear()
+            ..addAll(found);
+        });
+      }
     } catch (_) {
       // Unknown stock leaves quick-add disabled; bill amounts remain readable.
     }
@@ -288,7 +298,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   }
 
   bool canReduce(BillProductGroup group) =>
-      !reducing &&
+      verifiedSnapshot &&
       !checkout &&
       widget.changesAllowed &&
       foreground &&
@@ -302,7 +312,12 @@ class _TableBillPanelState extends State<TableBillPanel>
       );
 
   Future<void> reduceGroup(BillProductGroup group) async {
-    if (loading || failed || !canReduce(group)) return;
+    if (failed || !canReduce(group)) return;
+    if (reducing) {
+      if (queuedReductions.length < 50) queuedReductions.add(group.productRef);
+      return;
+    }
+    var succeeded = false;
     final identity = widget.auth.session,
         table = widget.tableRef,
         session = widget.sessionRef;
@@ -330,6 +345,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         expectedServingEpoch: target.item.servingEpoch,
         expectedTotalCents: target.order.totalCents,
       );
+      succeeded = true;
     } catch (error) {
       if (mounted &&
           identical(identity, widget.auth.session) &&
@@ -354,7 +370,27 @@ class _TableBillPanelState extends State<TableBillPanel>
     } finally {
       if (mounted) {
         await load();
-        if (mounted) setState(() => reducing = false);
+        if (mounted) {
+          setState(() => reducing = false);
+          if (!succeeded ||
+              failed ||
+              !identical(identity, widget.auth.session) ||
+              table != widget.tableRef ||
+              session != widget.sessionRef) {
+            queuedReductions.clear();
+          } else {
+            while (queuedReductions.isNotEmpty) {
+              final ref = queuedReductions.removeAt(0);
+              final next = groupBillProducts(orders)
+                  .where((g) => g.productRef == ref && canReduce(g))
+                  .firstOrNull;
+              if (next != null) {
+                unawaited(reduceGroup(next));
+                break;
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -615,15 +651,13 @@ class _TableBillPanelState extends State<TableBillPanel>
               onTap: () => openGroup(group),
               quantityControls: true,
               productRef: group.productRef,
-              onMinus: !loading && !failed && !reducing && !checkout
+              onMinus: !failed && !checkout
                   ? (draftFor(group) != null
                         ? draftFor(group)!.onMinus
                         : (canReduce(group) ? () => reduceGroup(group) : null))
                   : null,
               onPlus:
-                  !loading &&
-                      !failed &&
-                      !reducing &&
+                  !failed &&
                       widget.onQuickAddProduct != null &&
                       (inventory[group.productRef]?.inventoryKnown ?? false) &&
                       group.unpaidQuantity + (draftFor(group)?.quantity ?? 0) <

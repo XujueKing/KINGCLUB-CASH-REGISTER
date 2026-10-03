@@ -120,8 +120,7 @@ void main() {
       );
       await tap(tester, 'cart-minus-p001');
       await tap(tester, 'cart-minus-p001');
-      await tap(tester, 'cart-submit');
-      await tester.tap(find.byKey(const ValueKey('cart-confirm')));
+      await tester.tap(find.byKey(const ValueKey('cart-submit')));
       await tester.pump(const Duration(milliseconds: 300));
       auth.pushed = true;
       revision.value++;

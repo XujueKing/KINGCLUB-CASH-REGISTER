@@ -123,7 +123,6 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
         setState(() {
           failed = true;
           loading = false;
-          data = null;
         });
       }
     }
@@ -218,7 +217,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       ),
       if (loading && data == null) const LinearProgressIndicator(),
       Expanded(
-        child: failed
+        child: failed && data == null
             ? Center(child: Text(t('liveReadFailed')))
             : data == null
             ? const SizedBox()
@@ -258,7 +257,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     final canSelect =
         widget.onSelect != null &&
         foreground &&
-        !loading &&
+        !failed &&
         (widget.paymentTiming == 'prepay' || available);
     final stockColor = !p.inventoryKnown
         ? const Color(0xff986500)

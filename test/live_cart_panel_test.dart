@@ -221,6 +221,66 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     auth.dispose();
   });
+  testWidgets('rapid additions queue while retaining the catalog and bill', (
+    tester,
+  ) async {
+    final auth = CartAuth()..submitGate = Completer<OrderRequestResult>();
+    m.size(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveCartPanel(
+            auth: auth,
+            language: UiLanguage.zh,
+            orderContext: m.parse(m.contextData()),
+            memberRef: 'member-000',
+            onBack: () {},
+            tablePanel: const Text('TABLE GRID'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tap(tester, 'workspace-toggle-menu');
+    final card = tester.element(
+      find.byKey(const ValueKey('catalog-product-p001')),
+    );
+    await tester.tap(find.byKey(const ValueKey('catalog-add-p001')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('catalog-add-p001')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('catalog-add-p001')));
+    await tester.pump();
+    expect(auth.submits, 1);
+    expect(
+      identical(
+        card,
+        tester.element(find.byKey(const ValueKey('catalog-product-p001'))),
+      ),
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<TableBillPanel>(find.byType(TableBillPanel))
+          .checkoutAllowed,
+      isFalse,
+    );
+    final gate = auth.submitGate!;
+    auth.submitGate = null;
+    final command = o.command();
+    gate.complete(
+      OrderRequestResult.parse(
+        {'result': o.receipt(command.params)},
+        command,
+        submission: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(auth.submits, 3);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
+
   testWidgets(
     'table workspace records each addition without confirmation and preserves the bill',
     (tester) async {

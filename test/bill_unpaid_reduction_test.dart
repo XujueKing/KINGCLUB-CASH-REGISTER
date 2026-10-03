@@ -111,6 +111,27 @@ void main() {
       expect(auth.calls, 2);
     },
   );
+  testWidgets(
+    'rapid minus taps use refreshed quantities and stop at paid floor',
+    (tester) async {
+      final auth = ReductionAuth()..reductionGate = Completer<void>();
+      await mount(tester, auth);
+      await tester.tap(getMinus());
+      await tester.pump();
+      expect(tester.widget<IconButton>(getMinus()).onPressed, isNotNull);
+      await tester.tap(getMinus());
+      await tester.pump();
+      expect(auth.calls, 1);
+      final gate = auth.reductionGate!;
+      auth.reductionGate = null;
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(auth.calls, 2);
+      expect(auth.quantity, 0);
+      expect(tester.widget<IconButton>(getMinus()).onPressed, isNull);
+    },
+  );
+
   testWidgets('delivered unpaid quantities cannot be removed with minus', (
     tester,
   ) async {
