@@ -870,14 +870,27 @@ class _TableBillPanelState extends State<TableBillPanel>
                             pending.totalCents > 0
                         ? pay
                         : null,
-                    child: Text(
-                      pending != null &&
-                              pending.totalCents == 0 &&
-                              !widget.recording &&
-                              !loading &&
-                              !failed
-                          ? t('billSettled')
-                          : '${t('tableCheckoutTitle')}${pending != null && pending.totalCents > 0 ? ' ¥${formatCents(pending.totalCents)}' : ''}',
+                    child: Text.rich(
+                      TextSpan(
+                        text:
+                            pending != null &&
+                                pending.totalCents == 0 &&
+                                !widget.recording &&
+                                !loading &&
+                                !failed
+                            ? t('billSettled')
+                            : t('tableCheckoutTitle'),
+                        children: [
+                          if (pending != null && pending.totalCents > 0)
+                            TextSpan(
+                              text: '  ¥ ${formatCents(pending.totalCents)}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

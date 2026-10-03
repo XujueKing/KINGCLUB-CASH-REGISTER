@@ -837,8 +837,21 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                               disabledBackgroundColor: const Color(0xff17483b),
                               disabledForegroundColor: Colors.white,
                             ),
-                            child: Text(
-                              '${t(busy ? 'cartRecording' : 'cartConfirmOrder')} ¥${formatCents(total)}',
+                            child: Text.rich(
+                              TextSpan(
+                                text: t(
+                                  busy ? 'cartRecording' : 'cartConfirmOrder',
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: '  ¥ ${formatCents(total)}',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           )
                         : null,
