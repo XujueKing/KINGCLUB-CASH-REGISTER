@@ -17,12 +17,14 @@ class TableMembersPanel extends StatefulWidget {
     required this.tableRef,
     this.sessionRef,
     this.enabled = true,
+    this.onLinked,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef;
   final String? sessionRef;
   final bool enabled;
+  final VoidCallback? onLinked;
   @override
   TableMembersPanelState createState() => TableMembersPanelState();
 }
@@ -128,6 +130,9 @@ class TableMembersPanelState extends State<TableMembersPanel>
         for (final member in members) {
           pending.remove(member['userAccount']);
         }
+        if (foreground && ModalRoute.of(context)?.isCurrent == true) {
+          widget.onLinked?.call();
+        }
       }
     } catch (_) {
       if (mounted && generation == epoch) failed = true;
@@ -196,10 +201,14 @@ class TableMembersPanelState extends State<TableMembersPanel>
       const SizedBox(height: 6),
       Text(
         words([
-          '可连续扫码，无需点击输入框',
-          'Scan members consecutively; no input field needed',
-          '可連續掃碼，無需點擊輸入框',
-          'สแกนต่อเนื่องได้ ไม่ต้องแตะช่องกรอก',
+          widget.onLinked == null ? '可连续扫码，无需点击输入框' : '请扫会员码，成功后自动关闭',
+          widget.onLinked == null
+              ? 'Scan members consecutively; no input field needed'
+              : 'Scan a member code; closes automatically on success',
+          widget.onLinked == null ? '可連續掃碼，無需點擊輸入框' : '請掃會員碼，成功後自動關閉',
+          widget.onLinked == null
+              ? 'สแกนต่อเนื่องได้ ไม่ต้องแตะช่องกรอก'
+              : 'สแกนรหัสสมาชิก ปิดอัตโนมัติเมื่อสำเร็จ',
         ]),
         style: const TextStyle(fontSize: 12),
       ),
@@ -269,11 +278,12 @@ class _TableMembersButtonState extends State<TableMembersButton> {
 
   void reset() {
     epoch++;
-    if (mounted)
+    if (mounted) {
       setState(() {
         members = [];
         avatar = null;
       });
+    }
   }
 
   @override
@@ -353,15 +363,14 @@ class _TableMembersButtonState extends State<TableMembersButton> {
                 language: widget.language,
                 tableRef: widget.tableRef,
                 sessionRef: widget.sessionRef,
+                onLinked: () => Navigator.pop(dialogContext),
               ),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: Text(
-                ['完成', 'Done', '完成', 'เสร็จสิ้น'][widget.language.index],
-              ),
+              child: Text(['关闭', 'Close', '關閉', 'ปิด'][widget.language.index]),
             ),
           ],
         ),

@@ -57,6 +57,47 @@ void main() {
           (_) async => null,
         );
   });
+  testWidgets('member popup stays on failure and closes on confirmed scan', (
+    tester,
+  ) async {
+    final auth = MemberAuth();
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TableMembersButton(
+            auth: auth,
+            language: UiLanguage.zh,
+            tableRef: 'test-table',
+            sessionRef: 'H00000000001',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('table-members-open')));
+    await tester.pumpAndSettle();
+    Future<void> scan() async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'kingclub/scanner',
+        const StandardMethodCodec().encodeSuccessEnvelope('KC:M:' + 'A' * 32),
+        (_) {},
+      );
+      await tester.pumpAndSettle();
+    }
+
+    auth.fail = true;
+    await scan();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    auth.fail = false;
+    await scan();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(auth.linked, {'test-a'});
+    expect(find.text('t'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+    debugDefaultTargetPlatformOverride = null;
+  });
   for (final language in UiLanguage.values) {
     testWidgets('focusless member linking and retry ${language.name}', (
       tester,
