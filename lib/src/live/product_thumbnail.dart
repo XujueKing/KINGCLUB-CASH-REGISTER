@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'dart:ui' as ui;
+
+import 'product_image_store.dart';
+
 /// The same store-scoped signed thumbnail used by the APP catalog.
 String? productThumbnail(Object? raw, String storeRef) {
   if (raw is! Map ||
@@ -9,7 +13,7 @@ String? productThumbnail(Object? raw, String storeRef) {
       raw['files'] is! Map) {
     return null;
   }
-  final link = raw['files']['image'] ?? raw['files']['thumbnail'];
+  final link = raw['files']['thumbnail'] ?? raw['files']['image'];
   if (link is! String) return null;
   final uri = Uri.tryParse(link);
   if (uri == null ||
@@ -80,9 +84,30 @@ class ProductNetworkImage extends ImageProvider<ProductNetworkImage> {
     ProductNetworkImage key,
     ImageDecoderCallback decode,
   ) {
-    final network = NetworkImage(key.url);
-    // ignore: deprecated_member_use
-    return network.loadImage(network, decode);
+    return MultiFrameImageStreamCompleter(
+      codec: _decode(decode),
+      scale: 1,
+      informationCollector: () => [ErrorDescription('Product thumbnail')],
+    );
+  }
+
+  Future<ui.Codec> _decode(ImageDecoderCallback decode) async {
+    final uri = Uri.parse(url);
+    try {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final bytes = await ProductImageStore.shared.read(uri);
+        try {
+          return await decode(await ui.ImmutableBuffer.fromUint8List(bytes));
+        } catch (_) {
+          await ProductImageStore.shared.remove(uri);
+          if (attempt == 1) rethrow;
+        }
+      }
+      throw StateError('Image decoding failed');
+    } catch (_) {
+      PaintingBinding.instance.imageCache.evict(this);
+      rethrow;
+    }
   }
 
   String get assetKey => Uri.parse(url).replace(query: '').toString();

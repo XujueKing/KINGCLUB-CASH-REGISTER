@@ -52,6 +52,12 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        io.flutter.plugin.common.MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "cn.kingclub.cashier/product-images").setMethodCallHandler { call, result ->
+            if (call.method == "directory") {
+                result.success(java.io.File(noBackupFilesDir, "product-images-v1").absolutePath)
+            } else result.notImplemented()
+        }
         scanner?.dispose()
         scanner = ScannerBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         printerDiscovery?.dispose()

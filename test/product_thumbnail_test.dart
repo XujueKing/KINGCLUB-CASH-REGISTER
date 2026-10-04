@@ -49,6 +49,10 @@ void main() {
     'files': {'thumbnail': link},
   };
   test('uses the APP thumbnail only for the current store and service', () {
+    expect(productThumbnail({...material('store', path), 'files': {
+      'thumbnail': path,
+      'image': '/attachments/00000000-0000-4000-8000-000000000002?token=original',
+    }}, 'store'), path);
     expect(productThumbnail(material('store', path), 'store'), path);
     expect(productThumbnail(material('other', path), 'store'), isNull);
     expect(
