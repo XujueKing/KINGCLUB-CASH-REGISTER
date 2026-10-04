@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -16,7 +18,12 @@ android {
     }
 
     defaultConfig {
-        val rasterOutput = providers.gradleProperty("kingclubUsbRasterOutput").orElse("false").get()
+        // One release flag shared with Dart; avoids a UI-enabled/native-disabled APK.
+        val defines = providers.gradleProperty("dart-defines").orElse("").get()
+            .split(",").filter { it.isNotEmpty() }
+            .map { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }
+        val rasterOutput = defines.firstOrNull { it.startsWith("CASHIER_USB_RASTER_OUTPUT=") }
+            ?.substringAfter("=") ?: "false"
         require(rasterOutput in setOf("true", "false"))
         buildConfigField("boolean", "USB_RASTER_OUTPUT_ENABLED", rasterOutput)
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).

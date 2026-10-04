@@ -1,3 +1,5 @@
+import '../hardware/paid_receipt_printer.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -30,6 +32,31 @@ class _TableReceiptDialogState extends State<TableReceiptDialog>
   TableReceiptDocument? document;
   bool foreground = true, loading = false, failed = false;
   bool raster = false;
+  bool printing = false;
+  String printStatus = '';
+
+  Future<void> printReceipt() async {
+    if (printing || document == null) return;
+    setState(() {
+      printing = true;
+      printStatus = 'checkoutPrinting';
+    });
+    final status = await printPaidTableReceipt(
+      auth: widget.auth,
+      checkoutRef: widget.checkoutRef,
+      tableRef: widget.tableRef,
+      sessionRef: widget.sessionRef,
+      language: widget.language,
+      reprint: true,
+      stillCurrent: () => mounted && foreground,
+    );
+    if (mounted)
+      setState(() {
+        printing = false;
+        printStatus = status;
+      });
+  }
+
   int epoch = 0;
   Timer? expiry;
   String t(String key) => tr(widget.language, key);
@@ -155,6 +182,11 @@ class _TableReceiptDialogState extends State<TableReceiptDialog>
               Row(
                 children: [
                   Expanded(child: Text(t('tableReceiptTitle'))),
+                  FilledButton.icon(
+                    onPressed: data == null || printing ? null : printReceipt,
+                    icon: const Icon(Icons.print_outlined),
+                    label: Text(t('receiptReprint')),
+                  ),
                   if (data != null)
                     IconButton(
                       key: const ValueKey('table-receipt-raster-toggle'),
@@ -177,6 +209,7 @@ class _TableReceiptDialogState extends State<TableReceiptDialog>
                   ),
                 ],
               ),
+              if (printStatus.isNotEmpty) Text(t(printStatus)),
               if (loading) const LinearProgressIndicator(),
               Expanded(
                 child: data == null

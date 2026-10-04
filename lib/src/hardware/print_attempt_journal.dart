@@ -29,8 +29,10 @@ class PrintAttempt {
   factory PrintAttempt.decode(Object? raw) {
     if (raw is! Map<String, dynamic> ||
         raw.length != (raw.containsKey('documentHash') ? 6 : 5) ||
-        (raw.containsKey('documentHash') && (raw['documentHash'] is! String ||
-          !RegExp(r'^[0-9a-f]{64}$').hasMatch(raw['documentHash'] as String))) ||
+        (raw.containsKey('documentHash') &&
+            (raw['documentHash'] is! String ||
+                !RegExp(r'^[0-9a-f]{64}$')
+                    .hasMatch(raw['documentHash'] as String))) ||
         raw['id'] is! String ||
         !RegExp(r'^[0-9a-f]{32}$').hasMatch(raw['id'] as String) ||
         raw['contentHash'] is! String ||
@@ -46,6 +48,7 @@ class PrintAttempt {
           'transport_accepted',
           'unknown',
           'cancelled',
+          'reviewed',
         }.contains(raw['state'])) {
       throw const FormatException('PRINT_ATTEMPT_INVALID');
     }
@@ -117,6 +120,7 @@ class PrintAttemptJournal {
     required String targetHash,
     required int byteCount,
     String? documentHash,
+    bool confirmedReprint = false,
   }) => _serial(() async {
     final candidate = PrintAttempt.decode({
       'id': id,
@@ -130,10 +134,28 @@ class PrintAttemptJournal {
     if (entries.any((e) => e.id == id)) {
       throw const FormatException('PRINT_ATTEMPT_EXISTS');
     }
+    if (confirmedReprint && documentHash == null)
+      throw const FormatException('PRINT_SCOPE_REQUIRED');
+    if (confirmedReprint) {
+      // Explicit operator reprint only: retain previous evidence as reviewed.
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].documentHash == documentHash &&
+            entries[i].requiresReview) {
+          entries[i] = PrintAttempt.decode({
+            ...entries[i].encode(),
+            'state': 'reviewed',
+          });
+        }
+      }
+    }
     if (entries.any((e) => e.requiresReview)) {
       throw const FormatException('PRINT_REVIEW_REQUIRED');
     }
-    if (documentHash != null && entries.any((e) => e.documentHash == documentHash && e.state != 'cancelled')) {
+    if (!confirmedReprint &&
+        documentHash != null &&
+        entries.any(
+          (e) => e.documentHash == documentHash && e.state != 'cancelled',
+        )) {
       throw const FormatException('PRINT_DOCUMENT_ALREADY_ATTEMPTED');
     }
     if (entries.length >= 1000) {

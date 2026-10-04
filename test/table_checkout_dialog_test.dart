@@ -406,7 +406,7 @@ void main() {
       expect(auth.collections, 0);
       expect(auth.preparations, 0);
       expect(
-        find.text(tr(UiLanguage.zh, 'tableCheckout_settled')),
+        find.text(tr(UiLanguage.zh, 'checkoutSuccess')),
         findsOneWidget,
       );
       await tester.pumpWidget(const SizedBox.shrink());

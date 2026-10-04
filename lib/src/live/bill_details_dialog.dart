@@ -22,7 +22,9 @@ class BillDetailsDialog extends StatelessWidget {
     this.canRecall,
     this.canRefund,
     this.canReturnUnserved,
+    this.canReadReceipt = false,
   });
+  final bool canReadReceipt;
   final BillProductGroup group;
   final UiLanguage language;
   final bool Function(LiveOrder order, OrderItem item) canServe;
@@ -213,6 +215,12 @@ class BillDetailsDialog extends StatelessWidget {
                         ? () => select('recall')
                         : null,
                     child: Text(t('billRecall')),
+                  ),
+                if (paid && order.tableCheckoutRef != null && canReadReceipt)
+                  OutlinedButton.icon(
+                    onPressed: () => select('receipt'),
+                    icon: const Icon(Icons.print_outlined, size: 18),
+                    label: Text(t('tableReceiptTitle')),
                   ),
                 if (paid && item.priceCents > 0)
                   OutlinedButton(

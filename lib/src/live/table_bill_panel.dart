@@ -1,3 +1,4 @@
+import 'table_receipt_dialog.dart';
 import 'bill_product_group.dart';
 import 'workspace_read_cache.dart';
 import 'bill_product_card.dart';
@@ -631,9 +632,25 @@ class _TableBillPanelState extends State<TableBillPanel>
         canServe: canServe,
         canRecall: canRecall,
         canReturnUnserved: canReturnUnserved,
+        canReadReceipt: identity?.permissions.contains('orders.read') == true,
       ),
     );
     if (!mounted || !current() || selected == null) return;
+    if (selected.action == 'receipt' &&
+        selected.order.tableCheckoutRef != null &&
+        identity?.permissions.contains('orders.read') == true) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => TableReceiptDialog(
+          auth: widget.auth,
+          checkoutRef: selected.order.tableCheckoutRef!,
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          language: widget.language,
+        ),
+      );
+      return;
+    }
     if (selected.action == 'return' &&
         !selected.served &&
         canReturnUnserved(selected.order, selected.item)) {

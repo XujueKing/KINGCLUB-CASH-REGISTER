@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/services.dart';
 
@@ -52,7 +53,10 @@ class NativeRasterPrintTransport implements RasterPrintTransport {
         throw const FormatException();
       }
       return raw['acceptedBytes'] as int;
-    } catch (_) {
+    } catch (error) {
+      if (error is PlatformException && RegExp(r'^[A-Z_]{1,80}$').hasMatch(error.code)) {
+        debugPrint('cashier_print_native: ${error.code}');
+      }
       throw const FormatException('USB_OUTPUT_UNKNOWN');
     }
   }

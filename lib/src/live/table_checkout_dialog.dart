@@ -1,3 +1,4 @@
+import '../hardware/paid_receipt_printer.dart';
 import 'table_discount_dialog.dart';
 import '../hardware/receipt_document_renderer.dart';
 import '../hardware/receipt_output_panel.dart';
@@ -48,6 +49,9 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   TableCheckoutAdmission? admission;
   TableCheckoutResult? result;
   String choice = 'wechat', message = '';
+  String printStatus = '';
+  bool printing = false;
+  final printedCheckouts = <String>{};
   bool foreground = true, busy = false, ready = false;
   bool cancelled = false;
   bool replaceCash = false;
@@ -91,6 +95,28 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         ? 'balance_$value'
         : 'provider_$value',
   );
+  Future<void> printSettledReceipt(TableCheckoutResult settled) async {
+    if (!settled.settled || !printedCheckouts.add(settled.checkoutRef)) return;
+    setState(() {
+      printing = true;
+      printStatus = 'checkoutPrinting';
+    });
+    final status = await printPaidTableReceipt(
+      auth: widget.auth,
+      checkoutRef: settled.checkoutRef,
+      tableRef: widget.tableRef,
+      sessionRef: widget.sessionRef,
+      language: widget.language,
+      stillCurrent: () =>
+          mounted && foreground && result?.checkoutRef == settled.checkoutRef,
+    );
+    if (mounted)
+      setState(() {
+        printing = false;
+        printStatus = status;
+      });
+  }
+
   Future<void> openReceipt() async {
     final settled = result;
     final identity = widget.auth.session;
@@ -158,7 +184,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   }
 
   String get billReadFailure => [
-    '????????????',
+    '账单暂未读取，请重试',
     'Could not load the bill. Please retry.',
     '????????????',
     '??????????????????? ????????????????',
@@ -321,7 +347,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   }
 
   Future<void> dismissCheckout() async {
-    if (busy) return;
+    if (busy || printing) return;
     if (command != null &&
         admission?.paymentStatus == 'prepared' &&
         result?.settled != true) {
@@ -642,6 +668,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
           cancelled = next.closedUnpaid;
           message = t('tableCheckout_${next.state}');
         });
+        if (next.settled) unawaited(printSettledReceipt(next));
       }
     } catch (error) {
       // A failed send must be classified by the server's original request.
@@ -911,7 +938,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                     ),
                   ),
                   IconButton(
-                    onPressed: busy ? null : dismissCheckout,
+                    onPressed: busy || printing ? null : dismissCheckout,
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -937,6 +964,56 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
               Expanded(
                 child: !foreground
                     ? const SizedBox.shrink()
+                    : result?.settled == true
+                    ? Center(
+                        child: Column(
+                          key: const ValueKey('checkout-success'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.check_circle,
+                              color: Color(0xff168657),
+                              size: 68,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              t('checkoutSuccess'),
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              '￥ ${formatCents(originalDue ?? 0)}',
+                              style: const TextStyle(
+                                fontSize: 38,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            if (printStatus.isNotEmpty) Text(t(printStatus)),
+                            const SizedBox(height: 20),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                OutlinedButton(
+                                  key: const ValueKey(
+                                    'checkout-settled-receipt',
+                                  ),
+                                  onPressed: printing ? null : openReceipt,
+                                  child: Text(t('tableReceiptTitle')),
+                                ),
+                                const SizedBox(width: 16),
+                                FilledButton(
+                                  onPressed: printing ? null : dismissCheckout,
+                                  child: Text(t('checkoutDone')),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )
                     : Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

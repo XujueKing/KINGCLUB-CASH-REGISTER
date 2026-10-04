@@ -105,6 +105,7 @@ class ReceiptRasterPlan {
     required UiLanguage language,
     required int widthDots,
     String? fontFamily,
+    bool reprint = false,
   }) {
     String t(String key) => tr(language, key);
     String amount(String key, int cents) =>
@@ -113,6 +114,7 @@ class ReceiptRasterPlan {
     final header = [
       'KINGCLUB POS',
       t('tableReceiptTitle'),
+      if (reprint) t('receiptReprint'),
       document.checkoutRef,
       t('order_paid'),
     ];

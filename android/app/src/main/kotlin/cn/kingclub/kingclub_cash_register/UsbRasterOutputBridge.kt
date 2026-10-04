@@ -64,7 +64,12 @@ class UsbRasterOutputBridge(private val activity: Activity, messenger: BinaryMes
                             used.add(request.id)
                             val epoch = generation
                             executor.execute {
-                                val accepted = runCatching { write(request, epoch) }.getOrNull()
+                                val accepted = runCatching { write(request, epoch) }.onFailure {
+                                    val code = it.message
+                                    if (code != null && code.matches(Regex("^[A-Z_]{1,80}$"))) {
+                                        android.util.Log.i("KingPrinter", code)
+                                    }
+                                }.getOrNull()
                                 main.post {
                                     busy.set(false)
                                     if (accepted == null) result.error("USB_OUTPUT_UNKNOWN", null, null)
@@ -94,7 +99,8 @@ class UsbRasterOutputBridge(private val activity: Activity, messenger: BinaryMes
         val iface = (0 until device.interfaceCount).map { device.getInterface(it) }.single {
             it.id == request.n.getValue("interfaceId") && it.alternateSetting == request.n.getValue("alternate")
         }
-        // Do not change alternate settings or disconnect an existing kernel driver.
+        // Keep the selected alternate setting. The installed XP-80U is bound
+        // to Linux usblp; Android must detach that kernel driver to claim it.
         require(iface.alternateSetting == 0)
         val endpoint = (0 until iface.endpointCount).map { iface.getEndpoint(it) }.single {
             it.address == request.n.getValue("endpointAddress")
@@ -104,7 +110,9 @@ class UsbRasterOutputBridge(private val activity: Activity, messenger: BinaryMes
         try {
             val current = manager.openDevice(device) ?: error("open_failed")
             connection = current
-            require(active() && current.claimInterface(iface, false))
+            require(active())
+            val installedPrinter = device.vendorId == 1155 && device.productId == 22339
+            check(current.claimInterface(iface, installedPrinter)) { "USB_CLAIM_FAILED" }
             claimed = iface
             val deadline = SystemClock.elapsedRealtime() + 20000
             var offset = 0
@@ -117,7 +125,7 @@ class UsbRasterOutputBridge(private val activity: Activity, messenger: BinaryMes
                 val remaining = (deadline - SystemClock.elapsedRealtime()).coerceAtMost(1000).toInt()
                 require(remaining > 0)
                 val sent = current.bulkTransfer(endpoint, request.bytes, offset, count, remaining)
-                if (sent != count) error("partial_or_unknown") // Never resend a chunk.
+                if (sent != count) error("USB_PARTIAL_OR_UNKNOWN") // Never resend a chunk.
                 offset += sent
             }
             require(active())

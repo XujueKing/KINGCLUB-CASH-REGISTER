@@ -1,3 +1,11 @@
+## 2026-10-04 收款成功反馈与自动小票
+
+整桌收款经服务器验证 settled 后显示绿色成功页和本次金额，并读取同一 checkout 的服务端小票自动打印。失败只影响打印提示，不更改付款、不重复收款。已付款商品明细增加整桌小票入口，可手动补打并在纸面标记“补打小票”。自动发送沿用原有持久化小票去重；明确补打只解除该小票的旧未知打印状态，保留 reviewed 记录，不清除其他小票记录。
+
+现场 XP-80U 为 USB 0483:5743 / 80mm，复用现有 576 点点阵和 USB bulk 输出；只选择唯一、已授权的匹配打印设备。USB 权限在设备设置申请。实机 sysfs 确认该打印接口被 usblp 内核驱动占用，因此仅对已识别的 XP-80U 使用 Android claimInterface(force=true)，结束释放接口；其他 USB 设备不强制接管。接口占用行为参照 [Android UsbDeviceConnection 官方说明](https://developer.android.com/reference/android/hardware/usb/UsbDeviceConnection#claimInterface(android.hardware.usb.UsbInterface,%20boolean))。发布脚本的 CASHIER_USB_RASTER_OUTPUT 同时生成 Dart 和 Android BuildConfig 开关，消除原先界面开启但原生关闭的问题。权限缺失、设备断开或不明确的发送均不会被描述为实际已出纸。
+
+验证：付款对话框、小票对话框、商品明细及打印 journal/coordinator 共 36 项通过，新增补打恢复测试通过（打印服务共 4 项）。ARM32 release 构建及保留数据安装完成；原交易小票读取成功，在 USB 权限恢复、Android 开关统一及 XP-80U 接口 claim 修正后，实机补打已返回 transport_accepted（完整字节接收）；纸张与文字结果仍等待现场确认。静态分析无 error/warning，有既有及局部格式 info。没有发起新的扣款或退款，没有修改服务端账务。
+
 # 打印接入：设备事实与只读检查
 
 ## 测试预览到发送入口（源码已连接，默认关闭）
