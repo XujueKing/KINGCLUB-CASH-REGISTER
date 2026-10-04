@@ -508,6 +508,11 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                       return Row(
                         children: [
                           Expanded(flex: 2, child: grid),
+                          const VerticalDivider(
+                            width: 1,
+                            thickness: 1,
+                            color: Color(0xffd7e2dc),
+                          ),
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.all(12),
@@ -528,7 +533,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                           ),
                                         ),
                                         child: Text(
-                                          '吧台-V$selectedBarSeat',
+                                          '吧台-B$selectedBarSeat',
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 22,
