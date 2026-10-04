@@ -53,6 +53,9 @@ class CatalogProduct {
   CatalogProduct(Map<String, dynamic> v, {String? storeRef})
     : thumbnailPath = productThumbnail(v['bottleMaterial'], storeRef ?? ''),
       reference = _ref(v['productRef']),
+      productGroupRef = v['productGroupRef'] == null
+          ? null
+          : _ref(v['productGroupRef']),
       categoryRef = _ref(v['categoryRef']),
       names = _words(v['names']),
       specifications = _words(v['specifications']),
@@ -69,6 +72,7 @@ class CatalogProduct {
     }
   }
   final String reference, categoryRef;
+  final String? productGroupRef;
   final String? thumbnailPath;
   final List<String> names, specifications;
   final int priceCents, revision, sortOrder, available;

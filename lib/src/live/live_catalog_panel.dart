@@ -41,8 +41,8 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
   CatalogSnapshot? data;
   List<CatalogCategory> categories = [];
   String? category;
-  final cursors = <String?>[null];
-  int page = 0, epoch = 0;
+  List<List<CatalogProduct>> groups = [];
+  int epoch = 0;
   bool loading = false, failed = false, foreground = true;
   String t(String key) => tr(widget.language, key);
 
@@ -91,37 +91,40 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
 
   Future<void> load({bool reset = false, int? target}) async {
     final generation = ++epoch, identity = widget.auth.session;
-    final previousPage = page;
-    if (reset) {
-      cursors
-        ..clear()
-        ..add(null);
-      page = 0;
-    }
-    final requestedPage = target ?? page;
     setState(() {
-      if (requestedPage != previousPage) data = null;
       loading = true;
       failed = false;
     });
     try {
-      final result = await widget.auth.readCatalog(
-        categoryRef: category,
-        afterProduct: cursors[requestedPage],
-      );
-      if (!mounted ||
-          generation != epoch ||
-          !identical(identity, widget.auth.session)) {
-        return;
-      }
-      if (result.nextAfterProduct != null &&
-          cursors.take(requestedPage + 1).contains(result.nextAfterProduct)) {
-        throw const FormatException();
+      final products = <CatalogProduct>[];
+      final seen = <String>{};
+      String? cursor;
+      late CatalogSnapshot result;
+      do {
+        result = await widget.auth.readCatalog(
+          categoryRef: category,
+          afterProduct: cursor,
+        );
+        if (!mounted ||
+            generation != epoch ||
+            !identical(identity, widget.auth.session))
+          return;
+        products.addAll(result.products);
+        cursor = result.nextAfterProduct;
+        if (cursor != null && (!seen.add(cursor) || seen.length >= 100)) {
+          throw const FormatException();
+        }
+      } while (cursor != null);
+      final families = <String, List<CatalogProduct>>{};
+      for (final p in products) {
+        final key =
+            '${p.categoryRef}/${p.productGroupRef == null ? "sku:${p.reference}" : "group:${p.productGroupRef}"}';
+        (families[key] ??= []).add(p);
       }
       setState(() {
         data = result;
         categories = result.categories;
-        page = requestedPage;
+        groups = families.values.toList();
         loading = false;
       });
     } catch (_) {
@@ -237,20 +240,16 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                       .floor()
                       .clamp(1, 6);
                   return SwipeGrid(
-                    key: ValueKey('catalog-page-$category-$page'),
+                    key: ValueKey('catalog-page-$category'),
                     columns: columns,
                     tileHeight: 150 * scale,
                     loading: loading,
-                    hasPrevious: page > 0,
-                    hasNext: data?.nextAfterProduct != null,
-                    onPrevious: () => unawaited(load(target: page - 1)),
-                    onNext: () {
-                      cursors.removeRange(page + 1, cursors.length);
-                      cursors.add(data!.nextAfterProduct);
-                      unawaited(load(target: page + 1));
-                    },
-                    itemCount: data!.products.length,
-                    itemBuilder: (context, i) => productCard(data!.products[i]),
+                    hasPrevious: false,
+                    hasNext: false,
+                    onPrevious: () {},
+                    onNext: () {},
+                    itemCount: groups.length,
+                    itemBuilder: (context, i) => productCard(groups[i]),
                   );
                 },
               ),
@@ -258,14 +257,72 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     ],
   );
 
-  Widget productCard(CatalogProduct p) {
-    final available = p.inventoryKnown && p.available > 0;
-    final canSelect =
-        widget.onSelect != null &&
-        foreground &&
-        !failed &&
-        available &&
-        (widget.canAdd?.call(p) ?? true);
+  bool canSelectProduct(CatalogProduct p) =>
+      widget.onSelect != null &&
+      foreground &&
+      !failed &&
+      p.inventoryKnown &&
+      p.available > 0 &&
+      (widget.canAdd?.call(p) ?? true);
+
+  String variantCopy(String values) => values.split('|')[widget.language.index];
+
+  Future<void> chooseVariant(List<CatalogProduct> variants) async {
+    if (variants.length == 1) {
+      if (canSelectProduct(variants.first)) widget.onSelect!(variants.first);
+      return;
+    }
+    final generation = epoch, identity = widget.auth.session;
+    final selected = await showDialog<CatalogProduct>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(variants.first.name(widget.language)),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final p in variants)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        key: ValueKey('catalog-variant-${p.reference}'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.all(18),
+                        ),
+                        onPressed: canSelectProduct(p)
+                            ? () => Navigator.pop(context, p)
+                            : null,
+                        child: Text(
+                          '${p.specification(widget.language)}   ${data!.currency} ${formatCents(p.priceCents)}\n${p.inventoryKnown ? "${t('catalogAvailable')}: ${p.available}" : t('catalogUnknown')}',
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (selected != null &&
+        mounted &&
+        generation == epoch &&
+        identical(identity, widget.auth.session) &&
+        canSelectProduct(selected)) {
+      widget.onSelect!(selected);
+    }
+  }
+
+  Widget productCard(List<CatalogProduct> variants) {
+    final p = variants.first;
+    final multiple = variants.length > 1;
+    final price = variants.map((p) => p.priceCents).reduce(math.min);
+    final available = variants.any((p) => p.inventoryKnown && p.available > 0);
+    final canSelect = variants.any(canSelectProduct);
     final stockColor = !p.inventoryKnown
         ? const Color(0xff986500)
         : available
@@ -283,7 +340,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       child: InkWell(
         key: ValueKey('catalog-select-${p.reference}'),
         borderRadius: BorderRadius.circular(8),
-        onTap: canSelect ? () => widget.onSelect!(p) : null,
+        onTap: canSelect ? () => unawaited(chooseVariant(variants)) : null,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -341,7 +398,13 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                         Tooltip(
                           message: p.specification(widget.language),
                           child: Text(
-                            p.specification(widget.language),
+                            multiple
+                                ? variants
+                                      .map(
+                                        (p) => p.specification(widget.language),
+                                      )
+                                      .join(' / ')
+                                : p.specification(widget.language),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -364,7 +427,9 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          !p.inventoryKnown
+                          multiple
+                              ? variantCopy('多规格|Multiple sizes|多規格|หลายขนาด')
+                              : !p.inventoryKnown
                               ? t('catalogUnknown')
                               : !available
                               ? t('catalogSoldOut')
@@ -379,7 +444,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${data!.currency} ${formatCents(p.priceCents)}',
+                          '${data!.currency} ${formatCents(price)}${multiple ? variantCopy(' 起| +| 起| +') : ''}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -390,7 +455,14 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                       ],
                     ),
                   ),
-                  if (widget.onSelect != null)
+                  if (widget.onSelect != null && multiple)
+                    TextButton(
+                      onPressed: canSelect
+                          ? () => unawaited(chooseVariant(variants))
+                          : null,
+                      child: Text(variantCopy('选规格|Size|選規格|ขนาด')),
+                    )
+                  else if (widget.onSelect != null)
                     IconButton.filledTonal(
                       key: ValueKey('catalog-add-${p.reference}'),
                       style: IconButton.styleFrom(
@@ -401,7 +473,9 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                       ),
                       iconSize: 20,
                       tooltip: t('cartAdd'),
-                      onPressed: canSelect ? () => widget.onSelect!(p) : null,
+                      onPressed: canSelect
+                          ? () => unawaited(chooseVariant(variants))
+                          : null,
                       icon: const Icon(Icons.add),
                     )
                   else
