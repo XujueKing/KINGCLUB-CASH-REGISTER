@@ -200,7 +200,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             child: Column(
               children: [
                 Container(
-                  height: 40,
+                  height: 44,
                   color: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,

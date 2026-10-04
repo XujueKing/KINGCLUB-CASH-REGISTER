@@ -243,6 +243,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                     key: ValueKey('catalog-page-$category'),
                     columns: columns,
                     tileHeight: 132 * scale,
+                    fillHeight: true,
                     loading: loading,
                     hasPrevious: false,
                     hasNext: false,

@@ -15,9 +15,11 @@ class SwipeGrid extends StatefulWidget {
     required this.hasNext,
     required this.onPrevious,
     required this.onNext,
+    this.fillHeight = false,
   });
   final int itemCount, columns;
   final double tileHeight;
+  final bool fillHeight;
   final IndexedWidgetBuilder itemBuilder;
   final bool loading, hasPrevious, hasNext;
   final VoidCallback onPrevious, onNext;
@@ -37,6 +39,11 @@ class _SwipeGridState extends State<SwipeGrid> {
       final pages = (widget.itemCount / capacity).ceil().clamp(1, 10000);
       final current = localPage.clamp(0, pages - 1);
       final offset = widget.hasPrevious ? 1 : 0;
+      final dots = pages + offset + (widget.hasNext ? 1 : 0) > 1 ? 24 : 0;
+      final extent = widget.fillHeight
+          ? ((box.maxHeight - dots - 12 - (rows - 1) * 10) / rows)
+              .clamp(widget.tileHeight, double.infinity)
+          : widget.tileHeight;
       final begin = current * capacity;
       final end = (begin + capacity).clamp(0, widget.itemCount);
       return SwipePages(
@@ -65,7 +72,7 @@ class _SwipeGridState extends State<SwipeGrid> {
             crossAxisCount: widget.columns,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            mainAxisExtent: widget.tileHeight,
+            mainAxisExtent: extent,
           ),
           itemCount: end - begin,
           itemBuilder: (context, index) =>
