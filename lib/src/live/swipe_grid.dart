@@ -49,6 +49,67 @@ class _SwipeGridState extends State<SwipeGrid> {
               double.infinity,
             )
           : widget.tileHeight;
+      if (widget.fillHeight && !widget.hasPrevious && !widget.hasNext) {
+        return Column(
+          children: [
+            Expanded(
+              child: PageView.builder(
+                key: ValueKey('swipe-pages'),
+                itemCount: pages,
+                onPageChanged: (page) => setState(() => localPage = page),
+                itemBuilder: (context, page) {
+                  final begin = page * capacity;
+                  final count = (widget.itemCount - begin).clamp(0, capacity);
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: widget.columns,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      mainAxisExtent: extent,
+                    ),
+                    itemCount: count,
+                    itemBuilder: (context, index) =>
+                        widget.itemBuilder(context, begin + index),
+                  );
+                },
+              ),
+            ),
+            SizedBox(
+              height: 24,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (
+                    var i = (current - 3).clamp(0, (pages - 7).clamp(0, pages));
+                    pages > 1 &&
+                        i < pages &&
+                        i <
+                            (current - 3).clamp(
+                                  0,
+                                  (pages - 7).clamp(0, pages),
+                                ) +
+                                7;
+                    i++
+                  )
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: i == current ? 16 : 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: i == current
+                            ? const Color(0xff17483b)
+                            : const Color(0xffbacbc2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      }
       final begin = current * capacity;
       final end = (begin + capacity).clamp(0, widget.itemCount);
       return SwipePages(

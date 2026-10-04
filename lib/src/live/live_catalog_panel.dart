@@ -41,7 +41,10 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
   CatalogSnapshot? data;
   List<CatalogCategory> categories = [];
   String? category;
-  List<List<CatalogProduct>> groups = [];
+  List<List<CatalogProduct>> allGroups = [];
+  List<List<CatalogProduct>> get groups => category == null
+      ? allGroups
+      : allGroups.where((g) => g.first.categoryRef == category).toList();
   int epoch = 0;
   bool loading = false, failed = false, foreground = true;
   String t(String key) => tr(widget.language, key);
@@ -59,6 +62,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     setState(() {
       data = null;
       categories = [];
+      allGroups = [];
       loading = false;
       failed = false;
     });
@@ -71,6 +75,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       oldWidget.auth.removeListener(identityChanged);
       widget.auth.addListener(identityChanged);
       category = null;
+      allGroups = [];
       categories = [];
       data = null;
       unawaited(load(reset: true));
@@ -102,7 +107,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       late CatalogSnapshot result;
       do {
         result = await widget.auth.readCatalog(
-          categoryRef: category,
+          categoryRef: null,
           afterProduct: cursor,
         );
         if (!mounted ||
@@ -124,7 +129,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       setState(() {
         data = result;
         categories = result.categories;
-        groups = families.values.toList();
+        allGroups = families.values.toList();
         loading = false;
       });
     } catch (_) {
@@ -139,9 +144,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
 
   void select(String? ref) {
     if (category == ref) return;
-    data = null;
-    category = ref;
-    unawaited(load(reset: true));
+    setState(() => category = ref);
   }
 
   @override
@@ -343,7 +346,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
         borderRadius: BorderRadius.circular(8),
         onTap: canSelect ? () => unawaited(chooseVariant(variants)) : null,
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

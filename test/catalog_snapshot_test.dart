@@ -73,6 +73,7 @@ a.TestAuth loginChannel() => a.TestAuth()
 class ViewAuth extends StaffAuthController {
   String? filter, cursor;
   bool fail = false;
+  int calls = 0;
   Completer<CatalogSnapshot>? gate;
   Map<String, dynamic>? reply;
   @override
@@ -80,6 +81,7 @@ class ViewAuth extends StaffAuthController {
     String? categoryRef,
     String? afterProduct,
   }) async {
+    calls++;
     filter = categoryRef;
     cursor = afterProduct;
     if (gate != null) return gate!.future;
@@ -117,52 +119,49 @@ void main() {
     await tester.pump();
     expect(identical(element, tester.element(category)), isTrue);
     expect(tester.widget<ChoiceChip>(category).onSelected, isNotNull);
+    final callsBeforeSelection = auth.calls;
     await tester.tap(category);
     await tester.pump();
+    expect(auth.calls, callsBeforeSelection);
     expect(category, findsOneWidget);
     expect(tester.widget<ChoiceChip>(category).selected, isTrue);
     auth.gate!.complete(parse(catalog()));
     await tester.pumpAndSettle();
   });
 
-  testWidgets('unknown stock blocks both card and plus in either payment timing', (
-    tester,
-  ) async {
-    final auth = ViewAuth();
-    addTearDown(auth.dispose);
-    var selections = 0;
-    for (final timing in ['postpay', 'prepay']) {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: LiveCatalogPanel(
-              auth: auth,
-              language: UiLanguage.values.first,
-              onBack: () {},
-              paymentTiming: timing,
-              onSelect: (_) => selections++,
+  testWidgets(
+    'unknown stock blocks both card and plus in either payment timing',
+    (tester) async {
+      final auth = ViewAuth();
+      addTearDown(auth.dispose);
+      var selections = 0;
+      for (final timing in ['postpay', 'prepay']) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: LiveCatalogPanel(
+                auth: auth,
+                language: UiLanguage.values.first,
+                onBack: () {},
+                paymentTiming: timing,
+                onSelect: (_) => selections++,
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final button = find.byKey(const ValueKey('catalog-add-p001'));
-      expect(
-        tester.widget<IconButton>(button).onPressed,
-        isNull,
-      );
-      final card = find.byKey(const ValueKey('catalog-select-p001'));
-      expect(
-        tester.widget<InkWell>(card).onTap,
-        isNull,
-      );
-      await tester.tap(card);
-      await tester.tap(button);
+        );
+        await tester.pumpAndSettle();
+        final button = find.byKey(const ValueKey('catalog-add-p001'));
+        expect(tester.widget<IconButton>(button).onPressed, isNull);
+        final card = find.byKey(const ValueKey('catalog-select-p001'));
+        expect(tester.widget<InkWell>(card).onTap, isNull);
+        await tester.tap(card);
+        await tester.tap(button);
+        expect(selections, 0);
+      }
       expect(selections, 0);
-    }
-    expect(selections, 0);
-    await tester.pumpWidget(const SizedBox());
-  });
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
     'compact catalog fits fifteen products and respects stock in four languages',
@@ -423,7 +422,10 @@ void main() {
       }
       await tester.tap(find.byKey(const ValueKey('catalog-category-c1')));
       await tester.pumpAndSettle();
-      expect(auth.filter, 'c1');
+      expect(
+        auth.filter,
+        isNull,
+      ); // Category selection uses the complete local snapshot.
       expect(auth.cursor, isNull);
       auth.fail = true;
       await tester.tap(find.byKey(const ValueKey('catalog-refresh')));
