@@ -72,6 +72,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   final Map<String, CatalogProduct> initialBarProducts = {};
   final Set<String> barDrafts = {};
   bool emptyBarMenu = false;
+  int selectedFloor = 1;
+
+  int tableFloor(LiveTable table) =>
+      RegExp(r'^天字\s*(1|一|壹)\s*号$').hasMatch(table.name.trim()) ? 2 : 1;
   final List<List<String>> barGroups = [];
   String get barGroupKey =>
       'bar_groups_${widget.auth.session?.base}_${widget.auth.session?.storeRef}';
@@ -651,7 +655,12 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                             .floor()
                             .clamp(1, 8);
                     final ordinaryTables = data.tables
-                        .where((t) => !t.isBarCounter && !t.isBarSeat)
+                        .where(
+                          (t) =>
+                              !t.isBarCounter &&
+                              !t.isBarSeat &&
+                              tableFloor(t) == selectedFloor,
+                        )
                         .toList();
                     final counters = data.tables
                         .where((t) => t.isBarCounter)
@@ -662,7 +671,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         if (data.tables.isEmpty) Text(t('liveNoTables')),
                         Expanded(
                           child: SwipeGrid(
-                            key: ValueKey('table-page-$page'),
+                            key: ValueKey(
+                              'table-page-$page-floor-$selectedFloor',
+                            ),
                             columns: columns,
                             tileHeight: (focused == null ? 124 : 104) * scale,
                             itemCount: ordinaryTables.length,
@@ -1144,11 +1155,33 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     child: Row(
       children: [
         Expanded(
-          child: Text(
-            t((widget.menuVisible ?? emptyBarMenu) ? 'ordering' : 'tables'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          child: Row(
+            children: [
+              Text(
+                t((widget.menuVisible ?? emptyBarMenu) ? 'ordering' : 'tables'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (!(widget.menuVisible ?? emptyBarMenu)) ...[
+                const SizedBox(width: 14),
+                for (final floor in [1, 2]) ...[
+                  ChoiceChip(
+                    key: ValueKey('table-floor-$floor'),
+                    label: Text(
+                      floor == 1
+                          ? barText('一楼', '1F', '一樓', 'ชั้น 1')
+                          : barText('二楼', '2F', '二樓', 'ชั้น 2'),
+                    ),
+                    selected: selectedFloor == floor,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() => selectedFloor = floor),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+              ],
+            ],
           ),
         ),
         if (realtime != null &&
