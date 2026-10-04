@@ -46,6 +46,18 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   TableCheckoutCommand? command;
   TableCheckoutAdmission? admission;
   TableCheckoutResult? result;
+  String? settledOwner;
+  String? get currentOwner {
+    final identity = widget.auth.session;
+    if (identity == null || !identity.expiresAt.isAfter(DateTime.now()))
+      return null;
+    return '${identity.base}|${identity.storeRef}|${identity.employeeRef}|${widget.tableRef}|${widget.sessionRef}';
+  }
+
+  bool get keepSettlement =>
+      result?.settled == true &&
+      settledOwner != null &&
+      settledOwner == currentOwner;
   String choice = 'wechat', message = '';
   String printStatus = '';
   bool printing = false;
@@ -159,7 +171,8 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
           confirmationOpen ||
           ModalRoute.of(context)?.isCurrent != true ||
           ['cash', 'pos'].contains(channel) ||
-          !ready)
+          !ready ||
+          result?.settled == true)
         return;
       if (command == null) await startCollection();
       if (!mounted || admission?.paymentStatus != 'prepared') return;
@@ -186,6 +199,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   ][widget.language.index];
 
   void invalidate() {
+    final keep = keepSettlement;
     epoch++;
     final printRoute = unpaidPrintRoute;
     unpaidPrintRoute = null;
@@ -200,10 +214,13 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     input.clear();
     if (mounted) {
       setState(() {
-        quote = null;
-        command = null;
-        admission = null;
-        result = null;
+        if (!keep) {
+          quote = null;
+          command = null;
+          admission = null;
+          result = null;
+          settledOwner = null;
+        }
         ready = false;
         busy = false;
         confirmationOpen = false;
@@ -250,6 +267,15 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
 
   Future<void> load() async {
     if (!foreground || busy) return;
+    if (keepSettlement) {
+      // A refreshed login does not undo a verified payment or reopen collection.
+      authorityExpiry?.cancel();
+      authorityExpiry = Timer(
+        widget.auth.session!.expiresAt.difference(DateTime.now()),
+        invalidate,
+      );
+      return;
+    }
     final e = epoch;
     setState(() => busy = true);
     try {
@@ -660,6 +686,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       if (current(e)) {
         setState(() {
           result = next;
+          if (next.settled) settledOwner = currentOwner;
           cancelled = next.closedUnpaid;
           message = t('tableCheckout_${next.state}');
         });

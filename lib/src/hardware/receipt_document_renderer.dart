@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
+import 'package:flutter/services.dart';
 
 import '../live/receipt_document.dart';
 import '../live/table_checkout_command.dart';
@@ -47,6 +48,7 @@ class ReceiptRasterPlan {
     _pages.map((p) => List<String>.unmodifiable(p.map((r) => r.text))),
   );
   static const maxRows = 2048;
+  static const _logoHeight = 116.0;
   static const _rule = _Row([], rule: true, gap: 18);
 
   static String _label(
@@ -349,6 +351,7 @@ class ReceiptRasterPlan {
     final available =
         maxRows -
         72 -
+        _logoHeight -
         header.fold<double>(0, (v, r) => v + _height(r, width, font));
     if (available <= 0) throw const FormatException('RECEIPT_HEADER_TOO_TALL');
     final pages = <List<_Row>>[];
@@ -386,6 +389,7 @@ class ReceiptRasterPlan {
     ];
     final height =
         (40 +
+                _logoHeight +
                 rows.fold<double>(
                   0,
                   (v, r) => v + _height(r, widthDots, fontFamily),
@@ -395,7 +399,34 @@ class ReceiptRasterPlan {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder)
       ..drawColor(const ui.Color(0xffffffff), ui.BlendMode.src);
-    var y = 12.0;
+    final logoData = await rootBundle.load('assets/brand/kingclub-gold.png');
+    final codec = await ui.instantiateImageCodec(
+      logoData.buffer.asUint8List(
+        logoData.offsetInBytes,
+        logoData.lengthInBytes,
+      ),
+    );
+    final logo = (await codec.getNextFrame()).image;
+    try {
+      const logoWidth = 192.0;
+      final w = math.min(logoWidth, widthDots - 32.0);
+      final h = w * logo.height / logo.width;
+      canvas.drawImageRect(
+        logo,
+        ui.Rect.fromLTWH(0, 0, logo.width.toDouble(), logo.height.toDouble()),
+        ui.Rect.fromLTWH((widthDots - w) / 2, 8, w, h),
+        ui.Paint()
+          ..filterQuality = ui.FilterQuality.high
+          ..colorFilter = const ui.ColorFilter.mode(
+            ui.Color(0xff000000),
+            ui.BlendMode.srcIn,
+          ),
+      );
+    } finally {
+      logo.dispose();
+      codec.dispose();
+    }
+    var y = 12.0 + _logoHeight;
     for (final row in rows) {
       if (row.rule) {
         final pen = ui.Paint()
