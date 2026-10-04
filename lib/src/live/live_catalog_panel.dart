@@ -285,7 +285,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
         borderRadius: BorderRadius.circular(8),
         onTap: canSelect ? () => widget.onSelect!(p) : null,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 6, 4),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -301,14 +301,39 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                       children: [
                         Tooltip(
                           message: p.name(widget.language),
-                          child: Text(
-                            p.name(widget.language),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          child: LayoutBuilder(
+                            builder: (context, bounds) {
+                              final name = p.name(widget.language);
+                              var fontSize = 16.0;
+                              while (fontSize > 12) {
+                                final measure = TextPainter(
+                                  text: TextSpan(
+                                    text: name,
+                                    style: TextStyle(
+                                      fontSize: fontSize,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  textDirection: Directionality.of(context),
+                                  textScaler: MediaQuery.textScalerOf(context),
+                                  maxLines: 2,
+                                )..layout(maxWidth: bounds.maxWidth);
+                                final fits = !measure.didExceedMaxLines;
+                                measure.dispose();
+                                if (fits) break;
+                                fontSize--;
+                              }
+                              return Text(
+                                name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: fontSize,
+                                  height: 1.15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -330,31 +355,38 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                 ],
               ),
               const Spacer(),
-              Text(
-                !p.inventoryKnown
-                    ? t('catalogUnknown')
-                    : !available
-                    ? t('catalogSoldOut')
-                    : '${t('catalogAvailable')}: ${p.available}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: stockColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      '${data!.currency} ${formatCents(p.priceCents)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          !p.inventoryKnown
+                              ? t('catalogUnknown')
+                              : !available
+                              ? t('catalogSoldOut')
+                              : '${t('catalogAvailable')}: ${p.available}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: stockColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${data!.currency} ${formatCents(p.priceCents)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (widget.onSelect != null)
