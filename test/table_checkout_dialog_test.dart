@@ -447,4 +447,44 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+  testWidgets(
+    'wechat opens ready for scanning with no extra start or confirm button',
+    (tester) async {
+      final auth = CheckoutDialogAuth(
+        permissions: ['workbench.read', 'payment.wechat'],
+      );
+      await mount(tester, auth);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text(tr(UiLanguage.zh, 'checkoutStart')), findsNothing);
+      expect(
+        find.text(tr(UiLanguage.zh, 'tableCheckoutCollect')),
+        findsNothing,
+      );
+      expect(auth.preparations, 0);
+      expect(auth.collections, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets(
+    'restored wechat also scans without confirmation and without automatically charging',
+    (tester) async {
+      final auth = CheckoutDialogAuth(
+        permissions: ['workbench.read', 'payment.wechat'],
+      );
+      auth.saved = TableCheckoutCommand.decode({
+        ...fixture.command().encoded,
+        'channel': 'wechat',
+        'accountType': null,
+      });
+      await mount(tester, auth);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(
+        find.text(tr(UiLanguage.zh, 'tableCheckoutCollect')),
+        findsNothing,
+      );
+      expect(auth.preparations, 0);
+      expect(auth.collections, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }

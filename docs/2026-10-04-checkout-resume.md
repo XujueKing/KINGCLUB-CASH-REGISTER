@@ -7,3 +7,5 @@ Existing local attempts restore automatically. Prepared attempts accept a fresh 
 The calendar history view has a settlement entry using its selected original table/session. The service accepts closed sessions for collection only; today's table is independent.
 
 Verification: nine updated dialog widget tests pass, Android ARM32 release builds, same certificate verified and SUNMI install-r preserves data. Service counterpart 1716e827, migration 307 removes cashier shopping-cart expiry only. Real payment deduction remains to be confirmed by the customer scan; automation performs no debit.
+
+Follow-up: removed the redundant Start collection / Confirm collection buttons for WeChat and Alipay. Both fresh quotes and restored prepared attempts show the direct-scan instruction. Cash/POS and balance retain their distinct confirmations. Eleven dialog tests pass. Read-only server verification confirms the cancelled test attempt is closed with no provider send or payment confirmation.

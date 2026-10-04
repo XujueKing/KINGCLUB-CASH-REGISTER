@@ -62,6 +62,13 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   String get channel => ['platform_cash', 'store_balance'].contains(choice)
       ? 'member_balance'
       : choice;
+  bool get barcodePayment => ['wechat', 'alipay'].contains(channel);
+  String get scanPrompt => [
+    '请出示付款码，扫码即可付款',
+    'Scan the customer payment code to pay',
+    '請出示付款碼，掃碼即可付款',
+    'สแกนรหัสชำระเงินของลูกค้าเพื่อชำระเงิน',
+  ][widget.language.index];
   String? get account => channel == 'member_balance' ? choice : null;
   List<String> get choices =>
       ['wechat', 'alipay', 'cash', 'pos', 'platform_cash', 'store_balance']
@@ -1047,7 +1054,22 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                       enabled: !busy && q != null,
                                       label: t('tableCheckoutCode'),
                                     ),
-                                  if (ready && original == null)
+                                  if (ready &&
+                                      barcodePayment &&
+                                      q != null &&
+                                      original == null)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 20,
+                                      ),
+                                      child: Text(
+                                        scanPrompt,
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  if (ready &&
+                                      original == null &&
+                                      (!barcodePayment || q == null))
                                     FilledButton(
                                       onPressed: busy
                                           ? null
@@ -1101,19 +1123,30 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                           label: t('tableCheckoutCode'),
                                         ),
                                       const SizedBox(height: 12),
-                                      FilledButton(
-                                        onPressed: busy
-                                            ? null
-                                            : () => unawaited(collect()),
-                                        child: Padding(
+                                      if (barcodePayment)
+                                        Padding(
                                           padding: const EdgeInsets.symmetric(
                                             vertical: 12,
                                           ),
                                           child: Text(
-                                            t('tableCheckoutCollect'),
+                                            scanPrompt,
+                                            textAlign: TextAlign.center,
                                           ),
                                         ),
-                                      ),
+                                      if (!barcodePayment)
+                                        FilledButton(
+                                          onPressed: busy
+                                              ? null
+                                              : () => unawaited(collect()),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 12,
+                                            ),
+                                            child: Text(
+                                              t('tableCheckoutCollect'),
+                                            ),
+                                          ),
+                                        ),
                                       OutlinedButton(
                                         onPressed: busy
                                             ? null
