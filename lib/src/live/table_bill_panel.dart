@@ -52,6 +52,7 @@ class TableBillPanel extends StatefulWidget {
     this.primaryAction,
     this.beforeActions,
     this.seatSessions = const [],
+    this.emptySeat = false,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -59,6 +60,9 @@ class TableBillPanel extends StatefulWidget {
   final List<Map<String, String>> seatSessions;
   final int revision;
   final bool checkoutAllowed, fillHeight, recording;
+
+  /// Selected unused seat: render the same bill without creating a session.
+  final bool emptySeat;
   final bool changesAllowed;
   final Widget? leading;
   final Widget? orderAction, primaryAction, beforeActions;
@@ -229,6 +233,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   }
 
   void restoreDisplayCache() {
+    if (widget.emptySeat) return;
     if (widget.seatSessions.isNotEmpty) return;
     if (foreground && canRead) {
       final cached =
@@ -295,6 +300,7 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   Future<void>? activeRead;
   Future<void> load({bool more = false, bool fresh = false}) async {
+    if (widget.emptySeat) return;
     final previous = activeRead;
     if (previous != null) {
       await previous;
@@ -970,7 +976,9 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   @override
   Widget build(BuildContext context) {
-    final pending = widget.seatSessions.isEmpty
+    final pending = widget.emptySeat
+        ? const OrderSummaryBucket(0, 0)
+        : widget.seatSessions.isEmpty
         ? snapshot?.sessionSummary?.buckets['pending']
         : OrderSummaryBucket(
             orders.where((o) => o.status == 'pending').length,
@@ -979,7 +987,9 @@ class _TableBillPanelState extends State<TableBillPanel>
                 .fold<int>(0, (sum, o) => sum + o.totalCents),
           );
     final summary = snapshot?.sessionSummary;
-    final paid = widget.seatSessions.isEmpty
+    final paid = widget.emptySeat
+        ? const OrderSummaryBucket(0, 0)
+        : widget.seatSessions.isEmpty
         ? summary?.buckets['netPaid'] ?? summary?.buckets['paid']
         : OrderSummaryBucket(
             orders.where((o) => o.status == 'paid').length,

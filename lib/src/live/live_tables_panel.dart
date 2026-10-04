@@ -734,99 +734,67 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          border: Border.all(
-                                            color: const Color(0xffd7e2dc),
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
+                              child: TableBillPanel(
+                                auth: widget.auth,
+                                language: widget.language,
+                                tableRef: seat.reference,
+                                sessionRef: '',
+                                revision: 0,
+                                emptySeat: true,
+                                checkoutAllowed: false,
+                                fillHeight: true,
+                                headerBuilder: (filter) => Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        border: Border.all(
+                                          color: const Color(0xffd7e2dc),
                                         ),
-                                        child: Text(
-                                          'B${seat.barSeatNumber}',
-                                          style: const TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        'B${seat.barSeatNumber}',
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          t('ordersDetails'),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        t('ordersDetails'),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      IconButton(
-                                        key: const ValueKey('empty-bar-member'),
-                                        onPressed: () =>
-                                            linkEmptyBarMember(seat),
-                                        icon: const CircleAvatar(
-                                          backgroundColor: Color(0xffe0e0e0),
-                                          child: Icon(
-                                            Icons.person,
-                                            color: Colors.grey,
-                                          ),
+                                    ),
+                                    filter,
+                                    IconButton(
+                                      key: const ValueKey('empty-bar-member'),
+                                      onPressed: () => linkEmptyBarMember(seat),
+                                      icon: const CircleAvatar(
+                                        backgroundColor: Color(0xffe0e0e0),
+                                        child: Icon(
+                                          Icons.person,
+                                          color: Colors.grey,
                                         ),
                                       ),
-                                    ],
+                                    ),
+                                  ],
+                                ),
+                                orderAction: OutlinedButton(
+                                  onPressed: () => showMenu(!menu),
+                                  child: Text(
+                                    menu ? t('ordersBack') : t('ordering'),
                                   ),
-                                  const Divider(
-                                    thickness: 1,
-                                    color: Color(0xffd7e2dc),
-                                  ),
-                                  const Spacer(),
-                                  const Divider(
-                                    thickness: 1,
-                                    color: Color(0xffd7e2dc),
-                                  ),
-                                  Text('${t('billTotal')}   0.00'),
-                                  const SizedBox(height: 14),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: OutlinedButton(
-                                          onPressed: () => showMenu(!menu),
-                                          child: Text(
-                                            menu
-                                                ? t('ordersBack')
-                                                : barText(
-                                                    '点单',
-                                                    'Order',
-                                                    '點單',
-                                                    'สั่งอาหาร',
-                                                  ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        flex: 2,
-                                        child: FilledButton(
-                                          onPressed: null,
-                                          child: Text(
-                                            barText(
-                                              '暂无消费',
-                                              'No items',
-                                              '暫無消費',
-                                              'ยังไม่มีรายการ',
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                ),
+                                primaryAction: FilledButton(
+                                  onPressed: null,
+                                  child: Text(t('billSettled')),
+                                ),
                               ),
                             ),
                           ),

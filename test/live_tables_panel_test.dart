@@ -94,7 +94,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final auth = TableAuth();
+    final auth = TableAuth(permissions: ['workbench.read', 'orders.read']);
     final reply = tableFixture(count: 2);
     final tables = reply['result']['tables'] as List;
     tables[0]['tableName'] = '吧台';
@@ -121,6 +121,11 @@ void main() {
     expect(auth.openingReads, 0);
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.byKey(const ValueKey('empty-bar-member')), findsOneWidget);
+    expect(find.byKey(const ValueKey('table-bill-total')), findsOneWidget);
+    expect(find.byKey(const ValueKey('table-bill-paid')), findsOneWidget);
+    expect(find.byKey(const ValueKey('table-bill-pending')), findsOneWidget);
+    expect(find.byKey(const ValueKey('table-bill-print')), findsOneWidget);
+    expect(find.byKey(const ValueKey('bill-filter')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets('counter is below ordinary cards with eight avatar places', (
