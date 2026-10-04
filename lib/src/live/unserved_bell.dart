@@ -98,7 +98,7 @@ class _BellPainter extends CustomPainter {
       ..relativeLineTo(-204.953236, -0.574635)
       ..lineTo(612.752712, 223.341564)
       ..close();
-    canvas.drawPath(p, Paint()..color = const Color(0xffff6b35));
+    canvas.drawPath(p, Paint()..color = const Color(0xffffd600));
   }
 
   @override
