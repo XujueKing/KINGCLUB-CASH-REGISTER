@@ -168,7 +168,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('bar-seat-2')));
     await tester.pumpAndSettle();
-    expect(find.text('吧台-B2'), findsOneWidget);
+    expect(find.text('B2'), findsNWidgets(2));
     expect(find.byType(VerticalDivider), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

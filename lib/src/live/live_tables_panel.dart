@@ -953,7 +953,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                           ),
                                         ),
                                         child: Text(
-                                          '吧台-B$selectedBarSeat',
+                                          'B$selectedBarSeat',
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 22,

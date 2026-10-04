@@ -664,7 +664,9 @@ class _LiveCartPanelState extends State<LiveCartPanel>
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
-            widget.orderContext.tableName,
+            table?.isBarSeat == true
+                ? 'B${table!.barSeatNumber}'
+                : widget.orderContext.tableName,
             textAlign: TextAlign.center,
             maxLines: 2,
             style: TextStyle(
