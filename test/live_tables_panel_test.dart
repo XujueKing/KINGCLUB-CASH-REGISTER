@@ -79,7 +79,9 @@ class TableAuth extends StaffAuthController {
 }
 
 void main() {
-  testWidgets('counter is below ordinary cards with eight avatar places', (tester) async {
+  testWidgets('counter is below ordinary cards with eight avatar places', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1366, 768);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -91,12 +93,35 @@ void main() {
     tables[1]['maximumSeats'] = 8;
     tables[1]['session'] = null;
     auth.reply = reply;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: LiveTablesPanel(auth: auth, language: UiLanguage.zh, enableRealtime: false))));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveTablesPanel(
+            auth: auth,
+            language: UiLanguage.zh,
+            enableRealtime: false,
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-table-test-001')), findsNothing);
     expect(find.byType(BarCounterStrip), findsOneWidget);
-    expect(find.descendant(of: find.byType(BarCounterStrip), matching: find.byType(ClipOval)), findsNWidgets(8));
-    expect(tester.getTopLeft(find.byType(BarCounterStrip)).dy, greaterThan(tester.getBottomLeft(find.byKey(const ValueKey('live-table-test-000'))).dy));
+    expect(
+      find.descendant(
+        of: find.byType(BarCounterStrip),
+        matching: find.byType(ClipRRect),
+      ),
+      findsNWidgets(8),
+    );
+    expect(
+      tester.getTopLeft(find.byType(BarCounterStrip)).dy,
+      greaterThan(
+        tester
+            .getBottomLeft(find.byKey(const ValueKey('live-table-test-000')))
+            .dy,
+      ),
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     auth.dispose();

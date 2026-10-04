@@ -91,60 +91,64 @@ class _BarCounterStripState extends State<BarCounterStrip> {
       borderRadius: BorderRadius.circular(10),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 64,
-              child: Text(
-                widget.table.name,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            ...List.generate(widget.table.maximumSeats, (index) {
-              final member = index < members.length ? members[index] : null;
-              final label = member == null
-                  ? '${index + 1}'
-                  : (member['nickname']?.isNotEmpty == true
-                        ? member['nickname']!
-                        : member['userAccount']!);
-              return Expanded(
-                child: InkWell(
-                  onTap: widget.onMembers,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ClipOval(
-                        child: SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: ColoredBox(
-                            color: const Color(0xffdce1dd),
-                            child: avatar(member),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xff526159),
-                        ),
-                      ),
-                    ],
+        child: SizedBox(
+          height: 112,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 64,
+                child: Text(
+                  widget.table.name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              );
-            }),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: Color(0xff526159)),
-          ],
+              ),
+              ...List.generate(widget.table.maximumSeats, (index) {
+                final member = index < members.length ? members[index] : null;
+                final label = member == null
+                    ? '${index + 1}'
+                    : (member['nickname']?.isNotEmpty == true
+                          ? member['nickname']!
+                          : member['userAccount']!);
+                return Expanded(
+                  child: InkWell(
+                    onTap: widget.onMembers,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: SizedBox(
+                            width: 52,
+                            height: 52,
+                            child: ColoredBox(
+                              color: const Color(0xffdce1dd),
+                              child: avatar(member),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xff526159),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right, color: Color(0xff526159)),
+            ],
+          ),
         ),
       ),
     ),
