@@ -1,9 +1,11 @@
 import 'opening_snapshot.dart';
 import 'bar_counter_strip.dart';
-import 'table_members_panel.dart';
 import 'quick_opening_dialog.dart';
 
 import 'dart:async';
+import 'dart:convert';
+
+import '../auth/session_vault.dart';
 
 import 'table_calendar_panel.dart';
 
@@ -64,6 +66,136 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   TableSnapshot? snapshot;
   String? focusedTableRef;
   int? selectedBarSeat;
+  final List<List<String>> barGroups = [];
+  String get barGroupKey =>
+      'bar_groups_${widget.auth.session?.base}_${widget.auth.session?.storeRef}';
+  Future<void> restoreBarGroups() async {
+    try {
+      final saved = await PlatformSecretStorage().read(barGroupKey);
+      if (!mounted || saved == null) return;
+      final groups = jsonDecode(saved);
+      if (groups is! List || groups.length > 4) return;
+      final parsed = <List<String>>[];
+      for (final group in groups) {
+        if (group is! List ||
+            group.length < 2 ||
+            group.length > 8 ||
+            group.any(
+              (s) =>
+                  s is! String || !RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(s),
+            ))
+          return;
+        parsed.add(group.cast<String>());
+      }
+      setState(
+        () => barGroups
+          ..clear()
+          ..addAll(parsed),
+      );
+    } catch (_) {
+      /* Display grouping is not payment evidence. */
+    }
+  }
+
+  Future<void> saveBarGroups() async {
+    try {
+      await PlatformSecretStorage().write(barGroupKey, jsonEncode(barGroups));
+    } catch (_) {
+      /* Payment requests have their own durable journal. */
+    }
+  }
+
+  String barText(String zh, String en, String tw, String th) =>
+      [zh, en, tw, th][widget.language.index];
+  List<LiveTable> mergedSeats(LiveTable? selected) {
+    if (selected?.session == null) return [];
+    final refs = barGroups
+        .where((g) => g.contains(selected!.session!.reference))
+        .firstOrNull;
+    if (refs == null) return [];
+    final seats =
+        snapshot?.tables
+            .where((t) => t.isBarSeat && refs.contains(t.session?.reference))
+            .toList() ??
+        <LiveTable>[];
+    seats.sort((a, b) => a.barSeatNumber!.compareTo(b.barSeatNumber!));
+    return seats.length == refs.length ? seats : [];
+  }
+
+  Future<void> mergeBarSeats(LiveTable current) async {
+    final seats =
+        snapshot?.tables
+            .where(
+              (t) =>
+                  t.parentBarRef == current.parentBarRef &&
+                  t.session?.status == 'open' &&
+                  t.session?.businessDate == current.session?.businessDate &&
+                  (t.session?.pendingCents ?? 0) > 0,
+            )
+            .toList() ??
+        <LiveTable>[];
+    seats.sort((a, b) => a.barSeatNumber!.compareTo(b.barSeatNumber!));
+    final selected = {current.session!.reference};
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: Text(
+            barText('合并支付', 'Combine payment', '合併支付', 'รวมการชำระเงิน'),
+          ),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final seat in seats)
+                  CheckboxListTile(
+                    title: Text('B${seat.barSeatNumber}'),
+                    secondary: Text(
+                      '¥ ${formatCents(seat.session!.pendingCents)}',
+                    ),
+                    value: selected.contains(seat.session!.reference),
+                    onChanged: seat.reference == current.reference
+                        ? null
+                        : (checked) => update(() {
+                            if (checked == true)
+                              selected.add(seat.session!.reference);
+                            else
+                              selected.remove(seat.session!.reference);
+                          }),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(t('cancel')),
+            ),
+            FilledButton(
+              onPressed: selected.length < 2
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: Text(barText('合并', 'Combine', '合併', 'รวม')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || approved != true) return;
+    final chosen = seats
+        .where((s) => selected.contains(s.session!.reference))
+        .toList();
+    setState(() {
+      barGroups.removeWhere((g) => g.any(selected.contains));
+      barGroups.add(chosen.map((s) => s.session!.reference).toList());
+      focusedTableRef = chosen.first.reference;
+      selectedBarSeat = chosen.first.barSeatNumber;
+    });
+    widget.onMenuChanged?.call(false);
+    unawaited(saveBarGroups());
+  }
+
   LiveTable? orderingTable;
   bool opening = false;
   bool voucherReport = false;
@@ -95,6 +227,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   @override
   void initState() {
     super.initState();
+    unawaited(restoreBarGroups());
     WidgetsBinding.instance.addObserver(this);
     clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted && foreground) setState(() {});
@@ -457,7 +590,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                             .floor()
                             .clamp(1, 8);
                     final ordinaryTables = data.tables
-                        .where((t) => !t.isBarCounter)
+                        .where((t) => !t.isBarCounter && !t.isBarSeat)
                         .toList();
                     final counters = data.tables
                         .where((t) => t.isBarCounter)
@@ -487,10 +620,62 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: BarCounterStrip(
                               table: bar,
-                              selectedSeat: focusedTableRef == bar.reference
+                              groups: [
+                                for (final refs in barGroups)
+                                  if (data.tables
+                                          .where(
+                                            (t) =>
+                                                t.parentBarRef ==
+                                                    bar.reference &&
+                                                refs.contains(
+                                                  t.session?.reference,
+                                                ),
+                                          )
+                                          .length ==
+                                      refs.length)
+                                    (data.tables
+                                        .where(
+                                          (t) =>
+                                              t.parentBarRef == bar.reference &&
+                                              refs.contains(
+                                                t.session?.reference,
+                                              ),
+                                        )
+                                        .map((t) => t.barSeatNumber!)
+                                        .toList()
+                                      ..sort()),
+                              ],
+                              seatTables: {
+                                for (final seat in data.tables.where(
+                                  (t) => t.parentBarRef == bar.reference,
+                                ))
+                                  seat.barSeatNumber!: seat,
+                              },
+                              seatAmounts: {
+                                for (final seat in data.tables.where(
+                                  (t) => t.parentBarRef == bar.reference,
+                                ))
+                                  seat.barSeatNumber!:
+                                      (seat.session?.paidCents ?? 0) +
+                                      (seat.session?.pendingCents ?? 0),
+                              },
+                              selectedSeat:
+                                  focusedTableRef == bar.reference ||
+                                      focused?.parentBarRef == bar.reference
                                   ? selectedBarSeat
                                   : null,
                               onSeat: (seat) {
+                                final target = data.tables
+                                    .where(
+                                      (t) =>
+                                          t.parentBarRef == bar.reference &&
+                                          t.barSeatNumber == seat,
+                                    )
+                                    .firstOrNull;
+                                if (target != null) {
+                                  unawaited(selectBarSeat(target));
+                                  return;
+                                }
                                 setState(() {
                                   focusedTableRef = bar.reference;
                                   selectedBarSeat = seat;
@@ -503,6 +688,96 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         ],
                       ],
                     );
+                    final combined = mergedSeats(focused);
+                    if (combined.length > 1) {
+                      final leader = combined.first;
+                      final label = combined
+                          .map((s) => 'B${s.barSeatNumber}')
+                          .join('+');
+                      return Row(
+                        children: [
+                          Expanded(flex: 2, child: grid),
+                          const VerticalDivider(width: 1),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: TableBillPanel(
+                                key: ValueKey(
+                                  'bar-combined-${combined.map((s) => s.session!.reference).join('-')}',
+                                ),
+                                auth: widget.auth,
+                                language: widget.language,
+                                tableRef: leader.reference,
+                                sessionRef: leader.session!.reference,
+                                revision: realtimeRevision,
+                                fillHeight: true,
+                                changesAllowed: false,
+                                seatSessions: [
+                                  for (final seat in combined)
+                                    {
+                                      'tableRef': seat.reference,
+                                      'sessionRef': seat.session!.reference,
+                                    },
+                                ],
+                                headerBuilder: (filter) => Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            label,
+                                            style: const TextStyle(
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            setState(
+                                              () => barGroups.removeWhere(
+                                                (g) => g.contains(
+                                                  leader.session!.reference,
+                                                ),
+                                              ),
+                                            );
+                                            unawaited(saveBarGroups());
+                                          },
+                                          child: Text(
+                                            barText(
+                                              '分开显示',
+                                              'Separate',
+                                              '分開顯示',
+                                              'แสดงแยก',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            barText(
+                                              '消费明细',
+                                              'Bill',
+                                              '消費明細',
+                                              'รายการ',
+                                            ),
+                                          ),
+                                        ),
+                                        filter,
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
                     if (focused?.isBarCounter == true &&
                         selectedBarSeat != null) {
                       return Row(
@@ -629,6 +904,11 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                           onMenuChanged: widget.onMenuChanged,
                           tablePanel: grid,
                           liveTable: table,
+                          onMergePayment:
+                              table.isBarSeat &&
+                                  (table.session?.pendingCents ?? 0) > 0
+                              ? () => mergeBarSeats(table)
+                              : null,
                           menuHeader: workspaceHeader(),
                           tableActions: actions,
                           onBack: () => setState(() => focusedTableRef = null),
@@ -973,49 +1253,14 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   ];
 
   bool enteringBar = false;
-  Future<void> linkBarMember(LiveTable table) async {
+  Future<void> selectBarSeat(LiveTable table) async {
+    if (enteringBar) return;
+    selectedBarSeat = table.barSeatNumber;
     await selectTable(table);
-    if (!mounted) return;
-    final current = snapshot?.tables
-        .where((t) => t.reference == table.reference)
-        .firstOrNull;
-    if (current?.session == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          [
-            '扫码关联吧台会员',
-            'Link counter member',
-            '掃碼關聯吧檯會員',
-            'สแกนสมาชิกที่เคาน์เตอร์',
-          ][widget.language.index],
-        ),
-        content: SizedBox(
-          width: 440,
-          child: SingleChildScrollView(
-            child: TableMembersPanel(
-              auth: widget.auth,
-              language: widget.language,
-              tableRef: table.reference,
-              sessionRef: current!.session!.reference,
-              onLinked: () => Navigator.pop(dialogContext),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(['关闭', 'Close', '關閉', 'ปิด'][widget.language.index]),
-          ),
-        ],
-      ),
-    );
-    if (mounted) await load();
   }
 
   Future<void> selectTable(LiveTable table) async {
-    if (table.isBarCounter) {
+    if (table.isBarCounter || table.isBarSeat) {
       if (enteringBar || table.status != 'active') return;
       enteringBar = true;
       try {
@@ -1036,7 +1281,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
           if (opening.activeSessionRef == null) {
             final result = await widget.auth.submitOpening(
               context: opening,
-              partySize: null,
+              partySize: table.isBarSeat ? 1 : null,
               memberRefs: [],
               arrivalConfirmed: true,
               reservationChecked: true,
@@ -1051,7 +1296,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         }
         if (!mounted) return;
         setState(() => focusedTableRef = table.reference);
-        widget.onMenuChanged?.call(true);
+        widget.onMenuChanged?.call(false);
       } catch (_) {
         if (mounted)
           ScaffoldMessenger.of(context)

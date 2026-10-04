@@ -35,6 +35,7 @@ class LiveCartPanel extends StatefulWidget {
     this.liveTable,
     this.contextVerified = true,
     this.tableActions,
+    this.onMergePayment,
   });
   final bool? menuVisible;
   final ValueChanged<bool>? onMenuChanged;
@@ -43,6 +44,7 @@ class LiveCartPanel extends StatefulWidget {
   final OrderContextSnapshot orderContext;
   final String? memberRef;
   final VoidCallback onBack;
+  final VoidCallback? onMergePayment;
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
   final LiveTable? liveTable;
@@ -704,6 +706,27 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                   ),
                 ],
               ),
+              if (widget.onMergePayment != null)
+                TextButton.icon(
+                  key: const ValueKey('bar-merge-payment'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: const Size(0, 28),
+                  ),
+                  onPressed: items.isEmpty || attempted
+                      ? widget.onMergePayment
+                      : null,
+                  icon: const Icon(Icons.merge_type, size: 16),
+                  label: Text(
+                    [
+                      '合并支付',
+                      'Combine',
+                      '合併支付',
+                      'รวมจ่าย',
+                    ][widget.language.index],
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
               if (table?.isBarCounter != true && table?.isBarSeat != true)
                 Row(
                   children: [

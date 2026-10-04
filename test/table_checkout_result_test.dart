@@ -52,6 +52,16 @@ Map<String, dynamic> settlementFixture(TableCheckoutCommand c) => {
   },
 };
 void main() {
+  test('combined payment validates every original seat in the settled receipt', () {
+    final seats=[{'tableRef':'TEST_TABLE','sessionRef':'TEST_SESSION'},{'tableRef':'B3','sessionRef':'SESSION3'}];
+    final command=TableCheckoutCommand.decode({...fixture.command().encoded,'seatSessions':seats});
+    final raw=settlementFixture(command);
+    final allocations=raw['result']['receipt']['allocations'] as List;
+    for(var i=0;i<2;i++){(allocations[i] as Map).addAll(seats[i]);}
+    expect(TableCheckoutResult.parse(raw,command,checkoutRef:checkout).settled,true);
+    allocations[1]['tableRef']='B8';
+    expect(()=>TableCheckoutResult.parse(raw,command,checkoutRef:checkout),throwsA(isA<CcsopFailure>()));
+  });
   test('Alipay v2 closure requires the original trade and version', () {
     final c=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'alipay','accountType':null});
     Map<String,dynamic> proof(){final raw=closureFixture(c);(raw['result']['receipt'] as Map).addAll(<String,Object>{'version':2,'channel':'alipay','reason':'CLOSE_CONFIRMED','tradeNo':'TEST_TRADE'});return raw;}

@@ -136,6 +136,7 @@ class StaffAuthController extends ChangeNotifier {
     required String sessionRef,
     required String channel,
     required String? accountType,
+    List<Map<String, String>> seatSessions = const [],
   }) async {
     final identity = _tableCheckoutIdentity(channel), epoch = _epoch;
     if (!RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(tableRef) ||
@@ -152,6 +153,7 @@ class StaffAuthController extends ChangeNotifier {
       'channel': channel,
       'accountType': accountType,
       'currency': 'CNY',
+      if (seatSessions.isNotEmpty) 'seatSessions': seatSessions,
     });
     _check(epoch);
     _tableCheckoutIdentity(channel);
@@ -162,6 +164,7 @@ class StaffAuthController extends ChangeNotifier {
       sessionRef: sessionRef,
       channel: channel,
       accountType: accountType,
+      seatSessions: seatSessions,
     );
   }
 

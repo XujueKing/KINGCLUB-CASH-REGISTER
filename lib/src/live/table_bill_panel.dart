@@ -51,10 +51,12 @@ class TableBillPanel extends StatefulWidget {
     this.orderAction,
     this.primaryAction,
     this.beforeActions,
+    this.seatSessions = const [],
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef, sessionRef;
+  final List<Map<String, String>> seatSessions;
   final int revision;
   final bool checkoutAllowed, fillHeight, recording;
   final bool changesAllowed;
@@ -227,6 +229,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   }
 
   void restoreDisplayCache() {
+    if (widget.seatSessions.isNotEmpty) return;
     if (foreground && canRead) {
       final cached =
           WorkspaceReadCache.read<
@@ -346,11 +349,38 @@ class _TableBillPanelState extends State<TableBillPanel>
         collected.addAll(next.orders);
         after = next.nextAfterOrder;
       } while (after != null);
-      WorkspaceReadCache.put(
-        identity,
-        'bill/${widget.tableRef}/${widget.sessionRef}',
-        (snapshot: next, orders: List<LiveOrder>.unmodifiable(collected)),
-      );
+      for (final seat in widget.seatSessions.where(
+        (s) => s['sessionRef'] != widget.sessionRef,
+      )) {
+        String? seatCursor;
+        do {
+          final raw = await widget.auth.readOrders(
+            tableRef: seat['tableRef']!,
+            sessionRef: seat['sessionRef']!,
+            afterOrder: seatCursor,
+          );
+          if (!mounted ||
+              ticket != epoch ||
+              !foreground ||
+              !identical(identity, widget.auth.session))
+            return;
+          final extra = OrderSnapshot.parse(
+            raw,
+            storeRef: identity.storeRef,
+            tableRef: seat['tableRef']!,
+            sessionRef: seat['sessionRef']!,
+            afterOrder: seatCursor,
+          );
+          collected.addAll(extra.orders);
+          seatCursor = extra.nextAfterOrder;
+        } while (seatCursor != null);
+      }
+      if (widget.seatSessions.isEmpty)
+        WorkspaceReadCache.put(
+          identity,
+          'bill/${widget.tableRef}/${widget.sessionRef}',
+          (snapshot: next, orders: List<LiveOrder>.unmodifiable(collected)),
+        );
       setState(() {
         orders = collected;
         snapshot = next;
@@ -433,11 +463,13 @@ class _TableBillPanelState extends State<TableBillPanel>
             return const SizedBox.shrink();
           }
           return TableCheckoutDialog(
-            paidCents:
-                (snapshot?.sessionSummary?.buckets['netPaid'] ??
-                        snapshot?.sessionSummary?.buckets['paid'])
-                    ?.totalCents ??
-                0,
+            seatSessions: widget.seatSessions,
+            paidCents: widget.seatSessions.isNotEmpty
+                ? orders.fold<int>(0, (sum, o) => sum + o.netPaidCents)
+                : (snapshot?.sessionSummary?.buckets['netPaid'] ??
+                              snapshot?.sessionSummary?.buckets['paid'])
+                          ?.totalCents ??
+                      0,
             auth: widget.auth,
             language: widget.language,
             tableRef: tableRef,
@@ -938,9 +970,21 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   @override
   Widget build(BuildContext context) {
-    final pending = snapshot?.sessionSummary?.buckets['pending'];
+    final pending = widget.seatSessions.isEmpty
+        ? snapshot?.sessionSummary?.buckets['pending']
+        : OrderSummaryBucket(
+            orders.where((o) => o.status == 'pending').length,
+            orders
+                .where((o) => o.status == 'pending')
+                .fold<int>(0, (sum, o) => sum + o.totalCents),
+          );
     final summary = snapshot?.sessionSummary;
-    final paid = summary?.buckets['netPaid'] ?? summary?.buckets['paid'];
+    final paid = widget.seatSessions.isEmpty
+        ? summary?.buckets['netPaid'] ?? summary?.buckets['paid']
+        : OrderSummaryBucket(
+            orders.where((o) => o.status == 'paid').length,
+            orders.fold<int>(0, (sum, o) => sum + o.netPaidCents),
+          );
     final drafts = filter == 'all' || filter == 'pending'
         ? widget.draftCards
         : <String, BillProductCard>{};
@@ -1013,7 +1057,9 @@ class _TableBillPanelState extends State<TableBillPanel>
               totalCents: group.totalCents + (draftFor(group)?.totalCents ?? 0),
               thumbnailPath: group.item.thumbnailPath,
               base: widget.auth.session?.base,
-              onTap: () => openGroup(group),
+              onTap: widget.seatSessions.isEmpty
+                  ? () => openGroup(group)
+                  : null,
               specialPrice: group.specialPrice,
               quantityControls: true,
               productRef: group.groupingRef,

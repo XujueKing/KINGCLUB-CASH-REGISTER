@@ -26,11 +26,13 @@ class TableCheckoutDialog extends StatefulWidget {
     required this.language,
     this.originalRequestId,
     this.paidCents = 0,
+    this.seatSessions = const [],
   });
   final StaffAuthController auth;
   final String tableRef, sessionRef;
   final UiLanguage language;
   final int paidCents;
+  final List<Map<String, String>> seatSessions;
 
   /// Recovery entry must remain bound to the selected durable original request.
   final String? originalRequestId;
@@ -405,6 +407,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         sessionRef: widget.sessionRef,
         channel: channel,
         accountType: account,
+        seatSessions: widget.seatSessions,
       );
       if (!current(e)) return;
       final remaining = const Duration(seconds: 30) - watch.elapsed;
@@ -1052,6 +1055,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                     ),
                                   ),
                                 if (command == null &&
+                                    widget.seatSessions.isEmpty &&
                                     widget.auth.session?.permissions.contains(
                                           'orders.create',
                                         ) ==

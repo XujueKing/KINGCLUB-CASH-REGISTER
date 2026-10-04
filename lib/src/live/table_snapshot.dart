@@ -101,6 +101,12 @@ class LiveTable {
   LiveTable(Map<String, dynamic> value)
     : reference = _ref(value['tableRef']),
       name = _text(value['tableName']),
+      parentBarRef = value['parentBarRef'] == null
+          ? null
+          : _ref(value['parentBarRef']),
+      barSeatNumber = value['barSeatNumber'] == null
+          ? null
+          : _number(value['barSeatNumber']),
       reservation = value['reservation'] == null
           ? null
           : Map<String, dynamic>.from(_object(value['reservation'])),
@@ -128,8 +134,10 @@ class LiveTable {
     }
   }
   final String reference, name, status;
+  final String? parentBarRef;
+  final int? barSeatNumber;
   bool get isBarCounter => name.trim() == '吧台';
-  bool get isBarSeat => RegExp(r'^吧台-B[1-9][0-9]*$').hasMatch(name.trim());
+  bool get isBarSeat => parentBarRef != null && barSeatNumber != null;
   final Map<String, dynamic>? reservation;
   final String? tableMode;
   final int? minimumSeats;

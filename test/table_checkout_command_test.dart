@@ -64,6 +64,45 @@ TableCheckoutCommand command() => TableCheckoutCommand.fromQuote(
   requestId: '00000000-0000-4000-8000-000000000099',
 );
 void main() {
+  test('combined seats survive the durable payment command and reject substituted seats', () {
+    final seats = [
+      {'tableRef': 'TEST_TABLE', 'sessionRef': 'TEST_SESSION'},
+      {'tableRef': 'B3', 'sessionRef': 'SESSION3'},
+    ];
+    final raw = tableQuoteFixture();
+    (raw['result'] as Map)['seatSessions'] = seats;
+    final quote = TableCheckoutQuote.parse(
+      raw,
+      storeRef: 'test-store',
+      tableRef: 'TEST_TABLE',
+      sessionRef: 'TEST_SESSION',
+      channel: 'member_balance',
+      accountType: 'store_balance',
+      seatSessions: seats,
+    );
+    final saved = TableCheckoutCommand.fromQuote(
+      staff.session(),
+      quote,
+      requestId: '00000000-0000-4000-8000-000000000099',
+    );
+    expect(TableCheckoutCommand.decode(saved.encoded).params, saved.params);
+    expect(saved.seatSessions.length, 2);
+    expect(
+      () => TableCheckoutQuote.parse(
+        raw,
+        storeRef: 'test-store',
+        tableRef: 'TEST_TABLE',
+        sessionRef: 'TEST_SESSION',
+        channel: 'member_balance',
+        accountType: 'store_balance',
+        seatSessions: [
+          seats.first,
+          {'tableRef': 'B8', 'sessionRef': 'SESSION8'},
+        ],
+      ),
+      throwsA(isA<CcsopFailure>()),
+    );
+  });
   test('quote preserves remaining postpay stock action', () {
     final raw = tableQuoteFixture();
     final rows = (raw['result'] as Map)['allocations'] as List;

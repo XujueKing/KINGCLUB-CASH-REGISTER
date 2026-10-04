@@ -27,6 +27,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
     this.menuHeader,
     this.liveTable,
     this.tableActions,
+    this.onMergePayment,
   });
   final bool? menuVisible;
   final ValueChanged<bool>? onMenuChanged;
@@ -34,6 +35,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
   final UiLanguage language;
   final String tableRef, sessionRef;
   final VoidCallback onBack;
+  final VoidCallback? onMergePayment;
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
   final LiveTable? liveTable;
@@ -220,6 +222,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         menuHeader: widget.menuHeader,
         liveTable: widget.liveTable,
         tableActions: widget.tableActions,
+        onMergePayment: widget.onMergePayment,
         memberRef: selected?.reference,
         revision: widget.revision,
         onBack: data!.tableOrderAllowed

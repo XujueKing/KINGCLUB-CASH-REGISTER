@@ -177,6 +177,7 @@ class TableCheckoutQuote {
     this.quotedAt,
     this.allocations,
     this.lines,
+    this.seatSessions,
   );
   final String storeRef, tableRef, sessionRef, channel, fingerprint;
   final String? accountType;
@@ -184,6 +185,7 @@ class TableCheckoutQuote {
   final DateTime quotedAt;
   final List<TableCheckoutAllocation> allocations;
   final List<TableCheckoutLine> lines;
+  final List<Map<String, String>> seatSessions;
   late final Map<String, List<TableCheckoutLine>> linesByOrder = _groupLines();
   Map<String, List<TableCheckoutLine>> _groupLines() {
     final groups = <String, List<TableCheckoutLine>>{};
@@ -205,6 +207,7 @@ class TableCheckoutQuote {
     required String sessionRef,
     required String channel,
     required String? accountType,
+    List<Map<String, String>> seatSessions = const [],
   }) {
     try {
       _account(channel, accountType);
@@ -223,7 +226,13 @@ class TableCheckoutQuote {
         'snapshotFingerprint',
         'allocations',
         'lines',
+        if (seatSessions.isNotEmpty) 'seatSessions',
       ]);
+      if (seatSessions.isNotEmpty &&
+          _seatKey(_seats(row['seatSessions'])) !=
+              _seatKey(_seats(seatSessions))) {
+        throw const FormatException();
+      }
       if (row['version'] is! int ||
           row['version'] != 1 ||
           row['state'] != 'quote' ||
@@ -328,6 +337,7 @@ class TableCheckoutQuote {
         quoted,
         List.unmodifiable(allocations),
         List.unmodifiable(lines),
+        seatSessions.isEmpty ? const [] : _seats(seatSessions),
       );
     } catch (_) {
       throw const CcsopFailure('TABLE_CHECKOUT_QUOTE_INVALID');
@@ -350,6 +360,7 @@ class TableCheckoutCommand {
     this.totalCents,
     this.fingerprint,
     this.orderCount,
+    this.seatSessions,
   );
   final String base,
       employeeRef,
@@ -362,6 +373,7 @@ class TableCheckoutCommand {
       fingerprint;
   final String? accountType;
   final int totalCents, orderCount;
+  final List<Map<String, String>> seatSessions;
   factory TableCheckoutCommand.fromQuote(
     StaffSession session,
     TableCheckoutQuote quote, {
@@ -384,6 +396,7 @@ class TableCheckoutCommand {
       'expectedTotalCents': quote.totalCents,
       'expectedSnapshotFingerprint': quote.fingerprint,
       'orderCount': quote.allocations.length,
+      if (quote.seatSessions.isNotEmpty) 'seatSessions': quote.seatSessions,
     });
   }
   Map<String, dynamic> get params => {
@@ -396,6 +409,7 @@ class TableCheckoutCommand {
     'currency': 'CNY',
     'expectedTotalCents': totalCents,
     'expectedSnapshotFingerprint': fingerprint,
+    if (seatSessions.isNotEmpty) 'seatSessions': seatSessions,
   };
   Map<String, dynamic> get encoded => {
     'base': base,
@@ -430,6 +444,7 @@ class TableCheckoutCommand {
         'expectedTotalCents',
         'expectedSnapshotFingerprint',
         'orderCount',
+        if (raw is Map && raw.containsKey('seatSessions')) 'seatSessions',
       ]);
       final base = row['base'];
       if (base is! String) throw const FormatException();
@@ -463,9 +478,34 @@ class TableCheckoutCommand {
         _integer(row['expectedTotalCents'], 100000000),
         hash,
         _integer(row['orderCount'], 1000),
+        row.containsKey('seatSessions')
+            ? _seats(row['seatSessions'])
+            : const [],
       );
     } catch (_) {
       throw const CcsopFailure('TABLE_CHECKOUT_COMMAND_INVALID');
     }
   }
 }
+
+List<Map<String, String>> _seats(Object? raw) {
+  if (raw is! List || raw.length < 2 || raw.length > 8)
+    throw const FormatException();
+  final rows = raw.map((s) {
+    final row = _object(Map<String, dynamic>.from(s as Map), [
+      'tableRef',
+      'sessionRef',
+    ]);
+    return Map<String, String>.unmodifiable({
+      'tableRef': _ref(row['tableRef']),
+      'sessionRef': _ref(row['sessionRef']),
+    });
+  }).toList()..sort((a, b) => a['sessionRef']!.compareTo(b['sessionRef']!));
+  if (rows.map((s) => s['tableRef']).toSet().length != rows.length ||
+      rows.map((s) => s['sessionRef']).toSet().length != rows.length)
+    throw const FormatException();
+  return List.unmodifiable(rows);
+}
+
+String _seatKey(List<Map<String, String>> seats) =>
+    seats.map((s) => '${s['tableRef']}:${s['sessionRef']}').join('|');

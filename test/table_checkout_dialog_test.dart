@@ -113,6 +113,7 @@ class CheckoutDialogAuth extends StaffAuthController {
   ) async => saved != null && saved!.channel == channel ? [saved!] : [];
   @override
   Future<TableCheckoutQuote> quoteTableCheckout({
+    List<Map<String, String>> seatSessions = const [],
     required String tableRef,
     required String sessionRef,
     required String channel,

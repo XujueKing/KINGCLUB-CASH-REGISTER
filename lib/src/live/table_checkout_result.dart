@@ -212,8 +212,17 @@ class TableCheckoutResult {
           'inventoryAction',
           'updateCashierOrigin',
           'orderPaymentRef',
+          if (command.seatSessions.isNotEmpty) ...['tableRef', 'sessionRef'],
         ]);
         final order = a['orderRef'], cents = a['totalCents'];
+        if (command.seatSessions.isNotEmpty &&
+            !command.seatSessions.any(
+              (s) =>
+                  s['tableRef'] == a['tableRef'] &&
+                  s['sessionRef'] == a['sessionRef'],
+            )) {
+          throw const FormatException();
+        }
         if (order is! String ||
             !RegExp(r'^D[0-9]{11}$').hasMatch(order) ||
             !ids.add(order) ||
