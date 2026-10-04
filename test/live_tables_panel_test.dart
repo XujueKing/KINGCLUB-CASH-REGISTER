@@ -110,7 +110,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(BarCounterStrip),
-        matching: find.byType(ClipRRect),
+        matching: find.byType(AspectRatio),
       ),
       findsNWidgets(8),
     );

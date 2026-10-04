@@ -63,6 +63,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     with WidgetsBindingObserver {
   TableSnapshot? snapshot;
   String? focusedTableRef;
+  int? selectedBarSeat;
   LiveTable? orderingTable;
   bool opening = false;
   bool voucherReport = false;
@@ -486,17 +487,80 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: BarCounterStrip(
                               table: bar,
-                              auth: widget.auth,
-                              language: widget.language,
-                              revision: data.observedAt,
-                              onEnter: () => selectTable(bar),
-                              onMembers: () => linkBarMember(bar),
+                              selectedSeat: focusedTableRef == bar.reference
+                                  ? selectedBarSeat
+                                  : null,
+                              onSeat: (seat) {
+                                setState(() {
+                                  focusedTableRef = bar.reference;
+                                  selectedBarSeat = seat;
+                                });
+                                widget.onMenuChanged?.call(false);
+                              },
                             ),
                           ),
                           const SizedBox(height: 12),
                         ],
                       ],
                     );
+                    if (focused?.isBarCounter == true &&
+                        selectedBarSeat != null) {
+                      return Row(
+                        children: [
+                          Expanded(flex: 2, child: grid),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 18,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xff64716b),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '吧台-V$selectedBarSeat',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      IconButton(
+                                        onPressed: () => setState(
+                                          () => focusedTableRef = null,
+                                        ),
+                                        icon: const Icon(Icons.close),
+                                      ),
+                                    ],
+                                  ),
+                                  const Divider(),
+                                  Text(
+                                    [
+                                      '座位独立账单尚未启用',
+                                      'Seat billing is not enabled yet',
+                                      '座位獨立帳單尚未啟用',
+                                      'ยังไม่เปิดใช้งานบิลแยกที่นั่ง',
+                                    ][widget.language.index],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
                     if (focused?.session != null &&
                         widget.auth.session?.permissions.contains(
                               'orders.read',
