@@ -297,6 +297,73 @@ class ReceiptRasterPlan {
     null,
   );
 
+  /// Current consumption list, including local selections. Never a payment proof.
+  factory ReceiptRasterPlan.bill({
+    required UiLanguage language,
+    required ReceiptCaption caption,
+    required String filterLabel,
+    required List<
+      ({
+        String name,
+        String specification,
+        int quantity,
+        int priceCents,
+        String state,
+      })
+    >
+    items,
+  }) {
+    final rows = <_Row>[
+      _Row([filterLabel], center: true),
+      _Row([
+        _label(
+          language,
+          '消费清单，非付款凭证',
+          'Bill, not proof of payment',
+          '消費清單，非付款憑證',
+          'รายการ ไม่ใช่หลักฐานชำระเงิน',
+        ),
+      ], size: 20),
+      _Row([_time(DateTime.now())], size: 20),
+      _rule,
+      _columns(language),
+    ];
+    var total = 0;
+    for (final item in items) {
+      total += item.quantity * item.priceCents;
+      rows.add(_Row([item.state], size: 20));
+      rows.add(
+        _item(
+          item.name,
+          item.specification,
+          item.quantity,
+          item.priceCents,
+          item.quantity * item.priceCents,
+        ),
+      );
+    }
+    rows.addAll([
+      _rule,
+      _money(
+        _label(language, '清单合计', 'Total', '清單合計', 'รวม'),
+        total,
+        large: true,
+      ),
+      _rule,
+      _footer(language),
+    ]);
+    return _paginate(
+      _head(
+        language,
+        caption,
+        _label(language, '消费清单', 'Table bill', '消費清單', 'รายการสินค้า'),
+      ),
+      rows,
+      576,
+      null,
+    );
+  }
+
   static List<TextPainter> _painters(_Row row, int width, String? font) {
     final available = width - 32.0;
     final widths = row.cells.length == 3

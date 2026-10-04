@@ -110,23 +110,18 @@ void main() {
         ),
       ),
     );
-    await tester.enterText(
-      find.byKey(const ValueKey('item-return-quantity')),
-      '2',
-    );
-    await tester.pump();
     expect(
       tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey('item-return-submit')),
-          )
+          .widget<IconButton>(find.byKey(const ValueKey('quantity-plus')))
           .onPressed,
       isNull,
     );
-    await tester.enterText(
-      find.byKey(const ValueKey('item-return-quantity')),
-      '1',
-    );
+    if (tester
+            .widget<IconButton>(find.byKey(const ValueKey('quantity-minus')))
+            .onPressed !=
+        null) {
+      await tester.tap(find.byKey(const ValueKey('quantity-minus')));
+    }
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('item-return-submit')));
     await tester.pumpAndSettle();
@@ -206,23 +201,20 @@ void main() {
         await tester.tap(find.text('OPEN'));
         await tester.pumpAndSettle();
         expect(find.byType(Checkbox), findsNothing);
-        await tester.enterText(
-          find.byKey(const ValueKey('item-return-quantity')),
-          '3',
-        );
-        await tester.pump();
         expect(
           tester
-              .widget<FilledButton>(
-                find.byKey(const ValueKey('item-return-submit')),
-              )
+              .widget<IconButton>(find.byKey(const ValueKey('quantity-plus')))
               .onPressed,
           isNull,
         );
-        await tester.enterText(
-          find.byKey(const ValueKey('item-return-quantity')),
-          '1',
-        );
+        if (tester
+                .widget<IconButton>(
+                  find.byKey(const ValueKey('quantity-minus')),
+                )
+                .onPressed !=
+            null) {
+          await tester.tap(find.byKey(const ValueKey('quantity-minus')));
+        }
         await tester.pump();
         await tester.tap(find.byKey(const ValueKey('item-return-submit')));
         await tester.pumpAndSettle();

@@ -8,6 +8,16 @@ import 'receipt_document_test.dart' show document, parse, partialDocument;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('consumption print includes drafts and paid lines without claiming receipt', () {
+    final plan=ReceiptRasterPlan.bill(language:UiLanguage.zh,caption:const ReceiptCaption(tableName:'V1'),filterLabel:'全部消费',items:[
+      (name:'已购酒',specification:'750ml',quantity:2,priceCents:100,state:'已付款'),
+      (name:'加单酒',specification:'750ml',quantity:1,priceCents:200,state:'待下单'),
+    ]);
+    final content=plan.pages.expand((p)=>p).join('\n');
+    expect(content,contains('已付款'));expect(content,contains('待下单'));
+    expect(content,contains('非付款凭证'));expect(content,contains('4.00'));
+    expect(content,isNot(contains('实收金额')));
+  });
   test(
     'long order keeps each item exactly once and repeats scope/status per page',
     () {

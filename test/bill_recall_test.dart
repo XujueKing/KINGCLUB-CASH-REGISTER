@@ -106,23 +106,18 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('bill-recall-wait')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('bill-serving-quantity')),
-        '3',
-      );
-      await tester.pump();
       expect(
         tester
-            .widget<FilledButton>(
-              find.byKey(const ValueKey('bill-serving-submit')),
-            )
+            .widget<IconButton>(find.byKey(const ValueKey('quantity-plus')))
             .onPressed,
         isNull,
       );
-      await tester.enterText(
-        find.byKey(const ValueKey('bill-serving-quantity')),
-        '1',
-      );
+      if (tester
+              .widget<IconButton>(find.byKey(const ValueKey('quantity-minus')))
+              .onPressed !=
+          null) {
+        await tester.tap(find.byKey(const ValueKey('quantity-minus')));
+      }
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('bill-serving-submit')));
       await tester.pumpAndSettle();

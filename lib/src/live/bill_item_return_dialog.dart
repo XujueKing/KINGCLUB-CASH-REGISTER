@@ -1,3 +1,5 @@
+import 'touch_quantity.dart';
+
 import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
@@ -29,7 +31,18 @@ class BillItemReturnDialog extends StatefulWidget {
 }
 
 class _BillItemReturnDialogState extends State<BillItemReturnDialog> {
-  final quantity = TextEditingController(text: '1');
+  final quantity = TextEditingController();
+  int get maximum =>
+      (widget.served
+          ? widget.item.servedQuantity
+          : widget.item.returnableUnservedQuantity) ??
+      0;
+  @override
+  void initState() {
+    super.initState();
+    quantity.text = '${maximum}';
+  }
+
   bool busy = false, recovery = false, failed = false;
   String t(String key) => tr(widget.language, key);
   int? get count {
@@ -118,15 +131,12 @@ class _BillItemReturnDialogState extends State<BillItemReturnDialog> {
                 ItemReturnRecovery(auth: widget.auth, language: widget.language)
               else ...[
                 Text(t('itemReturnNotice')),
-                TextField(
-                  key: const ValueKey('item-return-quantity'),
+                TouchQuantity(
                   controller: quantity,
+                  maximum: maximum,
+                  label: t('billRecallQuantity'),
                   enabled: !busy,
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    labelText: t('billRecallQuantity'),
-                  ),
+                  onChanged: () => setState(() {}),
                 ),
                 if (count != null)
                   Text(

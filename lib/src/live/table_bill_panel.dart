@@ -1,3 +1,11 @@
+import 'dart:convert';
+
+import 'wine_storage_dialog.dart';
+
+import 'package:cryptography/cryptography.dart';
+
+import '../hardware/receipt_document_renderer.dart';
+import '../hardware/receipt_print_identity.dart';
 import '../hardware/paid_receipt_printer.dart';
 import 'bill_product_group.dart';
 import 'workspace_read_cache.dart';
@@ -88,6 +96,121 @@ class _TableBillPanelState extends State<TableBillPanel>
   final queuedReductions = <String>[];
   int epoch = 0;
   final inventory = <String, CatalogProduct>{};
+  bool printingBill = false;
+  Future<void> printBill() async {
+    final identity = widget.auth.session;
+    if (identity == null || printingBill || loading || failed) return;
+    final e = epoch;
+    bool current() =>
+        mounted &&
+        foreground &&
+        epoch == e &&
+        identical(identity, widget.auth.session);
+    final items =
+        <
+          ({
+            String name,
+            String specification,
+            int quantity,
+            int priceCents,
+            String state,
+          })
+        >[];
+    for (final order in orders) {
+      if (order.status == 'expired' || order.fullyRefunded) continue;
+      if (filter != 'all' && filter != 'gift' && order.status != filter)
+        continue;
+      if (filter == 'voucher') continue;
+      for (final item in order.items) {
+        if (item.activeQuantity == 0 ||
+            (filter == 'gift' && item.priceCents != 0))
+          continue;
+        items.add((
+          name: item.name(widget.language),
+          specification: item.specification(widget.language),
+          quantity: item.activeQuantity,
+          priceCents: item.priceCents,
+          state: item.priceCents == 0
+              ? t('billGift')
+              : t(order.status == 'paid' ? 'tableBillPaid' : 'tableBillUnpaid'),
+        ));
+      }
+    }
+    if (filter == 'all' || filter == 'pending') {
+      for (final card in widget.draftCards.values) {
+        items.add((
+          name: card.name,
+          specification: card.specification,
+          quantity: card.quantity,
+          priceCents: card.priceCents,
+          state: [
+            '待下单',
+            'Not submitted',
+            '待下單',
+            'ยังไม่ส่งคำสั่ง',
+          ][widget.language.index],
+        ));
+      }
+    }
+    if (items.isEmpty) return;
+    setState(() => printingBill = true);
+    try {
+      final caption = await readReceiptCaption(
+        widget.auth,
+        widget.tableRef,
+        widget.sessionRef,
+      );
+      final plan = ReceiptRasterPlan.bill(
+        language: widget.language,
+        caption: caption,
+        filterLabel: t(
+          {
+            'all': 'billAllConsumption',
+            'pending': 'tableBillUnpaid',
+            'paid': 'tableBillPaid',
+            'gift': 'billGift',
+            'voucher': 'billVoucher',
+          }[filter]!,
+        ),
+        items: items,
+      );
+      final digest = await Sha256().hash(
+        utf8.encode('${widget.tableRef}|${widget.sessionRef}|${plan.pages}'),
+      );
+      final status = await printReceiptPlan(
+        plan: plan,
+        printIdentity: ReceiptPrintIdentity.unpaid(
+          base: identity.base.toString(),
+          storeRef: identity.storeRef,
+          fingerprint: digest.bytes
+              .map((b) => b.toRadixString(16).padLeft(2, '0'))
+              .join(),
+        ),
+        current: current,
+        reprint: true,
+      );
+      if (mounted && status != 'checkoutPrintSent')
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(t(status))));
+    } catch (_) {
+      if (current())
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              [
+                '小票未打印，请检查打印机',
+                'Print unconfirmed; check the printer',
+                '小票未列印，請檢查印表機',
+                'ยังไม่พิมพ์ โปรดตรวจสอบเครื่องพิมพ์',
+              ][widget.language.index],
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => printingBill = false);
+    }
+  }
+
   String t(String key) => tr(widget.language, key);
   bool get canRead =>
       widget.auth.session?.permissions.contains('orders.read') == true;
@@ -605,7 +728,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         order.refundQuantitiesKnown &&
         !order.fullyRefunded &&
         item.servingKnown &&
-        item.servedQuantity! > 0 &&
+        item.servedQuantity! > item.storedQuantity &&
         item.servingEpoch != null &&
         item.servingEpoch! < 1000000 &&
         {'open', 'clearing'}.contains(snapshot?.sessionStatus) &&
@@ -624,6 +747,13 @@ class _TableBillPanelState extends State<TableBillPanel>
         item.servingEpoch != null &&
         item.servingEpoch! < 1000000 &&
         (item.returnableUnservedQuantity ?? 0) > 0;
+    bool canStoreWine(LiveOrder order, OrderItem item) =>
+        identity?.permissions.contains('orders.serve') == true &&
+        order.status == 'paid' &&
+        item.wineStorage &&
+        order.refunds.isEmpty &&
+        snapshot?.sessionStatus == 'open' &&
+        (item.servedQuantity ?? 0) > item.storedQuantity;
     final selected = await showDialog<BillDetailAction>(
       context: context,
       builder: (_) => BillDetailsDialog(
@@ -632,28 +762,27 @@ class _TableBillPanelState extends State<TableBillPanel>
         canServe: canServe,
         canRecall: canRecall,
         canReturnUnserved: canReturnUnserved,
-        canReadReceipt: identity?.permissions.contains('orders.read') == true,
+        canStoreWine: canStoreWine,
       ),
     );
     if (!mounted || !current() || selected == null) return;
-    if (selected.action == 'receipt' &&
-        selected.order.tableCheckoutRef != null &&
-        identity?.permissions.contains('orders.read') == true) {
-      setState(() => checkout = true);
-      final status = await printPaidTableReceipt(
-        auth: widget.auth,
-        checkoutRef: selected.order.tableCheckoutRef!,
-        tableRef: widget.tableRef,
-        sessionRef: widget.sessionRef,
-        language: widget.language,
-        reprint: true,
-        stillCurrent: current,
+    if (selected.action == 'storeWine' &&
+        canStoreWine(selected.order, selected.item)) {
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => WineStorageDialog(
+          auth: widget.auth,
+          language: widget.language,
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          orderRef: selected.order.reference,
+          productRef: selected.item.productRef,
+          name: selected.item.name(widget.language),
+          isCurrent: current,
+        ),
       );
-      if (mounted) {
-        setState(() => checkout = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(t(status))));
-      }
+      if (mounted && foreground) await load();
       return;
     }
     if (selected.action == 'return' &&
@@ -1032,10 +1161,36 @@ class _TableBillPanelState extends State<TableBillPanel>
           Row(
             children: [
               if (widget.orderAction != null)
-                Expanded(flex: 2, child: widget.orderAction!),
+                Expanded(
+                  child: OutlinedButtonTheme(
+                    data: OutlinedButtonThemeData(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
+                    ),
+                    child: widget.orderAction!,
+                  ),
+                ),
               if (widget.orderAction != null &&
                   (widget.primaryAction != null || (canRead && canPay)))
                 const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
+                  key: const ValueKey('table-bill-print'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                  onPressed: printingBill || loading || failed
+                      ? null
+                      : printBill,
+                  child: Text(
+                    ['打印', 'Print', '列印', 'พิมพ์'][widget.language.index],
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               if (widget.primaryAction != null)
                 Expanded(flex: 3, child: widget.primaryAction!)
               else if (canRead && canPay)

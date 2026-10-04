@@ -73,6 +73,8 @@ class OrderItem {
       ),
       subtotalCents = _amount(value['subtotalCents']),
       servedQuantity = _servingCount(value, 'servedQuantity'),
+      storedQuantity = _servingCount(value, 'storedQuantity') ?? 0,
+      wineStorage = value['wineStorage'] == true,
       remainingQuantity = _servingCount(value, 'remainingQuantity'),
       refundedQuantity = _servingCount(value, 'refundedQuantity'),
       returnableUnservedQuantity = _servingCount(
@@ -104,6 +106,7 @@ class OrderItem {
     }
     if (quantity * priceCents != subtotalCents) throw const FormatException();
     if ((refundedQuantity ?? 0) > quantity) throw const FormatException();
+    if (storedQuantity > (servedQuantity ?? 0)) throw const FormatException();
     if (returnableUnservedQuantity != null &&
         (remainingQuantity == null ||
             returnableUnservedQuantity! > remainingQuantity!)) {
@@ -126,6 +129,8 @@ class OrderItem {
   final int quantity, priceCents, originalPriceCents, subtotalCents;
   // Both absent means an older server did not provide delivery progress, never zero delivered.
   final int? servedQuantity, remainingQuantity;
+  final int storedQuantity;
+  final bool wineStorage;
   final int? refundedQuantity;
   int get activeQuantity => quantity - (refundedQuantity ?? 0);
   // Display hint only; the server revalidates physical stock and original receipts.

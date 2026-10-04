@@ -65,23 +65,13 @@ void main() {
     await open(tester);
     await tester.tap(find.byKey(const ValueKey('bill-serve-D00000000001')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('bill-serving-quantity')),
-      '3',
-    );
-    await tester.pump();
     expect(
       tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey('bill-serving-submit')),
-          )
+          .widget<IconButton>(find.byKey(const ValueKey('quantity-plus')))
           .onPressed,
       isNull,
     );
-    await tester.enterText(
-      find.byKey(const ValueKey('bill-serving-quantity')),
-      '1',
-    );
+    await tester.tap(find.byKey(const ValueKey('quantity-minus')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('bill-serving-submit')));
     await tester.pumpAndSettle();
@@ -100,6 +90,8 @@ void main() {
       await open(tester);
       await tester.tap(find.byKey(const ValueKey('bill-serve-D00000000001')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('quantity-minus')));
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('bill-serving-submit')));
       await tester.pumpAndSettle();
       expect(auth.writes, 1);

@@ -1,3 +1,5 @@
+import 'touch_quantity.dart';
+
 import 'package:flutter/material.dart';
 
 import '../auth/staff_auth_controller.dart';
@@ -30,7 +32,18 @@ class BillServingDialog extends StatefulWidget {
 }
 
 class _BillServingDialogState extends State<BillServingDialog> {
-  final quantity = TextEditingController(text: '1');
+  final quantity = TextEditingController();
+  int get maximum =>
+      (widget.recall
+          ? (widget.item.servedQuantity ?? 0) - widget.item.storedQuantity
+          : widget.item.remainingQuantity) ??
+      0;
+  @override
+  void initState() {
+    super.initState();
+    quantity.text = '${maximum}';
+  }
+
   bool busy = false, recovery = false, failed = false;
   String t(String key) => tr(widget.language, key);
   int? get count {
@@ -39,7 +52,8 @@ class _BillServingDialogState extends State<BillServingDialog> {
             value != null &&
             value <=
                 ((widget.recall
-                        ? widget.item.servedQuantity
+                        ? (widget.item.servedQuantity ?? 0) -
+                              widget.item.storedQuantity
                         : widget.item.remainingQuantity) ??
                     0)
         ? value
@@ -145,19 +159,16 @@ class _BillServingDialogState extends State<BillServingDialog> {
                     ),
                   ),
                   if (failed) Text(t('liveReadFailed')),
-                  TextField(
-                    key: const ValueKey('bill-serving-quantity'),
+                  TouchQuantity(
                     controller: quantity,
-                    enabled: !busy,
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      labelText: t(
-                        widget.recall
-                            ? 'billRecallQuantity'
-                            : 'servingThisQuantity',
-                      ),
+                    maximum: maximum,
+                    label: t(
+                      widget.recall
+                          ? 'billRecallQuantity'
+                          : 'servingThisQuantity',
                     ),
+                    enabled: !busy,
+                    onChanged: () => setState(() {}),
                   ),
                 ],
               ),

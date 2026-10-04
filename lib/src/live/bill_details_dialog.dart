@@ -22,9 +22,9 @@ class BillDetailsDialog extends StatelessWidget {
     this.canRecall,
     this.canRefund,
     this.canReturnUnserved,
-    this.canReadReceipt = false,
+    this.canStoreWine,
   });
-  final bool canReadReceipt;
+  final bool Function(LiveOrder order, OrderItem item)? canStoreWine;
   final BillProductGroup group;
   final UiLanguage language;
   final bool Function(LiveOrder order, OrderItem item) canServe;
@@ -174,6 +174,10 @@ class BillDetailsDialog extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (served && item.storedQuantity > 0)
+                  Text(
+                    '${['已存', 'Stored', '已存', 'ฝากแล้ว'][language.index]} ${item.storedQuantity}',
+                  ),
                 const SizedBox(height: 6),
                 Text(
                   '${formatCents(item.priceCents)} × $quantity  ·  ${formatCents(item.priceCents * quantity)}',
@@ -191,46 +195,50 @@ class BillDetailsDialog extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           if (!returned)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (state == 'unserved' &&
-                    canReturnUnserved?.call(order, item) == true)
-                  OutlinedButton(
-                    key: ValueKey('bill-return-unserved-${order.reference}'),
-                    onPressed: () => select('return'),
-                    child: Text(t('billRecallReturn')),
-                  ),
-                if (state == 'unserved' && canServe(order, item))
-                  FilledButton(
-                    key: ValueKey('bill-serve-${order.reference}'),
-                    onPressed: () => select('serve'),
-                    child: Text(t('billServed')),
-                  ),
-                if (served)
-                  OutlinedButton(
-                    key: ValueKey('bill-recall-${order.reference}'),
-                    onPressed: canRecall?.call(order, item) == true
-                        ? () => select('recall')
-                        : null,
-                    child: Text(t('billRecall')),
-                  ),
-                if (paid && order.tableCheckoutRef != null && canReadReceipt)
-                  OutlinedButton.icon(
-                    onPressed: () => select('receipt'),
-                    icon: const Icon(Icons.print_outlined, size: 18),
-                    label: Text(t('tableReceiptTitle')),
-                  ),
-                if (paid && item.priceCents > 0)
-                  OutlinedButton(
-                    key: ValueKey('bill-refund-${order.reference}-$state'),
-                    onPressed: canRefund?.call(order, item) == true
-                        ? () => select('refund')
-                        : null,
-                    child: Text(t('billSingleRefund')),
-                  ),
-              ],
+            Flexible(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (served && canStoreWine?.call(order, item) == true)
+                    OutlinedButton(
+                      key: ValueKey('bill-store-wine-${order.reference}'),
+                      onPressed: () => select('storeWine'),
+                      child: Text(
+                        ['存酒', 'Store wine', '存酒', 'ฝากสุรา'][language.index],
+                      ),
+                    ),
+                  if (state == 'unserved' &&
+                      canReturnUnserved?.call(order, item) == true)
+                    OutlinedButton(
+                      key: ValueKey('bill-return-unserved-${order.reference}'),
+                      onPressed: () => select('return'),
+                      child: Text(t('billRecallReturn')),
+                    ),
+                  if (state == 'unserved' && canServe(order, item))
+                    FilledButton(
+                      key: ValueKey('bill-serve-${order.reference}'),
+                      onPressed: () => select('serve'),
+                      child: Text(t('billServed')),
+                    ),
+                  if (served)
+                    OutlinedButton(
+                      key: ValueKey('bill-recall-${order.reference}'),
+                      onPressed: canRecall?.call(order, item) == true
+                          ? () => select('recall')
+                          : null,
+                      child: Text(t('billRecall')),
+                    ),
+                  if (paid && item.priceCents > 0)
+                    OutlinedButton(
+                      key: ValueKey('bill-refund-${order.reference}-$state'),
+                      onPressed: canRefund?.call(order, item) == true
+                          ? () => select('refund')
+                          : null,
+                      child: Text(t('billSingleRefund')),
+                    ),
+                ],
+              ),
             ),
         ],
       ),
