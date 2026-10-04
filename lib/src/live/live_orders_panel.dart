@@ -6,8 +6,7 @@ import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'order_snapshot.dart';
 import 'order_preview_dialog.dart';
-import 'receipt_document_dialog.dart';
-import 'table_receipt_dialog.dart';
+import '../hardware/paid_receipt_printer.dart';
 import 'table_checkout_dialog.dart';
 import 'live_cash_recovery_panel.dart';
 import 'live_serving_recovery_panel.dart';
@@ -160,38 +159,39 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
     final generation = epoch;
     previewOpening = true;
     try {
+      if (receiptDocument || tableReceipt) {
+        bool current() =>
+            mounted &&
+            foreground &&
+            epoch == generation &&
+            identical(identity, widget.auth.session);
+        final status = tableReceipt && order.tableCheckoutRef != null
+            ? await printPaidTableReceipt(
+                auth: widget.auth,
+                checkoutRef: order.tableCheckoutRef!,
+                tableRef: widget.table.reference,
+                sessionRef: widget.table.session!.reference,
+                language: widget.language,
+                stillCurrent: current,
+                reprint: true,
+              )
+            : await printPaidOrderReceipt(
+                auth: widget.auth,
+                orderRef: order.reference,
+                tableRef: widget.table.reference,
+                sessionRef: widget.table.session!.reference,
+                language: widget.language,
+                stillCurrent: current,
+              );
+        if (mounted)
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(t(status))));
+        return;
+      }
       await showDialog<void>(
         context: context,
         builder: (ctx) {
           previewDialog = ctx;
-          if (receiptDocument || tableReceipt) {
-            if (!mounted ||
-                !foreground ||
-                epoch != generation ||
-                !identical(identity, widget.auth.session)) {
-              return discardStaleConfirmation(ctx);
-            }
-            if (tableReceipt) {
-              final checkout = order.tableCheckoutRef;
-              if (checkout == null || order.status != 'paid') {
-                return discardStaleConfirmation(ctx);
-              }
-              return TableReceiptDialog(
-                auth: widget.auth,
-                checkoutRef: checkout,
-                tableRef: widget.table.reference,
-                sessionRef: widget.table.session!.reference,
-                language: widget.language,
-              );
-            }
-            return ReceiptDocumentDialog(
-              auth: widget.auth,
-              orderRef: order.reference,
-              tableRef: widget.table.reference,
-              sessionRef: widget.table.session!.reference,
-              language: widget.language,
-            );
-          }
           return OrderPreviewDialog(
             auth: widget.auth,
             order: order,

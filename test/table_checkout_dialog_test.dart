@@ -256,6 +256,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('receipt button prints directly without preview or another payment', (tester) async {
+    final auth = CheckoutDialogAuth(permissions: ['workbench.read', 'payment.balance', 'orders.read'])
+      ..saved = fixture.command()..admissionStatus = 'pending';
+    await mount(tester, auth);
+    auth.requestedReceipt = null;
+    await tester.tap(find.byKey(const ValueKey('checkout-settled-receipt')));
+    await tester.pumpAndSettle();
+    expect(auth.requestedReceipt, settlement.checkout);
+    expect(find.byType(TableReceiptDialog), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(auth.collections, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('unpaid ticket skips preview and never collects money', (tester) async {
+    final auth = CheckoutDialogAuth();
+    await mount(tester, auth);
+    await tester.tap(find.text(tr(UiLanguage.zh, 'checkoutUnpaidTicket')));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(auth.collections, 0);
+    expect(auth.preparations, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets(
     'lost preparation response queries the same request and restores scanning without collection',
     (tester) async {

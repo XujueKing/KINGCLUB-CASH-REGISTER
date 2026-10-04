@@ -1,4 +1,4 @@
-import 'table_receipt_dialog.dart';
+import '../hardware/paid_receipt_printer.dart';
 import 'bill_product_group.dart';
 import 'workspace_read_cache.dart';
 import 'bill_product_card.dart';
@@ -639,16 +639,21 @@ class _TableBillPanelState extends State<TableBillPanel>
     if (selected.action == 'receipt' &&
         selected.order.tableCheckoutRef != null &&
         identity?.permissions.contains('orders.read') == true) {
-      await showDialog<void>(
-        context: context,
-        builder: (_) => TableReceiptDialog(
-          auth: widget.auth,
-          checkoutRef: selected.order.tableCheckoutRef!,
-          tableRef: widget.tableRef,
-          sessionRef: widget.sessionRef,
-          language: widget.language,
-        ),
+      setState(() => checkout = true);
+      final status = await printPaidTableReceipt(
+        auth: widget.auth,
+        checkoutRef: selected.order.tableCheckoutRef!,
+        tableRef: widget.tableRef,
+        sessionRef: widget.sessionRef,
+        language: widget.language,
+        reprint: true,
+        stillCurrent: current,
       );
+      if (mounted) {
+        setState(() => checkout = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(t(status))));
+      }
       return;
     }
     if (selected.action == 'return' &&

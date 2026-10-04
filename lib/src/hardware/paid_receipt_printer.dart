@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../live/receipt_document.dart';
 import '../strings.dart';
@@ -38,7 +39,36 @@ Future<String> printPaidTableReceipt({
         document.sessionRef != sessionRef ||
         document.checkoutRef != checkoutRef)
       return 'checkoutPrintFailed';
-    stage = 'discovery';
+    return await printReceiptPlan(
+      plan: ReceiptRasterPlan.forTable(
+        document,
+        language: language,
+        widthDots: 576,
+        reprint: reprint,
+      ),
+      printIdentity: ReceiptPrintIdentity.forTable(
+        base: identity.base.toString(),
+        storeRef: identity.storeRef,
+        checkoutRef: checkoutRef,
+      ),
+      current: current,
+      reprint: reprint,
+    );
+  } catch (_) {
+    debugPrint('cashier_print_failed_stage: $stage');
+    // Payment remains successful even if receipt read, USB or paper output fails.
+    return 'checkoutPrintFailed';
+  }
+}
+
+/// Fixed 80mm output, shared by paid receipts and unpaid bills. No preview UI.
+Future<String> printReceiptPlan({
+  required ReceiptRasterPlan plan,
+  required ReceiptPrintIdentity printIdentity,
+  required bool Function() current,
+  bool reprint = false,
+}) async {
+  try {
     final discovery = await const PrinterDiscoveryClient().inspect();
     // Installed XP-80U USB printer. Never send raster bytes to a scanner,
     // an unknown printer, or an ambiguous collection of output interfaces.
@@ -55,19 +85,11 @@ Future<String> printPaidTableReceipt({
             UsbPrinterSelection.choose(device, interface, endpoint),
     ];
     if (targets.length != 1 || !current()) return 'checkoutPrintUnavailable';
-    stage = 'render';
-    final plan = ReceiptRasterPlan.forTable(
-      document,
-      language: language,
-      widthDots: 576,
-      reprint: reprint,
-    );
     final rasters = <MonochromeRaster>[];
     for (var page = 0; page < plan.pages.length; page++) {
       if (!current()) return 'checkoutPrintFailed';
       rasters.add((await plan.renderPage(page)).raster);
     }
-    stage = 'send';
     final result =
         await RasterPrintCoordinator(
           transport: const NativeRasterPrintTransport(),
@@ -75,11 +97,7 @@ Future<String> printPaidTableReceipt({
         ).printRasters(
           rasters: rasters,
           target: targets.single,
-          documentIdentity: ReceiptPrintIdentity.forTable(
-            base: identity.base.toString(),
-            storeRef: identity.storeRef,
-            checkoutRef: checkoutRef,
-          ),
+          documentIdentity: printIdentity,
           confirmed: true,
           confirmedReprint: reprint,
           compatibilityVerified: true,
@@ -90,8 +108,47 @@ Future<String> printPaidTableReceipt({
         ? 'checkoutPrintSent'
         : 'checkoutPrintFailed';
   } catch (_) {
-    debugPrint('cashier_print_failed_stage: $stage');
-    // Payment remains successful even if receipt read, USB or paper output fails.
+    return 'checkoutPrintFailed';
+  }
+}
+
+Future<String> printPaidOrderReceipt({
+  required StaffAuthController auth,
+  required String orderRef,
+  required String tableRef,
+  required String sessionRef,
+  required UiLanguage language,
+  required bool Function() stillCurrent,
+}) async {
+  final identity = auth.session;
+  if (identity == null) return 'checkoutPrintFailed';
+  bool current() =>
+      stillCurrent() &&
+      identical(identity, auth.session) &&
+      identity.expiresAt.isAfter(DateTime.now());
+  try {
+    final document = await auth.readReceiptDocument(orderRef);
+    if (!current() ||
+        document.storeRef != identity.storeRef ||
+        document.orderRef != orderRef ||
+        document.tableRef != tableRef ||
+        document.sessionRef != sessionRef)
+      return 'checkoutPrintFailed';
+    return await printReceiptPlan(
+      plan: ReceiptRasterPlan.create(
+        document,
+        language: language,
+        widthDots: 576,
+      ),
+      printIdentity: ReceiptPrintIdentity(
+        base: identity.base.toString(),
+        storeRef: identity.storeRef,
+        orderRef: orderRef,
+      ),
+      current: current,
+      reprint: true,
+    );
+  } catch (_) {
     return 'checkoutPrintFailed';
   }
 }

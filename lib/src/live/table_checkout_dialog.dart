@@ -1,7 +1,6 @@
 import '../hardware/paid_receipt_printer.dart';
 import 'table_discount_dialog.dart';
 import '../hardware/receipt_document_renderer.dart';
-import '../hardware/receipt_output_panel.dart';
 import '../hardware/receipt_print_identity.dart';
 
 import 'dart:async';
@@ -14,7 +13,6 @@ import '../strings.dart';
 import '../network/ccsop_client.dart';
 import 'table_checkout_command.dart';
 import 'table_checkout_result.dart';
-import 'table_receipt_dialog.dart';
 import 'table_snapshot.dart';
 import 'payment_code_field.dart';
 import '../hardware/scanner_input.dart';
@@ -119,29 +117,26 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
 
   Future<void> openReceipt() async {
     final settled = result;
-    final identity = widget.auth.session;
-    final generation = epoch;
-    if (busy ||
-        !foreground ||
-        settled?.settled != true ||
-        identity?.permissions.contains('orders.read') != true) {
-      return;
-    }
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        if (!current(generation) || !identical(identity, widget.auth.session)) {
-          return AlertDialog(content: Text(t('receiptDocumentReload')));
-        }
-        return TableReceiptDialog(
-          auth: widget.auth,
-          checkoutRef: settled!.checkoutRef,
-          tableRef: widget.tableRef,
-          sessionRef: widget.sessionRef,
-          language: widget.language,
-        );
-      },
+    if (busy || printing || !foreground || settled?.settled != true) return;
+    setState(() {
+      printing = true;
+      printStatus = 'checkoutPrinting';
+    });
+    final status = await printPaidTableReceipt(
+      auth: widget.auth,
+      checkoutRef: settled!.checkoutRef,
+      tableRef: widget.tableRef,
+      sessionRef: widget.sessionRef,
+      language: widget.language,
+      reprint: true,
+      stillCurrent: () =>
+          mounted && foreground && result?.checkoutRef == settled.checkoutRef,
     );
+    if (mounted)
+      setState(() {
+        printing = false;
+        printStatus = status;
+      });
   }
 
   bool current(int e) => mounted && foreground && epoch == e;
@@ -755,59 +750,36 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   }
 
   Future<void> printUnpaid() async {
-    if (busy || !foreground || command != null) return;
+    if (busy || printing || !foreground || command != null) return;
     await readQuote();
     final q = quote, identity = widget.auth.session, generation = epoch;
     if (!mounted || !fresh || q == null || identity == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        if (!current(generation) || !identical(identity, widget.auth.session))
-          return const SizedBox.shrink();
-        unpaidPrintRoute = ModalRoute.of(context);
-        return AlertDialog(
-          title: Text(t('checkoutUnpaidTicket')),
-          content: SizedBox(
-            width: 550,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(t('checkoutNotPaymentProof')),
-                  for (final line in q.lines)
-                    ListTile(
-                      dense: true,
-                      title: Text(line.name(widget.language)),
-                      trailing: Text(
-                        '× ${line.quantity}  ￥ ${formatCents(line.quantity * line.priceCents)}',
-                      ),
-                    ),
-                  ReceiptOutputPanel(
-                    plan: ReceiptRasterPlan.unpaid(
-                      q,
-                      language: widget.language,
-                      widthDots: 576,
-                    ),
-                    language: widget.language,
-                    identity: ReceiptPrintIdentity.unpaid(
-                      base: identity.base.toString(),
-                      storeRef: q.storeRef,
-                      fingerprint: q.fingerprint,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(t('printerInspectClose')),
-            ),
-          ],
-        );
-      },
+    setState(() {
+      printing = true;
+      message = t('checkoutPrinting');
+    });
+    final status = await printReceiptPlan(
+      plan: ReceiptRasterPlan.unpaid(
+        q,
+        language: widget.language,
+        widthDots: 576,
+      ),
+      printIdentity: ReceiptPrintIdentity.unpaid(
+        base: identity.base.toString(),
+        storeRef: q.storeRef,
+        fingerprint: q.fingerprint,
+      ),
+      current: () =>
+          current(generation) && identical(identity, widget.auth.session),
+      reprint: true,
     );
+    if (mounted)
+      setState(() {
+        printing = false;
+        message = t(
+          status == 'checkoutPrintSent' ? status : 'receiptPrinterUnavailable',
+        );
+      });
   }
 
   Future<void> startCollection() async {
@@ -1002,7 +974,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                     'checkout-settled-receipt',
                                   ),
                                   onPressed: printing ? null : openReceipt,
-                                  child: Text(t('tableReceiptTitle')),
+                                  child: Text(t('receiptReprint')),
                                 ),
                                 const SizedBox(width: 16),
                                 FilledButton(
@@ -1025,7 +997,8 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                   Align(
                                     alignment: Alignment.centerLeft,
                                     child: TextButton.icon(
-                                      onPressed: busy || quote == null
+                                      onPressed:
+                                          busy || printing || quote == null
                                           ? null
                                           : printUnpaid,
                                       icon: const Icon(Icons.print_outlined),
@@ -1041,13 +1014,15 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                     spacing: 8,
                                     children: [
                                       OutlinedButton(
-                                        onPressed: busy || quote == null
+                                        onPressed:
+                                            busy || printing || quote == null
                                             ? null
                                             : () => discount(),
                                         child: Text(t('checkoutDiscount')),
                                       ),
                                       OutlinedButton(
-                                        onPressed: busy || quote == null
+                                        onPressed:
+                                            busy || printing || quote == null
                                             ? null
                                             : () => discount(waive: true),
                                         child: Text(t('checkoutWaive')),
@@ -1173,7 +1148,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                         'checkout-settled-receipt',
                                       ),
                                       onPressed: busy ? null : openReceipt,
-                                      child: Text(t('tableReceiptTitle')),
+                                      child: Text(t('receiptReprint')),
                                     ),
                                   if (original != null &&
                                       result?.settled != true &&
