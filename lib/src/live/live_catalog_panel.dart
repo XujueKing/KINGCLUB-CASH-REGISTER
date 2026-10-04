@@ -294,13 +294,102 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                     hasNext: false,
                     onPrevious: () {},
                     onNext: () {},
-                    itemCount: groups.length,
-                    itemBuilder: (context, i) => productCard(groups[i]),
+                    itemCount: groups.length + (showBundleArtwork ? 1 : 0),
+                    itemBuilder: (context, i) => showBundleArtwork && i == 0
+                        ? bundleArtworkCard()
+                        : productCard(groups[i - (showBundleArtwork ? 1 : 0)]),
                   );
                 },
               ),
       ),
     ],
+  );
+
+  bool get showBundleArtwork =>
+      widget.auth.session?.storeRef == 'c839e237-defd-4c96-a6a3-3f6d3fe5d9d0' &&
+      categories.any(
+        (c) => c.reference == category && c.names.any((name) => name == '精选套餐'),
+      );
+
+  Widget bundleArtworkCard() => Material(
+    color: Colors.white,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: const BorderSide(color: Color(0xffb2c6ba)),
+    ),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (context) => Dialog(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  variantCopy('卡颜微醺派 A套餐|Kayan package A|卡顏微醺派 A套餐|Kayan A'),
+                ),
+                SizedBox(
+                  height: 400,
+                  child: Image.asset(
+                    'assets/products/kayan-bundle-a.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(variantCopy('关闭|Close|關閉|Close')),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 88,
+              child: Image.asset(
+                'assets/products/kayan-bundle-a.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    variantCopy('卡颜微醺派|Kayan party|卡顏微醺派|Kayan'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    variantCopy('A套餐酒水|Package A drinks|A套餐酒水|Package A'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    variantCopy('仅展示|Preview only|僅展示|Preview only'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xff616c65),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 
   bool canSelectProduct(CatalogProduct p) =>
