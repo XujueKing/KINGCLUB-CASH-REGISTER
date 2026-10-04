@@ -1432,7 +1432,8 @@ class StaffAuthController extends ChangeNotifier {
     if (!session.expiresAt.isAfter(_now())) {
       throw const CcsopFailure('SESSION_REQUIRED');
     }
-    final operator = value is Map ? value['operator'] : null;
+    final result = value is Map ? value['result'] : null;
+    final operator = result is Map ? result['operator'] : null;
     _updateOperatorAvatar(operator is Map ? operator['avatarBase64'] : null);
     return value;
   }

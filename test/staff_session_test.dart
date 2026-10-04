@@ -131,6 +131,18 @@ Future<void> login(StaffAuthController controller) => controller.login(
 );
 
 void main() {
+  test('workbench result supplies staff avatar and logout clears it', () async {
+    final storage=TestStorage(), auth=TestAuth(), api=TestApi();
+    final c=controller(storage,auth,api);
+    await login(c);
+    api.pendingRead=Completer<Object?>()..complete({'result':{'operator':{'avatarBase64':base64Encode([1,2,3])}}});
+    await c.readWorkbench();
+    expect(c.operatorAvatar.value,[1,2,3]);
+    await c.logout();
+    expect(c.operatorAvatar.value,isNull);
+    c.dispose();
+  });
+
   test(
     'single store login omits store input and trusts validated server binding',
     () async {
