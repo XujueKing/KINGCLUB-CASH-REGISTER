@@ -11,11 +11,13 @@ class SwipePages extends StatefulWidget {
     required this.onPrevious,
     required this.onNext,
     this.pageCount,
+    this.reserveIndicatorSpace = false,
   });
   final Widget child;
   final int page;
   final int? pageCount;
   final bool hasNext, loading;
+  final bool reserveIndicatorSpace;
   final VoidCallback onPrevious, onNext;
   @override
   State<SwipePages> createState() => _SwipePagesState();
@@ -78,13 +80,17 @@ class _SwipePagesState extends State<SwipePages> {
             ),
           ),
         ),
-        if (count > 1)
+        if (count > 1 || widget.reserveIndicatorSpace)
           SizedBox(
             height: 24,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (var i = start; i < count && i < start + 7; i++)
+                for (
+                  var i = start;
+                  count > 1 && i < count && i < start + 7;
+                  i++
+                )
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     width: i == widget.page ? 16 : 6,
