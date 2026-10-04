@@ -128,6 +128,7 @@ class LiveTable {
     }
   }
   final String reference, name, status;
+  bool get isBarCounter => name.trim() == '吧台';
   final Map<String, dynamic>? reservation;
   final String? tableMode;
   final int? minimumSeats;
