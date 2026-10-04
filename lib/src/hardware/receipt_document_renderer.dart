@@ -107,13 +107,14 @@ class ReceiptRasterPlan {
     bold: true,
   );
   static _Row _item(
+    UiLanguage language,
     String name,
     String spec,
     int qty,
     int price,
     int subtotal,
   ) => _Row([
-    '$name${spec.isEmpty ? '' : '\n$spec'}\n@ ${formatCents(price)}',
+    '$name${spec.isEmpty ? '' : '\n$spec'}\n${_label(language, '单价', 'Unit price', '單價', 'ราคาต่อหน่วย')} ${formatCents(price)}',
     '$qty',
     formatCents(subtotal),
   ], gap: 14);
@@ -153,6 +154,7 @@ class ReceiptRasterPlan {
         ], size: 20),
         for (final item in order.items)
           _item(
+            language,
             item.name(language),
             item.specification(language),
             item.quantity,
@@ -228,6 +230,7 @@ class ReceiptRasterPlan {
         _columns(language),
         for (final item in d.items)
           _item(
+            language,
             item.name(language),
             item.specification(language),
             item.quantity,
@@ -282,6 +285,7 @@ class ReceiptRasterPlan {
       _columns(language),
       for (final line in q.lines)
         _item(
+          language,
           line.name(language),
           '',
           line.quantity,
@@ -334,6 +338,7 @@ class ReceiptRasterPlan {
       rows.add(_Row([item.state], size: 20));
       rows.add(
         _item(
+          language,
           item.name,
           item.specification,
           item.quantity,

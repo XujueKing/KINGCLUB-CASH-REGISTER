@@ -1164,8 +1164,10 @@ class _TableBillPanelState extends State<TableBillPanel>
                 Expanded(
                   child: OutlinedButtonTheme(
                     data: OutlinedButtonThemeData(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      style: Theme.of(context).outlinedButtonTheme.style?.merge(
+                        OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        ),
                       ),
                     ),
                     child: widget.orderAction!,
