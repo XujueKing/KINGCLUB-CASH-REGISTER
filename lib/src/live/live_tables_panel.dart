@@ -293,6 +293,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   @override
   void initState() {
     super.initState();
+    unawaited(warmCatalogDisplay(widget.auth));
     autoSeatPending = widget.menuVisible == true;
     unawaited(restoreBarGroups());
     WidgetsBinding.instance.addObserver(this);

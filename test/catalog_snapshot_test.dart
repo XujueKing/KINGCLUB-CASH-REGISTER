@@ -95,6 +95,20 @@ class ViewAuth extends StaffAuthController {
 }
 
 void main() {
+  testWidgets('reopening catalog displays cached products before network returns', (tester) async {
+    final auth = ViewAuth();
+    addTearDown(auth.dispose);
+    Widget page() => MaterialApp(home: Scaffold(body: LiveCatalogPanel(auth: auth, language: UiLanguage.zh, onBack: () {})));
+    await tester.pumpWidget(page());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    auth.gate = Completer<CatalogSnapshot>();
+    await tester.pumpWidget(page());
+    expect(find.byKey(const ValueKey('catalog-product-p001')), findsOneWidget);
+    auth.gate!.complete(parse(catalog()));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('background refresh preserves categories and their interaction', (
     tester,
   ) async {

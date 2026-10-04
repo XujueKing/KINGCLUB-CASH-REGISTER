@@ -12,6 +12,62 @@ import 'catalog_snapshot.dart';
 import 'product_thumbnail.dart';
 import 'table_snapshot.dart';
 
+// Display cache is isolated to the employee session; server commands still
+// validate current prices, permissions and stock.
+class _CatalogDisplay {
+  _CatalogDisplay(this.identity);
+  final Object? identity;
+  CatalogSnapshot? snapshot;
+  List<List<CatalogProduct>> groups = [];
+  Future<void>? pending;
+}
+
+final _catalogDisplays = Expando<_CatalogDisplay>();
+_CatalogDisplay _displayFor(StaffAuthController auth) {
+  var cached = _catalogDisplays[auth];
+  if (cached == null || !identical(cached.identity, auth.session)) {
+    cached = _CatalogDisplay(auth.session);
+    _catalogDisplays[auth] = cached;
+  }
+  return cached;
+}
+
+Future<void> _refreshCatalog(StaffAuthController auth, _CatalogDisplay cached) {
+  return cached.pending ??= (() async {
+    try {
+      final families = <String, List<CatalogProduct>>{};
+      final seen = <String>{};
+      String? cursor;
+      late CatalogSnapshot result;
+      do {
+        result = await auth.readCatalog(afterProduct: cursor);
+        if (!identical(cached.identity, auth.session)) return;
+        for (final p in result.products) {
+          final key =
+              '${p.categoryRef}/${p.productGroupRef == null ? "sku:${p.reference}" : "group:${p.productGroupRef}"}';
+          (families[key] ??= []).add(p);
+        }
+        cursor = result.nextAfterProduct;
+        if (cursor != null && (!seen.add(cursor) || seen.length >= 100)) {
+          throw const FormatException();
+        }
+      } while (cursor != null);
+      cached.snapshot = result;
+      cached.groups = families.values.toList();
+    } finally {
+      cached.pending = null;
+    }
+  })();
+}
+
+Future<void> warmCatalogDisplay(StaffAuthController auth) async {
+  try {
+    await _refreshCatalog(auth, _displayFor(auth));
+  } catch (_) {
+    // Opening the catalog retains its own retry/error handling.
+  }
+}
+
 class LiveCatalogPanel extends StatefulWidget {
   const LiveCatalogPanel({
     super.key,
@@ -54,6 +110,10 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.auth.addListener(identityChanged);
+    final cached = _displayFor(widget.auth);
+    data = cached.snapshot;
+    categories = data?.categories ?? [];
+    allGroups = cached.groups;
     unawaited(load());
   }
 
@@ -101,35 +161,17 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       failed = false;
     });
     try {
-      final products = <CatalogProduct>[];
-      final seen = <String>{};
-      String? cursor;
-      late CatalogSnapshot result;
-      do {
-        result = await widget.auth.readCatalog(
-          categoryRef: null,
-          afterProduct: cursor,
-        );
-        if (!mounted ||
-            generation != epoch ||
-            !identical(identity, widget.auth.session))
-          return;
-        products.addAll(result.products);
-        cursor = result.nextAfterProduct;
-        if (cursor != null && (!seen.add(cursor) || seen.length >= 100)) {
-          throw const FormatException();
-        }
-      } while (cursor != null);
-      final families = <String, List<CatalogProduct>>{};
-      for (final p in products) {
-        final key =
-            '${p.categoryRef}/${p.productGroupRef == null ? "sku:${p.reference}" : "group:${p.productGroupRef}"}';
-        (families[key] ??= []).add(p);
-      }
+      final cached = _displayFor(widget.auth);
+      await _refreshCatalog(widget.auth, cached);
+      if (!mounted ||
+          generation != epoch ||
+          !identical(identity, widget.auth.session))
+        return;
+      final result = cached.snapshot!;
       setState(() {
         data = result;
         categories = result.categories;
-        allGroups = families.values.toList();
+        allGroups = cached.groups;
         loading = false;
       });
     } catch (_) {
