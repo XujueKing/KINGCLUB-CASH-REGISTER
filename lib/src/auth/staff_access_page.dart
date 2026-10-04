@@ -217,13 +217,24 @@ class _StaffAccessPageState extends State<StaffAccessPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Center(
+                    child: Image.asset(
+                      'assets/brand/kingclub-gold.png',
+                      width: 128,
+                      height: 69,
+                      fit: BoxFit.contain,
+                      color: Colors.black,
+                      colorBlendMode: BlendMode.srcIn,
+                      semanticLabel: 'KING CLUB',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Text(
                     t('staffWelcome'),
+                    textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  const SizedBox(height: 12),
-
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                   if (auth.busy) ...[
                     const LinearProgressIndicator(),
                     const SizedBox(height: 16),
