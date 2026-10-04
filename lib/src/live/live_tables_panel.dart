@@ -888,18 +888,30 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       try {
         if (table.session == null) {
           final pending = await widget.auth.pendingOpenings();
-          if (pending.any((p) => p.tableId == table.reference)) {
-            throw StateError('BAR_OPENING_PENDING');
+          for (final request in pending.where(
+            (p) => p.tableId == table.reference,
+          )) {
+            await widget.auth.recoverOpening(
+              request.requestId,
+              retryOriginal: true,
+            );
           }
-          final opening = await widget.auth.readOpeningContext(tableId: table.reference);
-          if (!mounted) return;
-          final result = await widget.auth.submitOpening(
-            context: opening, partySize: null, memberRefs: [],
-            arrivalConfirmed: true, reservationChecked: true,
-            selectedRule: {'mode': 'manual'},
+          final opening = await widget.auth.readOpeningContext(
+            tableId: table.reference,
           );
-          if (result.state != OpeningLookupState.confirmed) {
-            throw StateError('BAR_OPENING_PENDING');
+          if (!mounted) return;
+          if (opening.activeSessionRef == null) {
+            final result = await widget.auth.submitOpening(
+              context: opening,
+              partySize: null,
+              memberRefs: [],
+              arrivalConfirmed: true,
+              reservationChecked: true,
+              selectedRule: {'mode': 'manual'},
+            );
+            if (result.state != OpeningLookupState.confirmed) {
+              throw StateError('BAR_OPENING_PENDING');
+            }
           }
           if (!mounted) return;
           await load();
@@ -908,9 +920,12 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         setState(() => focusedTableRef = table.reference);
         widget.onMenuChanged?.call(true);
       } catch (_) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t('openingPending'))));
-      } finally { enteringBar = false; }
+        if (mounted)
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(t('openingPending'))));
+      } finally {
+        enteringBar = false;
+      }
       return;
     }
     if (table.status == 'active' &&
