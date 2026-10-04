@@ -1117,6 +1117,30 @@ class StaffAuthController extends ChangeNotifier {
     return epoch;
   }
 
+  Future<Map<String, dynamic>> qrLoginCall(String base, Map<String, dynamic> params,
+      {required bool Function() stillCurrent}) async {
+    if (_session != null || _busy) throw const CcsopFailure('SESSION_CHANGED');
+    final epoch = _epoch, canonicalBase = serviceBase(base).toString();
+    final device = await _vault.deviceId();
+    _check(epoch);
+    if (!stillCurrent()) throw const CcsopFailure('SESSION_CHANGED');
+    final channel = _authFactory(canonicalBase);
+    try {
+      final result = await channel.call('K261004002008', {...params, 'deviceId': device});
+      _check(epoch);
+      if (!stillCurrent() || _session != null || _busy) throw const CcsopFailure('SESSION_CHANGED');
+      if (result['sessionId'] != null) {
+        final installEpoch = _begin();
+        try {
+          await _install(StaffSession.fromServer(result, base: canonicalBase, deviceId: device,
+            expectedStore: params['storeRef'] as String?, now: _now()), installEpoch);
+        } catch(error) { await _fail(error, installEpoch); rethrow; }
+        finally { _finish(installEpoch); }
+      }
+      return result;
+    } finally { channel.close(); }
+  }
+
   Future<void> login({
     required String base,
     String? storeRef,

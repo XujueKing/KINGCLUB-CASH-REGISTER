@@ -6,6 +6,15 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'staffWelcome': '欢迎使用 KING 收银台|Welcome to KING|歡迎使用 KING 收銀台|ยินดีต้อนรับสู่ KING',
+  'staffQrHint': '使用 KING APP 扫码登录，或向扫码器出示员工会员码|Scan with KING APP, or scan your staff member code|使用 KING APP 掃碼登入，或向掃碼器出示員工會員碼|สแกนด้วยแอป KING หรือแสดงรหัสสมาชิกพนักงาน',
+  'staffPasswordMode': '手机号密码登录|Phone and password|手機號密碼登入|เข้าสู่ระบบด้วยเบอร์โทรและรหัสผ่าน',
+  'staffQrMode': '二维码登录|QR login|二維碼登入|เข้าสู่ระบบด้วย QR',
+  'staffQrRefresh': '刷新二维码|Refresh QR|重新整理二維碼|รีเฟรช QR',
+  'staffQrExpired': '二维码已失效，请刷新|QR expired. Refresh to continue.|二維碼已失效，請重新整理|QR หมดอายุ โปรดรีเฟรช',
+  'staffQrFailed': '暂时无法连接，请重试或使用手机号登录|Connection unavailable. Retry or use phone login.|暫時無法連線，請重試或使用手機號登入|เชื่อมต่อไม่ได้ โปรดลองอีกครั้งหรือใช้เบอร์โทร',
+  'staffQrDenied': '登录未完成，请确认会员码有效且有本店员工权限|Login failed. Check your member code and staff access.|登入未完成，請確認會員碼有效且有本店員工權限|เข้าสู่ระบบไม่ได้ โปรดตรวจสอบรหัสสมาชิกและสิทธิ์พนักงาน',
+
   'togetherAdmissionClose': '关闭|Close|關閉|ปิด',
   'togetherAdmission': '活动入场|Event admission|活動入場|เข้างาน',
   'togetherAdmissionHelp': '扫描顾客活动入场码，确认核销后放行。|Scan the guest’s event ticket and admit only after confirmation.|掃描顧客活動入場碼，確認核銷後放行。|สแกนบัตรเข้างานและให้เข้าหลังยืนยันสำเร็จ',

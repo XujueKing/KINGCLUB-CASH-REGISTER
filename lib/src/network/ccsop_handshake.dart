@@ -100,7 +100,7 @@ Future<SealedRequest> sealHandshakeRequest({
   RequestStamp? stamp,
 }) async {
   if (!RegExp(r'^[a-f0-9-]{36}$').hasMatch(handshakeId) ||
-      !{'K260929001901', 'K260929001903'}.contains(interfaceId)) {
+      !{'K260929001901', 'K260929001903', 'K261004002008'}.contains(interfaceId)) {
     throw ArgumentError('Invalid cashier handshake scope');
   }
   final s = stamp ?? RequestStamp();
@@ -159,7 +159,7 @@ class CcsopHandshakeClient implements AuthChannel {
   ) async {
     if (_closed) throw const CcsopFailure('CLIENT_CLOSED');
     if (_busy) throw const CcsopFailure('AUTH_IN_PROGRESS');
-    if (!{'K260929001901', 'K260929001903'}.contains(interfaceId)) {
+    if (!{'K260929001901', 'K260929001903', 'K261004002008'}.contains(interfaceId)) {
       throw const CcsopFailure('AUTH_SCOPE_INVALID');
     }
     _busy = true;

@@ -1,3 +1,5 @@
+import 'staff_qr_login.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -26,6 +28,7 @@ class _StaffAccessPageState extends State<StaffAccessPage>
   UiLanguage language = UiLanguage.zh;
   Timer? refreshTimer;
   bool foreground = true;
+  bool passwordMode = false;
   String? notice;
   String t(String key) => tr(language, key);
 
@@ -68,7 +71,12 @@ class _StaffAccessPageState extends State<StaffAccessPage>
       await auth.restore();
       if (mounted) setState(() => notice = null);
     } catch (_) {
-      if (mounted) setState(() => notice = auth.canRetryRestore ? 'staffReconnectNotice' : 'staffAuthFailure');
+      if (mounted)
+        setState(
+          () => notice = auth.canRetryRestore
+              ? 'staffReconnectNotice'
+              : 'staffAuthFailure',
+        );
     }
   }
 
@@ -210,11 +218,11 @@ class _StaffAccessPageState extends State<StaffAccessPage>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    t('staffLogin'),
+                    t('staffWelcome'),
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
-                  Text(t('authHint')),
+
                   const SizedBox(height: 20),
                   if (auth.busy) ...[
                     const LinearProgressIndicator(),
@@ -226,8 +234,30 @@ class _StaffAccessPageState extends State<StaffAccessPage>
                     const SizedBox(height: 16),
                   ],
                   if (auth.canRetryRestore)
-                    FilledButton(onPressed:auth.busy?null:()=>unawaited(restore()),child:Text(t('staffReconnect'))),
-                  if (session == null)
+                    FilledButton(
+                      onPressed: auth.busy ? null : () => unawaited(restore()),
+                      child: Text(t('staffReconnect')),
+                    ),
+                  if (!passwordMode && !auth.busy && !auth.canRetryRestore)
+                    StaffQrLogin(
+                      auth: auth,
+                      base: serviceEndpoint,
+                      language: language,
+                    ),
+                  TextButton(
+                    key: const ValueKey('staff-login-mode'),
+                    onPressed: auth.busy
+                        ? null
+                        : () => setState(() {
+                            passwordMode = !passwordMode;
+                            password.clear();
+                            notice = null;
+                          }),
+                    child: Text(
+                      t(passwordMode ? 'staffQrMode' : 'staffPasswordMode'),
+                    ),
+                  ),
+                  if (passwordMode)
                     Form(
                       key: form,
                       child: Column(

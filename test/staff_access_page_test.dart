@@ -7,6 +7,10 @@ import 'package:kingclub_cash_register/src/auth/staff_auth_controller.dart';
 
 // UI-only double: never used as an authentication or persistence fallback.
 class UiAuth extends StaffAuthController {
+  @override
+  Future<Map<String,dynamic>> qrLoginCall(String base,Map<String,dynamic> params,{required bool Function() stillCurrent}) async => {
+    'challengeId':'a'*64,'pollSecret':'b'*64,'code':'kingclub://cashier-login/v1/${'a'*64}',
+    'expiresAtMs':DateTime.now().add(const Duration(minutes:5)).millisecondsSinceEpoch,'status':'pending'};
   int restores = 0, logins = 0;
   String? submittedPassword;
   Completer<void>? gate;
@@ -86,6 +90,9 @@ void main() {
     (tester) async {
       final auth = UiAuth();
       await show(tester, auth);
+      expect(find.byType(TextFormField), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('staff-login-mode')));
+      await tester.pumpAndSettle();
       Future<void> enter(String field, String value) =>
           tester.enterText(find.byKey(ValueKey('staff-$field')), value);
       expect(find.byKey(const ValueKey('staff-endpoint')), findsNothing);
