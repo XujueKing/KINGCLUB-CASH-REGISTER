@@ -128,6 +128,59 @@ void main() {
     expect(find.byKey(const ValueKey('bill-filter')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'ordering menu automatically selects an unused bar seat without opening',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = TableAuth(permissions: ['workbench.read', 'orders.read']);
+      final reply = tableFixture(count: 2);
+      final tables = reply['result']['tables'] as List;
+      tables[0]['tableName'] = '吧台';
+      tables[0]['maximumSeats'] = 8;
+      tables[0]['session'] = null;
+      tables[1]['parentBarRef'] = tables[0]['tableRef'];
+      tables[1]['barSeatNumber'] = 2;
+      tables[1]['session'] = null;
+      auth.reply = reply;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveTablesPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveTablesPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+              menuVisible: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(auth.openingReads, 0);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byKey(const ValueKey('empty-bar-member')), findsOneWidget);
+      expect(find.byKey(const ValueKey('table-bill-total')), findsOneWidget);
+      expect(find.byKey(const ValueKey('table-bill-paid')), findsOneWidget);
+      expect(find.byKey(const ValueKey('table-bill-pending')), findsOneWidget);
+      expect(find.byKey(const ValueKey('table-bill-print')), findsOneWidget);
+      expect(find.byKey(const ValueKey('bill-filter')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('counter is below ordinary cards with eight avatar places', (
     tester,
   ) async {

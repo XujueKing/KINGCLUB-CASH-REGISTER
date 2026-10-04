@@ -229,10 +229,64 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   Timer? clockTimer;
   DateTime? selectedDate;
   String t(String key) => tr(widget.language, key);
+  bool autoSeatPending = false;
+
+  void selectDefaultBarSeat() {
+    if (!autoSeatPending || snapshot == null) return;
+    autoSeatPending = false;
+    if (focusedTableRef != null) return;
+    final seats =
+        snapshot!.tables
+            .where(
+              (seat) =>
+                  seat.isBarSeat &&
+                  seat.status == 'active' &&
+                  seat.reservation == null &&
+                  !barDrafts.contains(seat.reference) &&
+                  (seat.session == null ||
+                      (seat.session!.status == 'open' &&
+                          seat.session!.linkedMembers == 0 &&
+                          !seat.session!.hasConsumption)),
+            )
+            .toList()
+          ..sort((a, b) => a.barSeatNumber!.compareTo(b.barSeatNumber!));
+    if (seats.isNotEmpty) {
+      focusedTableRef = seats.first.reference;
+      selectedBarSeat = seats.first.barSeatNumber;
+      selectedDate = null;
+      emptyBarMenu = true;
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              barText(
+                '吧台暂无空位，请选择桌台',
+                'No free bar seat. Select a table.',
+                '吧台暫無空位，請選擇桌台',
+                'ไม่มีที่นั่งบาร์ว่าง กรุณาเลือกโต๊ะ',
+              ),
+            ),
+          ),
+        );
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant LiveTablesPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.menuVisible == true && oldWidget.menuVisible != true) {
+      autoSeatPending = focusedTableRef == null;
+      selectDefaultBarSeat();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    autoSeatPending = widget.menuVisible == true;
     unawaited(restoreBarGroups());
     WidgetsBinding.instance.addObserver(this);
     clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -335,6 +389,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       }
       setState(() {
         snapshot = value;
+        selectDefaultBarSeat();
         page = requestedPage;
         loading = false;
       });
