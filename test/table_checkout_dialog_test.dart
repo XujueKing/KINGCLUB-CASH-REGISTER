@@ -10,7 +10,6 @@ import 'package:kingclub_cash_register/src/live/table_checkout_command.dart';
 import 'package:kingclub_cash_register/src/live/table_checkout_cancellation.dart';
 import 'package:kingclub_cash_register/src/live/table_checkout_dialog.dart';
 import 'package:kingclub_cash_register/src/live/table_checkout_result.dart';
-import 'package:kingclub_cash_register/src/live/table_receipt_dialog.dart';
 import 'package:kingclub_cash_register/src/live/receipt_document.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
@@ -245,37 +244,28 @@ void main() {
     addTearDown(auth.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        home: TableCheckoutDialog(
-          auth: auth,
-          tableRef: 'TEST_TABLE',
-          sessionRef: 'TEST_SESSION',
-          language: UiLanguage.zh,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showDialog<bool>(
+                context: context,
+                builder: (_) => TableCheckoutDialog(
+                  auth: auth,
+                  tableRef: 'TEST_TABLE',
+                  sessionRef: 'TEST_SESSION',
+                  language: UiLanguage.zh,
+                ),
+              ),
+              child: const Text('OPEN_CHECKOUT'),
+            ),
+          ),
         ),
       ),
     );
+    await tester.tap(find.text('OPEN_CHECKOUT'));
     await tester.pumpAndSettle();
   }
 
-  testWidgets(
-    'receipt button prints directly without preview or another payment',
-    (tester) async {
-      final auth =
-          CheckoutDialogAuth(
-              permissions: ['workbench.read', 'payment.balance', 'orders.read'],
-            )
-            ..saved = fixture.command()
-            ..admissionStatus = 'pending';
-      await mount(tester, auth);
-      auth.requestedReceipt = null;
-      await tester.tap(find.byKey(const ValueKey('checkout-settled-receipt')));
-      await tester.pumpAndSettle();
-      expect(auth.requestedReceipt, settlement.checkout);
-      expect(find.byType(TableReceiptDialog), findsNothing);
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(auth.collections, 0);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
   testWidgets('unpaid ticket skips preview and never collects money', (
     tester,
   ) async {
@@ -321,48 +311,6 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
-  testWidgets(
-    'confirmed payment survives session refresh, quote expiry and foreground return',
-    (tester) async {
-      final auth = CheckoutDialogAuth()
-        ..saved = fixture.command()
-        ..admissionStatus = 'pending';
-      await mount(tester, auth);
-      expect(find.byKey(const ValueKey('checkout-success')), findsOneWidget);
-      final reads = auth.quoteReads, queries = auth.recoveries;
-      // Successful server collection removes the pending request from storage.
-      auth.saved = null;
-      auth.quoteUnavailable = true;
-      auth.sessionRefreshed();
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 45));
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-      await tester.pump();
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('checkout-success')), findsOneWidget);
-      expect(find.byType(TextField), findsNothing);
-      expect(auth.quoteReads, reads);
-      expect(auth.recoveries, queries);
-      expect(auth.collections, 0);
-      expect(auth.preparations, 0);
-      // A different table/session must not inherit this success screen.
-      await tester.pumpWidget(
-        MaterialApp(
-          home: TableCheckoutDialog(
-            auth: auth,
-            tableRef: 'OTHER_TABLE',
-            sessionRef: 'OTHER_SESSION',
-            language: UiLanguage.zh,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('checkout-success')), findsNothing);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
-
   testWidgets('failed quote retries without creating a payment request', (
     tester,
   ) async {
@@ -472,16 +420,18 @@ void main() {
     },
   );
   testWidgets(
-    'pending original automatically reconciles without a new charge',
+    'paid checkout returns directly and starts receipt without another charge',
     (tester) async {
       final auth = CheckoutDialogAuth()
         ..saved = fixture.command()
         ..admissionStatus = 'pending';
       await mount(tester, auth);
       expect(auth.recoveries, 1);
+      expect(auth.requestedReceipt, settlement.checkout);
+      expect(find.byType(TableCheckoutDialog), findsNothing);
       expect(auth.collections, 0);
       expect(auth.preparations, 0);
-      expect(find.text(tr(UiLanguage.zh, 'checkoutSuccess')), findsOneWidget);
+      expect(find.text(tr(UiLanguage.zh, 'checkoutSuccess')), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

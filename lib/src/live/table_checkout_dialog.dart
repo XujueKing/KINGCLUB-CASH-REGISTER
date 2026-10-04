@@ -111,15 +111,26 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       printing = true;
       printStatus = 'checkoutPrinting';
     });
+    final auth = widget.auth;
+    final identity = auth.session;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final language = widget.language;
     final status = await printPaidTableReceipt(
-      auth: widget.auth,
+      auth: auth,
       checkoutRef: settled.checkoutRef,
       tableRef: widget.tableRef,
       sessionRef: widget.sessionRef,
       language: widget.language,
+      // Closing the paid dialog must not cancel its receipt output.
       stillCurrent: () =>
-          mounted && foreground && result?.checkoutRef == settled.checkoutRef,
+          identity != null &&
+          auth.session?.storeRef == identity.storeRef &&
+          auth.session?.employeeRef == identity.employeeRef &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
     );
+    if (status != 'checkoutPrintSent' && messenger?.mounted == true) {
+      messenger!.showSnackBar(SnackBar(content: Text(tr(language, status))));
+    }
     if (mounted)
       setState(() {
         printing = false;
@@ -690,7 +701,10 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
           cancelled = next.closedUnpaid;
           message = t('tableCheckout_${next.state}');
         });
-        if (next.settled) unawaited(printSettledReceipt(next));
+        if (next.settled) {
+          unawaited(printSettledReceipt(next));
+          Navigator.of(context).pop(true);
+        }
       }
     } catch (error) {
       // A failed send must be classified by the server's original request.
