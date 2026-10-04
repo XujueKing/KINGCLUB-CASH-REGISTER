@@ -482,13 +482,16 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         ),
                         for (final bar in counters) ...[
                           const Divider(height: 16, thickness: 1),
-                          BarCounterStrip(
-                            table: bar,
-                            auth: widget.auth,
-                            language: widget.language,
-                            revision: data.observedAt,
-                            onEnter: () => selectTable(bar),
-                            onMembers: () => linkBarMember(bar),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: BarCounterStrip(
+                              table: bar,
+                              auth: widget.auth,
+                              language: widget.language,
+                              revision: data.observedAt,
+                              onEnter: () => selectTable(bar),
+                              onMembers: () => linkBarMember(bar),
+                            ),
                           ),
                           const SizedBox(height: 12),
                         ],
