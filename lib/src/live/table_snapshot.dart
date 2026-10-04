@@ -48,6 +48,11 @@ String formatCents(int cents) =>
 class TableSessionSnapshot {
   TableSessionSnapshot(Map<String, dynamic> value)
     : reference = _ref(value['sessionRef']),
+      linkedMembers = _number(value['linkedMembers'] ?? 0),
+      hasConsumption =
+          value['hasConsumption'] == true ||
+          (value['paidOrders'] as num? ?? 0) > 0 ||
+          (value['pendingOrders'] as num? ?? 0) > 0,
       status = _text(value['status']),
       paymentTiming = _text(value['paymentTiming']),
       temporaryHold = value['temporaryHold'] == true,
@@ -85,6 +90,8 @@ class TableSessionSnapshot {
   }
   final String reference, status, paymentTiming, businessDate;
   final bool temporaryHold;
+  final bool hasConsumption;
+  final int linkedMembers;
   final DateTime? openedAt;
   final int? partySize;
   final int partyRevision,

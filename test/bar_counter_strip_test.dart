@@ -2,10 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/bar_counter_strip.dart';
 import 'package:kingclub_cash_register/src/live/table_snapshot.dart';
+import 'package:kingclub_cash_register/src/live/table_status_color.dart';
 
 import 'support/table_fixture.dart';
 
 void main() {
+  test(
+    'empty bar sessions stay white until a member or consumption exists',
+    () {
+      final data = Map<String, dynamic>.from(
+        tableFixture()['result']['tables'][0],
+      );
+      data['parentBarRef'] = 'bar-parent';
+      data['barSeatNumber'] = 1;
+      final session = data['session'] as Map;
+    session.addAll(<String, Object?>{
+        'paidOrders': 0,
+        'pendingOrders': 0,
+        'paidCents': 0,
+        'pendingCents': 0,
+        'linkedMembers': 0,
+        'hasConsumption': false,
+      });
+      expect(tableStatusColor(LiveTable(data)), Colors.white);
+      session['linkedMembers'] = 1;
+      expect(tableStatusColor(LiveTable(data)), const Color(0xFF1D4ED8));
+      session['linkedMembers'] = 0;
+      session['hasConsumption'] = true;
+      expect(tableStatusColor(LiveTable(data)), const Color(0xFF1D4ED8));
+      session['pendingCents'] = 100;
+      expect(tableStatusColor(LiveTable(data)), const Color(0xFFDC2626));
+    },
+  );
   testWidgets(
     'B2+B3+B4 replaces three seats with one wide button and sums only their amounts',
     (tester) async {

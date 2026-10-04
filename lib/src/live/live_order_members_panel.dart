@@ -1,5 +1,6 @@
 import 'workspace_read_cache.dart';
 import 'table_snapshot.dart';
+import 'catalog_snapshot.dart';
 import 'table_bill_panel.dart';
 
 import 'dart:async';
@@ -28,6 +29,9 @@ class LiveOrderMembersPanel extends StatefulWidget {
     this.liveTable,
     this.tableActions,
     this.onMergePayment,
+    this.initialProduct,
+    this.onInitialProductConsumed,
+    this.onDraftChanged,
   });
   final bool? menuVisible;
   final ValueChanged<bool>? onMenuChanged;
@@ -36,6 +40,9 @@ class LiveOrderMembersPanel extends StatefulWidget {
   final String tableRef, sessionRef;
   final VoidCallback onBack;
   final VoidCallback? onMergePayment;
+  final CatalogProduct? initialProduct;
+  final VoidCallback? onInitialProductConsumed;
+  final ValueChanged<bool>? onDraftChanged;
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
   final LiveTable? liveTable;
@@ -223,6 +230,9 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         liveTable: widget.liveTable,
         tableActions: widget.tableActions,
         onMergePayment: widget.onMergePayment,
+        initialProduct: widget.initialProduct,
+        onInitialProductConsumed: widget.onInitialProductConsumed,
+        onDraftChanged: widget.onDraftChanged,
         memberRef: selected?.reference,
         revision: widget.revision,
         onBack: data!.tableOrderAllowed

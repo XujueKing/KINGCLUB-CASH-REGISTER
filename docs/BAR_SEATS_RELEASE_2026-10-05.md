@@ -3,7 +3,7 @@
 本说明覆盖 `BAR_COUNTER_FLOW_2026-10-04.md` 中旧的占位实现和入座选择弹窗。
 
 - B1–B8 对应服务器真实独立座位，使用原有点单、收款和订单记录。
-- 点击座位直接切换右侧消费明细；空位自动建立场次，不询问人数、扫码或无会员。点击消费明细右上角头像关联会员。
+- 点击座位只切换右侧消费明细；空位保持白色，不建立场次。首次选商品或成功关联会员才建立场次，不询问人数或无会员。点击消费明细右上角头像关联会员。
 - APP 扫公共吧台码，由服务器复用该会员的座位或随机分配空位；下单校验会员归属。
 - 有待付消费时，消费明细标题旁显示“合并支付”。选择同一吧台的座位，合并显示为 B2+B3+B4，宽度按座位数量分配。
 - 合并账单显示全部所选座位的商品和已付、未付金额；只对未付部分发起一次收款，原订单归属不改变。打印与支付复用原有流程。
@@ -17,3 +17,9 @@
 已保留数据升级 SUNMI，实机确认点击 B2 直接显示账单和右上角会员头像。未进行真实多座位扣款或退款；不得把自动测试结果描述为真实收款验收。
 
 后台迁移：315（独立座位）、316（APP 分座）、317（现有收款接口增加可选座位范围）。未新建另一套会员或支付账本。报表应按 `parentBarRef` 汇总吧台收入；本次未增加报表页面。
+
+## Empty-seat activation correction
+
+Seat selection never opens a session. Empty existing sessions without members or consumption remain white. Local draft quantities turn the seat red; removing the draft returns an otherwise empty seat to white. The bill-avatar links members; merely opening or cancelling that dialog does not activate a seat. Workbench reads now include linkedMembers and hasConsumption (including zero-price waived orders). No new schema or payment flow.
+
+Validation: 46 focused Flutter tests plus 2 bar color/layout tests passed; backend verify passed all 3725 tests. Signed ARM32 data-preserving upgrade installed; scoped workbench module deployed with backup and runtime checks.

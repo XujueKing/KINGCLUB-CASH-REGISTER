@@ -36,6 +36,9 @@ class LiveCartPanel extends StatefulWidget {
     this.contextVerified = true,
     this.tableActions,
     this.onMergePayment,
+    this.initialProduct,
+    this.onInitialProductConsumed,
+    this.onDraftChanged,
   });
   final bool? menuVisible;
   final ValueChanged<bool>? onMenuChanged;
@@ -45,6 +48,9 @@ class LiveCartPanel extends StatefulWidget {
   final String? memberRef;
   final VoidCallback onBack;
   final VoidCallback? onMergePayment;
+  final CatalogProduct? initialProduct;
+  final VoidCallback? onInitialProductConsumed;
+  final ValueChanged<bool>? onDraftChanged;
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
   final LiveTable? liveTable;
@@ -134,6 +140,13 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         if (!ready) message = 'cartPending';
         if (ready && savedDraft != null) message = 'cartDraftFound';
       });
+      if (ready &&
+          widget.initialProduct != null &&
+          items.isEmpty &&
+          savedDraft == null) {
+        change(widget.initialProduct!, 1);
+        widget.onInitialProductConsumed?.call();
+      }
     } catch (_) {
       if (mounted && generation == epoch) {
         setState(() {
@@ -263,6 +276,18 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   @override
   void didUpdateWidget(covariant LiveCartPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialProduct == null && widget.initialProduct != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            ready &&
+            items.isEmpty &&
+            savedDraft == null &&
+            widget.initialProduct != null) {
+          change(widget.initialProduct!, 1);
+          widget.onInitialProductConsumed?.call();
+        }
+      });
+    }
     if (!identical(oldWidget.auth, widget.auth)) {
       oldWidget.auth.removeListener(invalidate);
       widget.auth.addListener(invalidate);
@@ -618,7 +643,9 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   Widget billHeader(Widget filter) {
     final table = widget.liveTable;
     final session = table?.session;
-    final color = table == null
+    final color = table?.isBarSeat == true && items.isNotEmpty && !attempted
+        ? const Color(0xFFDC2626)
+        : table == null
         ? const Color(0xff1d4ed8)
         : tableStatusColor(table);
     return Row(
@@ -640,8 +667,10 @@ class _LiveCartPanelState extends State<LiveCartPanel>
             widget.orderContext.tableName,
             textAlign: TextAlign.center,
             maxLines: 2,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: color == Colors.white
+                  ? const Color(0xff263c30)
+                  : Colors.white,
               fontSize: 22,
               fontWeight: FontWeight.w800,
             ),
@@ -665,45 +694,48 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  TextButton(
-                    key: const ValueKey('bill-opening-tag'),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      minimumSize: const Size(0, 20),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      backgroundColor: color.withValues(alpha: 0.10),
-                      foregroundColor: color,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        side: BorderSide(color: color.withValues(alpha: 0.25)),
+                  if (table?.isBarSeat != true) const SizedBox(width: 6),
+                  if (table?.isBarSeat != true)
+                    TextButton(
+                      key: const ValueKey('bill-opening-tag'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        minimumSize: const Size(0, 20),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: color.withValues(alpha: 0.10),
+                        foregroundColor: color,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          side: BorderSide(
+                            color: color.withValues(alpha: 0.25),
+                          ),
+                        ),
                       ),
-                    ),
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(t('billOpeningAttribute')),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(t('billRuleUnavailable')),
-                            if (widget.tableActions != null)
-                              widget.tableActions!,
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text(t('billOpeningAttribute')),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(t('billRuleUnavailable')),
+                              if (widget.tableActions != null)
+                                widget.tableActions!,
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: Text(t('staffCancelSelection')),
+                            ),
                           ],
                         ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: Text(t('staffCancelSelection')),
-                          ),
-                        ],
+                      ),
+                      child: Text(
+                        t('tableOpen'),
+                        style: const TextStyle(fontSize: 10),
                       ),
                     ),
-                    child: Text(
-                      t('tableOpen'),
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                  ),
                 ],
               ),
               if (widget.onMergePayment != null)
@@ -778,8 +810,16 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     super.dispose();
   }
 
+  bool? reportedDraft;
   @override
   Widget build(BuildContext context) {
+    final hasDraft = items.isNotEmpty && !attempted;
+    if (reportedDraft != hasDraft) {
+      reportedDraft = hasDraft;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onDraftChanged?.call(hasDraft);
+      });
+    }
     if (recovery) {
       return LiveOrderRecoveryPanel(
         auth: widget.auth,

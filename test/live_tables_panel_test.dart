@@ -6,6 +6,7 @@ import 'package:kingclub_cash_register/src/auth/staff_auth_controller.dart';
 import 'package:kingclub_cash_register/src/auth/staff_session.dart';
 import 'package:kingclub_cash_register/src/live/live_tables_panel.dart';
 import 'package:kingclub_cash_register/src/live/bar_counter_strip.dart';
+import 'package:kingclub_cash_register/src/live/opening_snapshot.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 import 'package:kingclub_cash_register/src/network/cashier_realtime_client.dart';
 
@@ -39,6 +40,13 @@ class PanelRealtime extends CashierRealtimeClient {
 }
 
 class TableAuth extends StaffAuthController {
+  int openingReads = 0;
+  @override
+  Future<OpeningContext> readOpeningContext({required String tableId}) async {
+    openingReads++;
+    throw StateError('Selection must not open a bar seat');
+  }
+
   Object? reply = tableFixture();
   final requested = <String?>[];
   Completer<Object?>? gate;
@@ -79,6 +87,42 @@ class TableAuth extends StaffAuthController {
 }
 
 void main() {
+  testWidgets('empty bar selection shows an empty bill without opening', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final auth = TableAuth();
+    final reply = tableFixture(count: 2);
+    final tables = reply['result']['tables'] as List;
+    tables[0]['tableName'] = '吧台';
+    tables[0]['maximumSeats'] = 8;
+    tables[0]['session'] = null;
+    tables[1]['parentBarRef'] = tables[0]['tableRef'];
+    tables[1]['barSeatNumber'] = 2;
+    tables[1]['session'] = null;
+    auth.reply = reply;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveTablesPanel(
+            auth: auth,
+            language: UiLanguage.zh,
+            enableRealtime: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('bar-seat-2')));
+    await tester.pumpAndSettle();
+    expect(auth.openingReads, 0);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byKey(const ValueKey('empty-bar-member')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('counter is below ordinary cards with eight avatar places', (
     tester,
   ) async {

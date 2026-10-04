@@ -18,6 +18,7 @@ class TableMembersPanel extends StatefulWidget {
     this.sessionRef,
     this.enabled = true,
     this.onLinked,
+    this.ensureSession,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -25,6 +26,7 @@ class TableMembersPanel extends StatefulWidget {
   final String? sessionRef;
   final bool enabled;
   final VoidCallback? onLinked;
+  final Future<String> Function()? ensureSession;
   @override
   TableMembersPanelState createState() => TableMembersPanelState();
 }
@@ -115,6 +117,19 @@ class TableMembersPanelState extends State<TableMembersPanel>
       if (attachedSession == null) {
         final member = await widget.auth.readMemberIdentity(code);
         if (!mounted || generation != epoch) return;
+        if (widget.ensureSession != null) {
+          final session = await widget.ensureSession!();
+          if (!mounted || generation != epoch) return;
+          attachedSession = session;
+          members = await widget.auth.tableMembers(
+            tableRef: widget.tableRef,
+            sessionRef: session,
+            identityCode: code,
+          );
+          if (!mounted || generation != epoch) return;
+          widget.onLinked?.call();
+          return;
+        }
         pending[member.memberRef] = (
           code: code,
           name: member.nickname ?? member.memberRef,

@@ -1,6 +1,8 @@
 import 'opening_snapshot.dart';
 import 'bar_counter_strip.dart';
 import 'quick_opening_dialog.dart';
+import 'catalog_snapshot.dart';
+import 'table_members_panel.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -66,6 +68,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   TableSnapshot? snapshot;
   String? focusedTableRef;
   int? selectedBarSeat;
+  final Map<String, CatalogProduct> initialBarProducts = {};
+  final Set<String> barDrafts = {};
+  bool emptyBarMenu = false;
   final List<List<String>> barGroups = [];
   String get barGroupKey =>
       'bar_groups_${widget.auth.session?.base}_${widget.auth.session?.storeRef}';
@@ -620,6 +625,14 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: BarCounterStrip(
                               table: bar,
+                              draftSeats: {
+                                for (final seat in data.tables.where(
+                                  (s) =>
+                                      s.parentBarRef == bar.reference &&
+                                      barDrafts.contains(s.reference),
+                                ))
+                                  seat.barSeatNumber!,
+                              },
                               groups: [
                                 for (final refs in barGroups)
                                   if (data.tables
@@ -688,6 +701,138 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         ],
                       ],
                     );
+                    if (focused?.isBarSeat == true &&
+                        focused?.session == null) {
+                      final seat = focused!;
+                      final menu = widget.menuVisible ?? emptyBarMenu;
+                      void showMenu(bool value) {
+                        setState(() => emptyBarMenu = value);
+                        widget.onMenuChanged?.call(value);
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: menu
+                                ? LiveCatalogPanel(
+                                    auth: widget.auth,
+                                    language: widget.language,
+                                    header: workspaceHeader(),
+                                    paymentTiming: 'prepay',
+                                    onBack: () => showMenu(false),
+                                    canAdd: (p) =>
+                                        !enteringBar &&
+                                        p.inventoryKnown &&
+                                        p.available > 0,
+                                    onSelect: (p) =>
+                                        unawaited(startBarProduct(seat, p)),
+                                  )
+                                : grid,
+                          ),
+                          const VerticalDivider(width: 1),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          border: Border.all(
+                                            color: const Color(0xffd7e2dc),
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'B${seat.barSeatNumber}',
+                                          style: const TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          t('ordersDetails'),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        key: const ValueKey('empty-bar-member'),
+                                        onPressed: () =>
+                                            linkEmptyBarMember(seat),
+                                        icon: const CircleAvatar(
+                                          backgroundColor: Color(0xffe0e0e0),
+                                          child: Icon(
+                                            Icons.person,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const Divider(
+                                    thickness: 1,
+                                    color: Color(0xffd7e2dc),
+                                  ),
+                                  const Spacer(),
+                                  const Divider(
+                                    thickness: 1,
+                                    color: Color(0xffd7e2dc),
+                                  ),
+                                  Text('${t('billTotal')}   0.00'),
+                                  const SizedBox(height: 14),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          onPressed: () => showMenu(!menu),
+                                          child: Text(
+                                            menu
+                                                ? t('ordersBack')
+                                                : barText(
+                                                    '点单',
+                                                    'Order',
+                                                    '點單',
+                                                    'สั่งอาหาร',
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        flex: 2,
+                                        child: FilledButton(
+                                          onPressed: null,
+                                          child: Text(
+                                            barText(
+                                              '暂无消费',
+                                              'No items',
+                                              '暫無消費',
+                                              'ยังไม่มีรายการ',
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
                     final combined = mergedSeats(focused);
                     if (combined.length > 1) {
                       final leader = combined.first;
@@ -904,6 +1049,19 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                           onMenuChanged: widget.onMenuChanged,
                           tablePanel: grid,
                           liveTable: table,
+                          initialProduct: initialBarProducts[table.reference],
+                          onInitialProductConsumed: () =>
+                              initialBarProducts.remove(table.reference),
+                          onDraftChanged: (value) {
+                            if (mounted &&
+                                barDrafts.contains(table.reference) != value)
+                              setState(() {
+                                if (value)
+                                  barDrafts.add(table.reference);
+                                else
+                                  barDrafts.remove(table.reference);
+                              });
+                          },
                           onMergePayment:
                               table.isBarSeat &&
                                   (table.session?.pendingCents ?? 0) > 0
@@ -1253,6 +1411,82 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   ];
 
   bool enteringBar = false;
+  Future<String> ensureBarSession(LiveTable table) async {
+    if (table.session != null) return table.session!.reference;
+    final pending = await widget.auth.pendingOpenings();
+    for (final request in pending.where((p) => p.tableId == table.reference)) {
+      await widget.auth.recoverOpening(request.requestId, retryOriginal: true);
+    }
+    final opening = await widget.auth.readOpeningContext(
+      tableId: table.reference,
+    );
+    if (opening.activeSessionRef == null) {
+      final result = await widget.auth.submitOpening(
+        context: opening,
+        partySize: 1,
+        memberRefs: [],
+        arrivalConfirmed: true,
+        reservationChecked: true,
+        selectedRule: {'mode': 'manual'},
+      );
+      if (result.state != OpeningLookupState.confirmed)
+        throw StateError('BAR_OPENING_PENDING');
+    }
+    await load();
+    final session = snapshot?.tables
+        .where((t) => t.reference == table.reference)
+        .firstOrNull
+        ?.session;
+    if (session == null) throw StateError('BAR_SESSION_UNAVAILABLE');
+    return session.reference;
+  }
+
+  Future<void> startBarProduct(LiveTable table, CatalogProduct product) async {
+    if (enteringBar || !product.inventoryKnown || product.available < 1) return;
+    setState(() => enteringBar = true);
+    try {
+      await ensureBarSession(table);
+      if (!mounted) return;
+      setState(() {
+        initialBarProducts[table.reference] = product;
+        focusedTableRef = table.reference;
+        barDrafts.add(table.reference);
+      });
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(t('liveReadFailed'))));
+    } finally {
+      if (mounted) setState(() => enteringBar = false);
+    }
+  }
+
+  Future<void> linkEmptyBarMember(LiveTable table) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(barText('关联会员', 'Link member', '關聯會員', 'เชื่อมโยงสมาชิก')),
+        content: SizedBox(
+          width: 400,
+          child: TableMembersPanel(
+            auth: widget.auth,
+            language: widget.language,
+            tableRef: table.reference,
+            ensureSession: () => ensureBarSession(table),
+            onLinked: () => Navigator.pop(dialogContext),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('cancel')),
+          ),
+        ],
+      ),
+    );
+    if (mounted) await load();
+  }
+
   Future<void> selectBarSeat(LiveTable table) async {
     if (enteringBar) return;
     selectedBarSeat = table.barSeatNumber;
@@ -1261,49 +1495,12 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   Future<void> selectTable(LiveTable table) async {
     if (table.isBarCounter || table.isBarSeat) {
-      if (enteringBar || table.status != 'active') return;
-      enteringBar = true;
-      try {
-        if (table.session == null) {
-          final pending = await widget.auth.pendingOpenings();
-          for (final request in pending.where(
-            (p) => p.tableId == table.reference,
-          )) {
-            await widget.auth.recoverOpening(
-              request.requestId,
-              retryOriginal: true,
-            );
-          }
-          final opening = await widget.auth.readOpeningContext(
-            tableId: table.reference,
-          );
-          if (!mounted) return;
-          if (opening.activeSessionRef == null) {
-            final result = await widget.auth.submitOpening(
-              context: opening,
-              partySize: table.isBarSeat ? 1 : null,
-              memberRefs: [],
-              arrivalConfirmed: true,
-              reservationChecked: true,
-              selectedRule: {'mode': 'manual'},
-            );
-            if (result.state != OpeningLookupState.confirmed) {
-              throw StateError('BAR_OPENING_PENDING');
-            }
-          }
-          if (!mounted) return;
-          await load();
-        }
-        if (!mounted) return;
-        setState(() => focusedTableRef = table.reference);
-        widget.onMenuChanged?.call(false);
-      } catch (_) {
-        if (mounted)
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(t('openingPending'))));
-      } finally {
-        enteringBar = false;
-      }
+      if (table.status != 'active') return;
+      setState(() {
+        focusedTableRef = table.reference;
+        emptyBarMenu = false;
+      });
+      widget.onMenuChanged?.call(false);
       return;
     }
     if (table.status == 'active' &&

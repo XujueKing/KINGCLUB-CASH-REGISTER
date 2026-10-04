@@ -12,6 +12,7 @@ class BarCounterStrip extends StatelessWidget {
     this.seatAmounts = const {},
     this.seatTables = const {},
     this.groups = const [],
+    this.draftSeats = const {},
   });
   final LiveTable table;
   final ValueChanged<int> onSeat;
@@ -19,9 +20,12 @@ class BarCounterStrip extends StatelessWidget {
   final Map<int, int> seatAmounts;
   final Map<int, LiveTable> seatTables;
   final List<List<int>> groups;
+  final Set<int> draftSeats;
   List<int> group(int seat) =>
       groups.where((g) => g.contains(seat)).firstOrNull ?? [seat];
-  Color seatColor(int seat) => seatTables[seat] == null
+  Color seatColor(int seat) => group(seat).any(draftSeats.contains)
+      ? const Color(0xFFDC2626)
+      : seatTables[seat] == null
       ? Colors.white
       : tableStatusColor(seatTables[seat]!);
   Color seatTextColor(int seat) =>
@@ -70,7 +74,7 @@ class BarCounterStrip extends StatelessWidget {
                         onTap: () => onSeat(seat),
                         borderRadius: BorderRadius.circular(10),
                         child: Padding(
-                        padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
