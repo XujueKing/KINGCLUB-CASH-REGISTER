@@ -87,6 +87,43 @@ class TableAuth extends StaffAuthController {
 }
 
 void main() {
+  testWidgets('floor tabs separate dining and KTV rooms from ground tables', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final auth = TableAuth();
+    final reply = tableFixture(count: 5);
+    final tables = reply['result']['tables'] as List;
+    for (var i = 0; i < 5; i++) {
+      tables[i]['tableName'] = ['V1', 'C1', 'C2', 'K1', 'K2'][i];
+      tables[i]['session'] = null;
+    }
+    auth.reply = reply;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiveTablesPanel(
+            auth: auth,
+            language: UiLanguage.zh,
+            enableRealtime: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('V1'), findsOneWidget);
+    expect(find.text('C1'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('table-floor-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('V1'), findsNothing);
+    for (final name in ['C1', 'C2', 'K1', 'K2']) {
+      expect(find.text(name), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('empty bar selection shows an empty bill without opening', (
     tester,
   ) async {

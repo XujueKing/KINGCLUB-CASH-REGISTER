@@ -75,7 +75,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   int selectedFloor = 1;
 
   int tableFloor(LiveTable table) =>
-      RegExp(r'^天字\s*(1|一|壹)\s*号$').hasMatch(table.name.trim()) ? 2 : 1;
+      {'C1', 'C2', 'K1', 'K2'}.contains(table.name.trim()) ||
+          RegExp(r'^天字\s*(1|一|壹)\s*号$').hasMatch(table.name.trim())
+      ? 2
+      : 1;
   final List<List<String>> barGroups = [];
   String get barGroupKey =>
       'bar_groups_${widget.auth.session?.base}_${widget.auth.session?.storeRef}';
@@ -1609,6 +1612,20 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
+                              if (tableFloor(table) == 2)
+                                Text(
+                                  table.name.startsWith('K')
+                                      ? 'KTV'
+                                      : barText(
+                                          '私人餐饮',
+                                          'Private dining',
+                                          '私人餐飲',
+                                          'ห้องอาหารส่วนตัว',
+                                        ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
                               if (session != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
