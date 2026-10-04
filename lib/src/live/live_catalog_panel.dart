@@ -289,6 +289,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const SizedBox(height: 6),
               Row(
                 children: [
                   ProductThumbnail(
