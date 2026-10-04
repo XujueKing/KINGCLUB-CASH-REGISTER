@@ -1,3 +1,4 @@
+import 'bar_bill_header.dart';
 import 'opening_snapshot.dart';
 import 'bar_counter_strip.dart';
 import 'quick_opening_dialog.dart';
@@ -743,47 +744,24 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                 emptySeat: true,
                                 checkoutAllowed: false,
                                 fillHeight: true,
-                                headerBuilder: (filter) => Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        border: Border.all(
-                                          color: const Color(0xffd7e2dc),
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        'B${seat.barSeatNumber}',
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                headerBuilder: (filter) => BarBillHeader(
+                                  number: seat.barSeatNumber!,
+                                  color: Colors.white,
+                                  language: widget.language,
+                                  filter: filter,
+                                  member: IconButton(
+                                    key: const ValueKey('empty-bar-member'),
+                                    onPressed: () => linkEmptyBarMember(seat),
+                                    icon: const CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: Color(0xffdedede),
+                                      child: Icon(
+                                        Icons.person,
+                                        color: Color(0xff9e9e9e),
+                                        size: 23,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        t('ordersDetails'),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    filter,
-                                    IconButton(
-                                      key: const ValueKey('empty-bar-member'),
-                                      onPressed: () => linkEmptyBarMember(seat),
-                                      icon: const CircleAvatar(
-                                        backgroundColor: Color(0xffe0e0e0),
-                                        child: Icon(
-                                          Icons.person,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                                 orderAction: OutlinedButton(
                                   onPressed: () => showMenu(!menu),

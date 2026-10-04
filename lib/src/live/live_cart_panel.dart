@@ -1,3 +1,4 @@
+import 'bar_bill_header.dart';
 import 'table_members_panel.dart';
 import 'item_price_dialog.dart';
 import 'bill_product_card.dart';
@@ -648,6 +649,38 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         : table == null
         ? const Color(0xff1d4ed8)
         : tableStatusColor(table);
+    if (table?.isBarSeat == true) {
+      return BarBillHeader(
+        number: table!.barSeatNumber!,
+        color: color,
+        language: widget.language,
+        filter: filter,
+        member: TableMembersButton(
+          auth: widget.auth,
+          language: widget.language,
+          tableRef: currentContext.tableRef,
+          sessionRef: currentContext.sessionRef,
+          revision: widget.revision,
+        ),
+        mergeAction: widget.onMergePayment == null
+            ? null
+            : TextButton.icon(
+                key: const ValueKey('bar-merge-payment'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 28),
+                ),
+                onPressed: items.isEmpty || attempted
+                    ? widget.onMergePayment
+                    : null,
+                icon: const Icon(Icons.merge_type, size: 16),
+                label: Text(
+                  ['合并支付', 'Combine', '合併支付', 'รวมจ่าย'][widget.language.index],
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
