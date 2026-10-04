@@ -1144,9 +1144,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       children: [
         Expanded(
           child: Text(
-            snapshot?.storeName ??
-                widget.auth.session?.storeName ??
-                t('tables'),
+            t((widget.menuVisible ?? emptyBarMenu) ? 'ordering' : 'tables'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
