@@ -297,7 +297,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                             ? () => Navigator.pop(context, p)
                             : null,
                         child: Text(
-                          '${p.specification(widget.language)}   ${data!.currency} ${formatCents(p.priceCents)}\n${p.inventoryKnown ? "${t('catalogAvailable')}: ${p.available}" : t('catalogUnknown')}',
+                          '${p.specification(widget.language)}   ${data!.currency == 'CNY' ? '¥' : data!.currency} ${formatCents(p.priceCents)}\n${p.inventoryKnown ? "${t('catalogAvailable')}: ${p.available}" : t('catalogUnknown')}',
                         ),
                       ),
                     ),
@@ -444,7 +444,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${data!.currency} ${formatCents(price)}${multiple ? variantCopy(' 起| +| 起| +') : ''}',
+                          '${data!.currency == 'CNY' ? '¥' : data!.currency} ${formatCents(price)}${multiple ? variantCopy(' 起| +| 起| +') : ''}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

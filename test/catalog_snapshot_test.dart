@@ -418,7 +418,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text(tr(language, 'catalogUnknown')), findsOneWidget);
-        expect(find.text('CNY 12.34'), findsOneWidget);
+        expect(find.text('¥ 12.34'), findsOneWidget);
         expect(tester.takeException(), isNull);
       }
       await tester.tap(find.byKey(const ValueKey('catalog-category-c1')));
