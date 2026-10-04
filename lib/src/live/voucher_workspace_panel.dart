@@ -327,32 +327,57 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         for (final certificate
             in (result!['selection'] as Map?)?['certificates'] as List? ?? [])
           Card(
-            child: ListTile(
-              title: Text(
-                certificate['title'] as String? ?? t('voucherPackage'),
-              ),
-              subtitle: Text(
-                localized(
-                  '核销记入当前登录门店',
-                  'Recorded for the current store',
-                  '核銷記入目前登入門店',
-                  'บันทึกสำหรับร้านปัจจุบัน',
+            child: Column(
+              children: [
+                if ((certificate['title'] as String? ?? '').contains('卡颜'))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Image.asset(
+                      'assets/products/kayan-bundle-a.png',
+                      height: 190,
+                      fit: BoxFit.contain,
+                      semanticLabel: 'Package A drinks illustration',
+                    ),
+                  ),
+                ListTile(
+                  title: Text(
+                    certificate['title'] as String? ?? t('voucherPackage'),
+                  ),
+                  subtitle: Text(
+                    localized(
+                      '核销记入当前登录门店',
+                      'Recorded for the current store',
+                      '核銷記入目前登入門店',
+                      'บันทึกสำหรับร้านปัจจุบัน',
+                    ),
+                  ),
+                  trailing: FilledButton(
+                    onPressed:
+                        busy ||
+                            confirmationFinished ||
+                            (confirmationIndex != null &&
+                                confirmationIndex !=
+                                    certificate['selectionIndex'])
+                        ? null
+                        : () => confirm(certificate['selectionIndex'] as int),
+                    child: Text(
+                      confirmationId == null
+                          ? localized(
+                              '确认核销',
+                              'Redeem',
+                              '確認核銷',
+                              'ยืนยันใช้คูปอง',
+                            )
+                          : localized(
+                              '查询结果',
+                              'Check result',
+                              '查詢結果',
+                              'ตรวจสอบผล',
+                            ),
+                    ),
+                  ),
                 ),
-              ),
-              trailing: FilledButton(
-                onPressed:
-                    busy ||
-                        confirmationFinished ||
-                        (confirmationIndex != null &&
-                            confirmationIndex != certificate['selectionIndex'])
-                    ? null
-                    : () => confirm(certificate['selectionIndex'] as int),
-                child: Text(
-                  confirmationId == null
-                      ? localized('确认核销', 'Redeem', '確認核銷', 'ยืนยันใช้คูปอง')
-                      : localized('查询结果', 'Check result', '查詢結果', 'ตรวจสอบผล'),
-                ),
-              ),
+              ],
             ),
           ),
         if ((result!['packages'] as List? ?? []).isEmpty)
