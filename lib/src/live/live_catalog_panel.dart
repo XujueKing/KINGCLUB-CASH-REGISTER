@@ -233,13 +233,13 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                     1.0,
                     MediaQuery.textScalerOf(context).scale(16) / 16,
                   );
-                  final columns = ((constraints.maxWidth - 14) / (250 * scale))
+                  final columns = ((constraints.maxWidth - 14) / (200 * scale))
                       .floor()
                       .clamp(1, 6);
                   return SwipeGrid(
                     key: ValueKey('catalog-page-$category-$page'),
                     columns: columns,
-                    tileHeight: 168 * scale,
+                    tileHeight: 150 * scale,
                     loading: loading,
                     hasPrevious: page > 0,
                     hasNext: data?.nextAfterProduct != null,
@@ -285,7 +285,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
         borderRadius: BorderRadius.circular(8),
         onTap: canSelect ? () => widget.onSelect!(p) : null,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+          padding: const EdgeInsets.fromLTRB(8, 8, 6, 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -306,7 +306,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 17,
+                              fontSize: 16,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
