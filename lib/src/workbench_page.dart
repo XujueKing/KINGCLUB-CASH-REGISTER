@@ -1,6 +1,7 @@
 import 'live/together_admission_dialog.dart';
 
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../main.dart';
@@ -62,12 +63,12 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             color: forest,
             child: Column(
               children: [
-                const SizedBox(height: 20),
+                const SizedBox(height: 8),
                 SizedBox(
-                  width: 76,
-                  height: 64,
+                  width: 64,
+                  height: 48,
                   child: Transform.scale(
-                    scale: 0.8,
+                    scale: 0.75,
                     child: Image.asset(
                       'assets/brand/kingclub-gold.png',
                       key: const ValueKey('kingclub-logo'),
@@ -81,55 +82,59 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 8),
                 Expanded(
                   child: ListView.separated(
                     itemCount: labels.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 7),
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Material(
-                        color: page == index
-                            ? const Color(0xFF31554A)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
-                          key: ValueKey('nav-$index'),
+                    padding: EdgeInsets.zero,
+                    separatorBuilder: (_, _) => const SizedBox(height: 3),
+                    itemBuilder: (context, position) {
+                      final index = const [0, 1, 6, 2, 3, 4, 5][position];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Material(
+                          color: page == index
+                              ? const Color(0xFF31554A)
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(14),
-                          onTap: page == index
-                              ? null
-                              : () => setState(() => page = index),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 13,
-                              horizontal: 3,
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  icons[index],
-                                  color: page == index
-                                      ? const Color(0xFFE2C88D)
-                                      : const Color(0xFFB9C9C2),
-                                  size: 25,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  t(labels[index]),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 11,
+                          child: InkWell(
+                            key: ValueKey('nav-$index'),
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: page == index
+                                ? null
+                                : () => setState(() => page = index),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 3,
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    icons[index],
                                     color: page == index
-                                        ? Colors.white
+                                        ? const Color(0xFFE2C88D)
                                         : const Color(0xFFB9C9C2),
+                                    size: 23,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    t(labels[index]),
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: page == index
+                                          ? Colors.white
+                                          : const Color(0xFFB9C9C2),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
                 Padding(
@@ -140,10 +145,25 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                       radius: 18,
                       backgroundColor: const Color(0xffdce5df),
                       child: bytes == null
-                        ? const Icon(Icons.person_outline, color: forest, size: 24)
-                        : ClipOval(child: Image.memory(bytes, width: 36, height: 36,
-                            fit: BoxFit.cover, gaplessPlayback: true,
-                            errorBuilder: (_, error, stack) => const Icon(Icons.person_outline, color: forest, size: 24))),
+                          ? const Icon(
+                              Icons.person_outline,
+                              color: forest,
+                              size: 24,
+                            )
+                          : ClipOval(
+                              child: Image.memory(
+                                bytes,
+                                width: 36,
+                                height: 36,
+                                fit: BoxFit.cover,
+                                gaplessPlayback: true,
+                                errorBuilder: (_, error, stack) => const Icon(
+                                  Icons.person_outline,
+                                  color: forest,
+                                  size: 24,
+                                ),
+                              ),
+                            ),
                     ),
                   ),
                 ),
