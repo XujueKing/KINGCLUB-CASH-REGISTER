@@ -459,14 +459,24 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                       ],
                     ),
                   ),
-                  if (widget.onSelect != null && multiple)
-                    TextButton(
+                  if (widget.onSelect != null && available && multiple)
+                    FilledButton.tonal(
+                      key: ValueKey('catalog-size-${p.reference}'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 32),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        shape: const StadiumBorder(),
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       onPressed: canSelect
                           ? () => unawaited(chooseVariant(variants))
                           : null,
                       child: Text(variantCopy('选规格|Size|選規格|ขนาด')),
                     )
-                  else if (widget.onSelect != null)
+                  else if (widget.onSelect != null && available)
                     IconButton.filledTonal(
                       key: ValueKey('catalog-add-${p.reference}'),
                       style: IconButton.styleFrom(

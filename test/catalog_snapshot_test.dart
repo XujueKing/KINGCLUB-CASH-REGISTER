@@ -151,11 +151,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         final button = find.byKey(const ValueKey('catalog-add-p001'));
-        expect(tester.widget<IconButton>(button).onPressed, isNull);
+        expect(button, findsNothing);
         final card = find.byKey(const ValueKey('catalog-select-p001'));
         expect(tester.widget<InkWell>(card).onTap, isNull);
         await tester.tap(card);
-        await tester.tap(button);
+
         expect(selections, 0);
       }
       expect(selections, 0);
@@ -211,22 +211,8 @@ void main() {
               .top,
           lessThanOrEqualTo(120),
         );
-        expect(
-          tester
-              .widget<IconButton>(
-                find.byKey(const ValueKey('catalog-add-p000')),
-              )
-              .onPressed,
-          isNull,
-        );
-        expect(
-          tester
-              .widget<IconButton>(
-                find.byKey(const ValueKey('catalog-add-p001')),
-              )
-              .onPressed,
-          isNull,
-        );
+        expect(find.byKey(const ValueKey('catalog-add-p000')), findsNothing);
+        expect(find.byKey(const ValueKey('catalog-add-p001')), findsNothing);
         await tester.tap(find.byKey(const ValueKey('catalog-add-p002')));
         expect(selected, 'p002');
         expect(tester.takeException(), isNull);
