@@ -15,6 +15,16 @@ class UsbRasterFramesTest {
         UsbRasterFrames.validate(frame(72, 256) + frame(72, 1))
         UsbRasterFrames.validate((1..16).fold(byteArrayOf()) { all, _ -> all + frame(72, 256) })
     }
+    @Test fun acceptsOnlyOneFinalFeedAndCutAfterImage() {
+        val cut = byteArrayOf(29, 86, 66, 0)
+        UsbRasterFrames.validate(frame() + cut)
+        UsbRasterFrames.validate(frame(72, 128) + frame(72, 32) + cut)
+        rejected(cut)
+        rejected(cut + frame())
+        rejected(frame() + cut + cut)
+        rejected(frame() + cut + frame())
+        rejected(frame() + byteArrayOf(29, 86, 66, 255.toByte()))
+    }
     @Test fun imageBytesAreNotInterpretedAsExtraCommands() {
         val bytes = frame(8, 1)
         byteArrayOf(27, 112, 0, 29, 86, 0, 27, 64).copyInto(bytes, 8)

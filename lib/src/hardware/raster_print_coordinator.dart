@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -52,6 +53,7 @@ class RasterPrintCoordinator {
   Future<PrintAttempt> printRasters({
     ReceiptPrintIdentity? documentIdentity,
     bool confirmedReprint = false,
+    bool cutAtEnd = false,
     required List<MonochromeRaster> rasters,
     required UsbPrinterSelection target,
     required bool confirmed,
@@ -64,7 +66,7 @@ class RasterPrintCoordinator {
     if (_busy) throw const FormatException('PRINT_IN_PROGRESS');
     _busy = true;
     try {
-      // Immutable encoder output only; callers cannot inject cut/drawer commands.
+      // Immutable encoder output only; only the fixed final cut trailer is allowed.
       if (rasters.isEmpty ||
           rasters.length > 32 ||
           rasters.any(
@@ -76,7 +78,10 @@ class RasterPrintCoordinator {
       }
       // Copy the caller's page collection synchronously before the first await.
       // Encoder buffers are immutable and are not persisted with customer data.
-      final pages = List<Uint8List>.unmodifiable(rasters.map(encodeGsV0));
+      final pages = List<Uint8List>.unmodifiable([
+        for (var i = 0; i < rasters.length; i++)
+          encodeGsV0(rasters[i], cutAtEnd: cutAtEnd && i == rasters.length - 1),
+      ]);
       final byteCount = pages.fold<int>(0, (sum, page) => sum + page.length);
       if (byteCount > PrintAttempt.maxDocumentBytes)
         throw const FormatException('PRINT_DOCUMENT_TOO_LARGE');
@@ -171,7 +176,8 @@ class RasterPrintCoordinator {
       }
       return saved.single;
     } catch (error) {
-      if (error is FormatException && RegExp(r'^[A-Z_]{1,80}$').hasMatch(error.message)) {
+      if (error is FormatException &&
+          RegExp(r'^[A-Z_]{1,80}$').hasMatch(error.message)) {
         debugPrint('cashier_print_error: ${error.message}');
       }
       // Native/storage exceptions can contain paths or customer information.

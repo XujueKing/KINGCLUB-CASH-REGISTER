@@ -761,6 +761,11 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     final status = await printReceiptPlan(
       plan: ReceiptRasterPlan.unpaid(
         q,
+        caption: await readReceiptCaption(
+          widget.auth,
+          q.tableRef,
+          q.sessionRef,
+        ),
         language: widget.language,
         widthDots: 576,
       ),

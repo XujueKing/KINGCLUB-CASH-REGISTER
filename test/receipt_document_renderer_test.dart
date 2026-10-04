@@ -42,11 +42,11 @@ void main() {
       final all = plan.pages.expand((page) => page).toList();
       for (var index = 0; index < 50; index++) {
         expect(
-          all.where((block) => block.startsWith('TEST_ITEM_$index ·')),
+          all.where((block) => block.startsWith('TEST_ITEM_$index\n')),
           hasLength(1),
         );
       }
-      expect(plan.header, contains('D00000000001'));
+      expect(all, contains('D00000000001'));
       expect(plan.header, contains(tr(UiLanguage.en, 'order_paid')));
       expect(() => plan.pages[0].clear(), throwsUnsupportedError);
     },
@@ -62,15 +62,9 @@ void main() {
         );
         expect(plan.header, contains(tr(language, 'receiptPartialRefund')));
         final blocks = plan.pages.expand((page) => page).join('\n');
-        expect(
-          blocks,
-          contains('${tr(language, 'receiptNetAmount')}: CNY 0.50'),
-        );
-        expect(
-          blocks,
-          contains('${tr(language, 'refundPrincipal')}: CNY 0.40'),
-        );
-        expect(blocks, contains('00000000-0000-4000-8000-000000000003'));
+        expect(blocks, contains('${tr(language, 'receiptNetAmount')}  0.50'));
+        expect(blocks, contains('${tr(language, 'refundPrincipal')}  0.40'));
+        expect(blocks, isNot(contains('00000000-0000-4000-8000-000000000003')));
         expect(blocks, contains('x 1'));
       },
     );

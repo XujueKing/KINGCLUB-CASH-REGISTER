@@ -43,9 +43,14 @@ class MonochromeRaster {
 }
 
 /// Candidate GS v 0 encoder, not a verified XP-80U driver or a transmission API.
-/// No init, text, feed, cut, drawer, mode changes, or arbitrary command injection.
+/// Optional fixed feed-to-cutter + partial cut, only on the final receipt page.
+/// No arbitrary commands or cash-drawer access.
 /// Caller must establish device support and an empty standard-mode print buffer.
-Uint8List encodeGsV0(MonochromeRaster raster, {int stripeRows = 128}) {
+Uint8List encodeGsV0(
+  MonochromeRaster raster, {
+  int stripeRows = 128,
+  bool cutAtEnd = false,
+}) {
   if (stripeRows < 1 || stripeRows > 256) {
     throw const FormatException('RECEIPT_STRIPE_INVALID');
   }
@@ -70,5 +75,6 @@ Uint8List encodeGsV0(MonochromeRaster raster, {int stripeRows = 128}) {
       ),
     );
   }
+  if (cutAtEnd) builder.add([0x1d, 0x56, 66, 0]);
   return builder.takeBytes().asUnmodifiableView();
 }

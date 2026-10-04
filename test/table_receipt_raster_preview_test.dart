@@ -32,7 +32,7 @@ void main() {
               language: UiLanguage.en,
               sourceBase: 'https://test.invalid',
               render: (plan, page) {
-                expect(plan.header, contains(fixture.checkout));
+                expect(plan.header, isNot(contains(fixture.checkout)));
                 calls++;
                 return job.future;
               },

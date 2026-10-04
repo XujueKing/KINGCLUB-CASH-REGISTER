@@ -9,49 +9,46 @@ import 'table_receipt_document_test.dart' as fixture;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test(
-    'table pages preserve child allocations and one separated parent tender',
-    () {
-      final document = fixture.parse(fixture.tableReceiptFixture());
-      for (final language in UiLanguage.values) {
-        for (final width in [384, 512, 576]) {
-          final plan = ReceiptRasterPlan.forTable(
-            document,
-            language: language,
-            widthDots: width,
-          );
-          final blocks = plan.pages.expand((page) => page).toList();
-          expect(plan.header, contains(fixture.checkout));
+  test('customer receipt preserves line prices and one parent tender without internal IDs', () {
+    final document = fixture.parse(fixture.tableReceiptFixture());
+    for (final language in UiLanguage.values) {
+      for (final width in [384, 512, 576]) {
+        final plan = ReceiptRasterPlan.forTable(
+          document,
+          language: language,
+          widthDots: width,
+        );
+        final blocks = plan.pages.expand((page) => page).toList();
+        expect(plan.header, isNot(contains(fixture.checkout)));
+        expect(blocks.join(), isNot(contains('TEST_STORE')));
+        expect(blocks.join(), isNot(contains('TEST_SESSION')));
+        expect(blocks.join(), isNot(contains('UTC')));
+        expect(
+          blocks.where(
+            (text) =>
+                text == '${tr(language, 'provider_member_balance')}  3.00',
+          ),
+          hasLength(1),
+        );
+        expect(blocks, contains('${tr(language, 'receiptPrincipal')}  2.40'));
+        expect(blocks, contains('${tr(language, 'receiptGift')}  0.60'));
+        expect(
+          blocks.where(
+            (text) => text.startsWith('${tr(language, 'orderPreviewTotal')}  '),
+          ),
+          hasLength(1),
+        );
+        for (final order in document.orders) {
           expect(
-            blocks.where(
-              (text) => text == tr(language, 'provider_member_balance'),
-            ),
+            blocks.where((text) => text.endsWith(': ${order.orderRef}')),
             hasLength(1),
           );
-          expect(
-            blocks,
-            contains('${tr(language, 'receiptPrincipal')}: CNY 2.40'),
-          );
-          expect(blocks, contains('${tr(language, 'receiptGift')}: CNY 0.60'));
-          expect(
-            blocks.where(
-              (text) =>
-                  text.startsWith('${tr(language, 'orderPreviewTotal')}:'),
-            ),
-            hasLength(1),
-          );
-          for (final order in document.orders) {
-            expect(
-              blocks.where((text) => text.startsWith('${order.orderRef}\n')),
-              hasLength(1),
-            );
-          }
-          expect(() => plan.pages.clear(), throwsUnsupportedError);
-          expect(() => plan.pages.first.clear(), throwsUnsupportedError);
         }
+        expect(() => plan.pages.clear(), throwsUnsupportedError);
+        expect(() => plan.pages.first.clear(), throwsUnsupportedError);
       }
-    },
-  );
+    }
+  });
   test('cash and platform cash do not reuse store gift amounts', () {
     for (final tender in [
       {'channel': 'cash', 'receivedCents': 500, 'changeCents': 200},
@@ -70,11 +67,8 @@ void main() {
         widthDots: 576,
       );
       final text = plan.pages.expand((page) => page).join('\n');
-      expect(text, isNot(contains('CNY 0.60')));
-      expect(
-        text,
-        contains(tender['channel'] == 'cash' ? 'CNY 5.00' : 'CNY 0.00'),
-      );
+      expect(text, isNot(contains('  0.60')));
+      expect(text, contains(tender['channel'] == 'cash' ? '  5.00' : '  0.00'));
     }
   });
   test('table print identity is parent-scoped and namespaced', () {

@@ -9,6 +9,10 @@ internal object UsbRasterFrames {
         var totalRows = 0
         fun b(i: Int) = bytes[i].toInt() and 255
         while (offset < bytes.size) {
+            // Only a single final feed-to-cutter/partial-cut is accepted.
+            if (totalRows > 0 && bytes.size - offset == 4 &&
+                b(offset) == 29 && b(offset + 1) == 86 &&
+                b(offset + 2) == 66 && b(offset + 3) == 0) return
             require(bytes.size - offset >= 8)
             require(b(offset) == 29 && b(offset + 1) == 118 && b(offset + 2) == 48 && b(offset + 3) == 0)
             val w = b(offset + 4) + 256 * b(offset + 5)

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../auth/staff_auth_controller.dart';
 import '../live/receipt_document.dart';
+import '../live/table_snapshot.dart';
 import '../strings.dart';
 import 'escpos_raster.dart';
 import 'native_raster_print_transport.dart';
@@ -10,6 +11,46 @@ import 'raster_print_coordinator.dart';
 import 'receipt_document_renderer.dart';
 import 'receipt_print_identity.dart';
 import 'usb_printer_permission.dart';
+
+/// Resolve labels from the existing workbench; never print database IDs as names.
+Future<ReceiptCaption> readReceiptCaption(
+  StaffAuthController auth,
+  String tableRef,
+  String sessionRef,
+) async {
+  final identity = auth.session;
+  if (identity == null) return const ReceiptCaption();
+  try {
+    return await (() async {
+      String? after;
+      final visited = <String>{};
+      for (var page = 0; page < 10; page++) {
+        final snapshot = TableSnapshot.parse(
+          await auth.readWorkbench(afterTable: after),
+          storeRef: identity.storeRef,
+          employeeRef: identity.employeeRef,
+          afterTable: after,
+        );
+        if (!identical(identity, auth.session)) break;
+        for (final table in snapshot.tables) {
+          if (table.reference == tableRef)
+            return ReceiptCaption(
+              storeName: snapshot.storeName,
+              tableName: table.name,
+              partySize: table.session?.reference == sessionRef
+                  ? table.session?.partySize
+                  : null,
+            );
+        }
+        after = snapshot.nextAfterTable;
+        if (after == null || !visited.add(after)) break;
+      }
+      return ReceiptCaption(storeName: identity.storeName);
+    })().timeout(const Duration(seconds: 5));
+  } catch (_) {
+    return ReceiptCaption(storeName: identity.storeName);
+  }
+}
 
 /// Prints a verified server receipt, never a local cart or payment admission.
 /// The existing durable document fence prevents automatic duplicate output.
@@ -44,6 +85,7 @@ Future<String> printPaidTableReceipt({
         document,
         language: language,
         widthDots: 576,
+        caption: await readReceiptCaption(auth, tableRef, sessionRef),
         reprint: reprint,
       ),
       printIdentity: ReceiptPrintIdentity.forTable(
@@ -100,6 +142,7 @@ Future<String> printReceiptPlan({
           documentIdentity: printIdentity,
           confirmed: true,
           confirmedReprint: reprint,
+          cutAtEnd: true,
           compatibilityVerified: true,
           stillCurrent: current,
         );
@@ -139,6 +182,7 @@ Future<String> printPaidOrderReceipt({
         document,
         language: language,
         widthDots: 576,
+        caption: await readReceiptCaption(auth, tableRef, sessionRef),
       ),
       printIdentity: ReceiptPrintIdentity(
         base: identity.base.toString(),

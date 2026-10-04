@@ -6,6 +6,7 @@ import 'package:kingclub_cash_register/src/hardware/native_raster_print_transpor
 import 'package:kingclub_cash_register/src/live/receipt_document.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 
+import 'support/table_fixture.dart';
 import 'table_checkout_dialog_test.dart' show CheckoutDialogAuth;
 import 'table_receipt_document_test.dart' show tableReceiptFixture, checkout;
 import 'printer_discovery_test.dart' show observation;
@@ -13,6 +14,21 @@ import 'usb_printer_descriptor_test.dart' show descriptor;
 
 class ReceiptAuth extends CheckoutDialogAuth {
   bool wrongScope = false;
+  bool differentSession = false;
+  @override
+  Future<Object?> readWorkbench({String? afterTable}) async {
+    final raw = tableFixture();
+    raw['result']['operator']['employeeRef'] = session.employeeRef;
+    final table = raw['result']['tables'][0];
+    table['tableRef'] = 'TEST_TABLE';
+    table['tableName'] = 'V06';
+    table['session']['sessionRef'] = differentSession
+        ? 'NEW_SESSION'
+        : 'TEST_SESSION';
+    table['session']['partySize'] = 4;
+    return raw;
+  }
+
   @override
   Future<TableReceiptDocument> readTableReceiptDocument(String ref) async {
     final raw = tableReceiptFixture();
@@ -60,6 +76,8 @@ void main() {
       call,
     ) async {
       sends++;
+      final bytes = call.arguments['bytes'] as Uint8List;
+      expect(bytes.sublist(bytes.length - 4), [29, 86, 66, 0]);
       return {
         'attemptId': call.arguments['attemptId'],
         'acceptedBytes': shortWrite
@@ -83,6 +101,21 @@ void main() {
     language: UiLanguage.zh,
     stillCurrent: () => true,
   );
+  test('receipt caption keeps readable table and does not borrow new-session headcount', () async {
+    final auth = ReceiptAuth();
+    addTearDown(auth.dispose);
+    final same = await readReceiptCaption(auth, 'TEST_TABLE', 'TEST_SESSION');
+    expect(same.tableName, 'V06');
+    expect(same.partySize, 4);
+    auth.differentSession = true;
+    final historical = await readReceiptCaption(
+      auth,
+      'TEST_TABLE',
+      'TEST_SESSION',
+    );
+    expect(historical.tableName, 'V06');
+    expect(historical.partySize, isNull);
+  });
   testWidgets(
     'verified receipt prints once; reopening does not send duplicate',
     (tester) async {
@@ -120,14 +153,28 @@ void main() {
     expect(await tester.runAsync(() => print(auth)), 'checkoutPrintFailed');
     expect(sends, 1);
   });
-  testWidgets('explicit copy resolves its previous unknown output', (tester) async {
-    final auth = ReceiptAuth(); addTearDown(auth.dispose); shortWrite = true;
+  testWidgets('explicit copy resolves its previous unknown output', (
+    tester,
+  ) async {
+    final auth = ReceiptAuth();
+    addTearDown(auth.dispose);
+    shortWrite = true;
     expect(await tester.runAsync(() => print(auth)), 'checkoutPrintFailed');
     shortWrite = false;
-    expect(await tester.runAsync(() => printPaidTableReceipt(auth: auth,
-      checkoutRef: checkout, tableRef: 'TEST_TABLE', sessionRef: 'TEST_SESSION',
-      language: UiLanguage.zh, stillCurrent: () => true, reprint: true)), 'checkoutPrintSent');
+    expect(
+      await tester.runAsync(
+        () => printPaidTableReceipt(
+          auth: auth,
+          checkoutRef: checkout,
+          tableRef: 'TEST_TABLE',
+          sessionRef: 'TEST_SESSION',
+          language: UiLanguage.zh,
+          stillCurrent: () => true,
+          reprint: true,
+        ),
+      ),
+      'checkoutPrintSent',
+    );
     expect(sends, greaterThan(1));
   });
-
 }
