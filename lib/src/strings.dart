@@ -6,6 +6,21 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'voucherWorkspace':'核券／取酒|Vouchers / pickup|核券／取酒|คูปอง / รับเครื่องดื่ม',
+  'voucherChannel_douyin':'抖音团购|Douyin|抖音團購|Douyin',
+  'voucherChannel_meituan':'美团团购|Meituan|美團團購|Meituan',
+  'voucherChannel_king':'KING 券|KING vouchers|KING 券|คูปอง KING',
+  'voucherChannel_wine':'KING 取存酒|Stored wine|KING 取存酒|รับเครื่องดื่มที่ฝาก',
+  'voucherScanHint':'请扫描顾客的团购券码|Scan the guest’s voucher|請掃描顧客的團購券碼|สแกนคูปองของลูกค้า',
+  'voucherChooseChannel':'请先选择券的渠道，再扫码|Select the channel, then scan again|請先選擇券的渠道，再掃碼|เลือกช่องทางแล้วสแกนอีกครั้ง',
+  'voucherChannelPending':'该渠道暂未开通核销|Redemption is not available for this channel yet|該渠道暫未開通核銷|ยังไม่เปิดใช้การแลกช่องทางนี้',
+  'voucherWrongCode':'请出示团购券码，不是付款码或会员码|Use a voucher code, not a payment or member code|請出示團購券碼，不是付款碼或會員碼|กรุณาใช้รหัสคูปอง ไม่ใช่รหัสชำระเงินหรือสมาชิก',
+  'voucherScanFailed':'未能读取券，请确认渠道及券码后重扫|Unable to read voucher. Check the channel and scan again.|未能讀取券，請確認渠道及券碼後重掃|อ่านคูปองไม่ได้ ตรวจสอบช่องทางแล้วสแกนอีกครั้ง',
+  'voucherReading':'正在验券…|Reading voucher…|正在驗券…|กำลังอ่านคูปอง…',
+  'voucherScanExpired':'验券信息已过期，请重扫|Voucher preview expired. Scan again.|驗券資訊已過期，請重掃|ข้อมูลคูปองหมดอายุ โปรดสแกนอีกครั้ง',
+  'voucherPreviewOnly':'套餐预览，尚未核销|Package preview — not redeemed|套餐預覽，尚未核銷|ตัวอย่างแพ็กเกจ ยังไม่ได้แลก',
+  'voucherNoPackage':'暂无可用的本店套餐绑定|No usable package mapping for this store|暫無可用的本店套餐綁定|ยังไม่มีแพ็กเกจที่ใช้ได้สำหรับร้านนี้',
+  'voucherPackage':'团购套餐|Voucher package|團購套餐|แพ็กเกจคูปอง',
   'staffWelcome': '欢迎使用 KING 收银台|Welcome to KING|歡迎使用 KING 收銀台|ยินดีต้อนรับสู่ KING',
   'staffQrHint': '使用 KING APP 扫码登录，或向扫码器出示员工会员码|Scan with KING APP, or scan your staff member code|使用 KING APP 掃碼登入，或向掃碼器出示員工會員碼|สแกนด้วยแอป KING หรือแสดงรหัสสมาชิกพนักงาน',
   'staffPasswordMode': '手机号密码登录|Phone and password|手機號密碼登入|เข้าสู่ระบบด้วยเบอร์โทรและรหัสผ่าน',

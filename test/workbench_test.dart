@@ -127,6 +127,9 @@ void main() {
     (tester) async {
       await tester.pumpWidget(const CashierApp());
       await tester.pumpAndSettle();
+      expect(find.byType(TextFormField), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('staff-login-mode')));
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('staff-login')), findsOneWidget);
       expect(find.byType(TextFormField), findsNWidgets(2));
       expect(find.text('T01'), findsNothing);

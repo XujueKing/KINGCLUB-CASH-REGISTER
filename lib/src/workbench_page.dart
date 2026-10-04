@@ -40,6 +40,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     'members',
     'reports',
     'settings',
+    'voucherWorkspace',
   ];
   static const icons = [
     Icons.grid_view_rounded,
@@ -48,6 +49,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     Icons.people_outline,
     Icons.bar_chart_rounded,
     Icons.tune_rounded,
+    Icons.qr_code_scanner,
   ];
 
   @override
@@ -263,7 +265,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
 
   Widget content() => switch (page) {
     // Order views require selection of a real table and its current session.
-    0 || 1 || 2 => LiveTablesPanel(
+    0 || 1 || 2 || 6 => LiveTablesPanel(
       key: const ValueKey('tables'),
       onStoreName: (name) {
         if (mounted &&
@@ -275,6 +277,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
         }
       },
       menuVisible: page == 1,
+      voucherVisible: page == 6,
       onMenuChanged: (value) => setState(() => page = value ? 1 : 0),
       auth: widget.auth,
       language: widget.language,

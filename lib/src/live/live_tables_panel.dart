@@ -17,6 +17,7 @@ import 'swipe_grid.dart';
 import 'provider_recovery_panel.dart';
 import 'voucher_report_panel.dart';
 import 'voucher_lookup_panel.dart';
+import 'voucher_workspace_panel.dart';
 import 'balance_refund_recovery_panel.dart';
 import 'recharge_recovery_panel.dart';
 import 'recharge_collect_panel.dart';
@@ -46,6 +47,7 @@ class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
     super.key,
     this.menuVisible,
+    this.voucherVisible = false,
     this.onMenuChanged,
     this.onStoreName,
     required this.auth,
@@ -54,6 +56,7 @@ class LiveTablesPanel extends StatefulWidget {
     this.realtimeFactory,
   });
   final bool? menuVisible;
+  final bool voucherVisible;
   final ValueChanged<bool>? onMenuChanged;
   final ValueChanged<String>? onStoreName;
   final StaffAuthController auth;
@@ -284,6 +287,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   @override
   void didUpdateWidget(covariant LiveTablesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if(widget.voucherVisible&&!oldWidget.voucherVisible)selectedDate=null;
     if (widget.menuVisible == true && oldWidget.menuVisible != true) {
       autoSeatPending = focusedTableRef == null;
       selectDefaultBarSeat();
@@ -669,7 +673,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                     final counters = data.tables
                         .where((t) => t.isBarCounter)
                         .toList();
-                    final grid = Column(
+                    final grid = widget.voucherVisible
+                        ? VoucherWorkspacePanel(auth:widget.auth,language:widget.language,tableName:focused?.name)
+                        : Column(
                       children: [
                         workspaceHeader(),
                         if (data.tables.isEmpty) Text(t('liveNoTables')),
