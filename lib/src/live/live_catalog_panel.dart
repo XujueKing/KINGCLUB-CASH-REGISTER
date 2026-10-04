@@ -392,6 +392,13 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                   if (widget.onSelect != null)
                     IconButton.filledTonal(
                       key: ValueKey('catalog-add-${p.reference}'),
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(32, 32),
+                        fixedSize: const Size(32, 32),
+                        padding: const EdgeInsets.all(6),
+                        tapTargetSize: MaterialTapTargetSize.padded,
+                      ),
+                      iconSize: 20,
                       tooltip: t('cartAdd'),
                       onPressed: canSelect ? () => widget.onSelect!(p) : null,
                       icon: const Icon(Icons.add),
