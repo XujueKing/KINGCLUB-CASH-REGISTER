@@ -129,6 +129,7 @@ class LiveTable {
   }
   final String reference, name, status;
   bool get isBarCounter => name.trim() == '吧台';
+  bool get isBarSeat => RegExp(r'^吧台-B[1-9][0-9]*$').hasMatch(name.trim());
   final Map<String, dynamic>? reservation;
   final String? tableMode;
   final int? minimumSeats;

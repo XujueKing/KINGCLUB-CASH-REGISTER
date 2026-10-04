@@ -704,33 +704,34 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                   ),
                 ],
               ),
-              Row(
-                children: [
-                  InkWell(
-                    key: const ValueKey('bill-party-size'),
-                    onTap: () => showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(t('guests')),
-                        content: Text(t('billPartyUnavailable')),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: Text(t('staffCancelSelection')),
-                          ),
-                        ],
+              if (table?.isBarCounter != true && table?.isBarSeat != true)
+                Row(
+                  children: [
+                    InkWell(
+                      key: const ValueKey('bill-party-size'),
+                      onTap: () => showDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text(t('guests')),
+                          content: Text(t('billPartyUnavailable')),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: Text(t('staffCancelSelection')),
+                            ),
+                          ],
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          '${t('guests')}: ${session?.partySize ?? currentContext.partySize ?? '—'}/${table?.maximumSeats ?? '—'}',
+                          style: const TextStyle(fontSize: 10),
+                        ),
                       ),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        '${t('guests')}: ${session?.partySize ?? currentContext.partySize ?? '—'}/${table?.maximumSeats ?? '—'}',
-                        style: const TextStyle(fontSize: 10),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
         ),

@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'table_snapshot.dart';
 
-Color tableStatusColor(LiveTable table) => table.isBarCounter
-    ? const Color(0xFF64716B)
-    : table.status != 'active'
+Color tableStatusColor(LiveTable table) => table.status != 'active'
     ? const Color(0xFF64748B)
     : table.session == null
     ? (table.reservation == null ? Colors.white : const Color(0xFFFACC15))
