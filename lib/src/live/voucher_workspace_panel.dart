@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -9,8 +10,8 @@ import '../strings.dart';
 import 'provider_payment.dart';
 import 'voucher_group_admission_card.dart';
 
-/// Scan/preview only until official confirmation and table fulfillment are wired.
-/// A prepared package never appears in the bill as a completed redemption.
+/// Official single-coupon redemption is separate from package fulfillment.
+/// No preview or redemption alone adds AA drinks to the table bill.
 class VoucherWorkspacePanel extends StatefulWidget {
   const VoucherWorkspacePanel({
     super.key,
@@ -35,6 +36,10 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
   Map<String, dynamic>? result;
   bool busy = false, foreground = true;
   int epoch = 0;
+  String? confirmationId;
+  int? confirmationIndex;
+  String? confirmationMessage;
+  bool confirmationFinished = false;
   final choices = <String, Set<String>>{};
   String t(String key) => tr(widget.language, key);
   @override
@@ -69,6 +74,10 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         choices.clear();
         message = null;
         channel = null;
+        confirmationId = null;
+        confirmationIndex = null;
+        confirmationMessage = null;
+        confirmationFinished = false;
       });
   }
 
@@ -100,7 +109,11 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
   }
 
   Future<void> scan(String value) async {
-    if (!foreground || busy || value.isEmpty) return;
+    if (!foreground ||
+        busy ||
+        value.isEmpty ||
+        confirmationId != null && !confirmationFinished)
+      return;
     // Never forward payment or member identity credentials to a voucher provider.
     if (value.length > 8192 ||
         value.startsWith('KC:') ||
@@ -150,6 +163,10 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
       message = null;
       result = null;
       choices.clear();
+      confirmationId = null;
+      confirmationIndex = null;
+      confirmationMessage = null;
+      confirmationFinished = false;
     });
     try {
       final data = await widget.auth.prepareDouyinVoucher(value);
@@ -163,6 +180,71 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
                   error.code == 'DOUYIN_PREPARATION_NOT_ENABLED'
               ? 'voucherChannelPending'
               : 'voucherScanFailed',
+        );
+    } finally {
+      if (mounted && epoch == current) setState(() => busy = false);
+    }
+  }
+
+  String localized(String zh, String en, String tw, String th) =>
+      switch (widget.language) {
+        UiLanguage.zh => zh,
+        UiLanguage.en => en,
+        UiLanguage.tw => tw,
+        UiLanguage.th => th,
+      };
+  Future<void> confirm(int index) async {
+    if (busy || result == null || confirmationFinished) return;
+    final preparation = result!['preparationRef'];
+    if (preparation is! String) return;
+    if (confirmationId == null) {
+      final bytes = List.generate(16, (_) => Random.secure().nextInt(256));
+      bytes[6] = (bytes[6] & 15) | 64;
+      bytes[8] = (bytes[8] & 63) | 128;
+      final h = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      confirmationId =
+          '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
+      confirmationIndex = index;
+    }
+    if (confirmationIndex != index) return;
+    expiry?.cancel();
+    final current = epoch;
+    setState(() => busy = true);
+    try {
+      final receipt = await widget.auth.confirmDouyinRedemption(
+        preparationRef: preparation,
+        requestId: confirmationId!,
+        selectionIndex: index,
+      );
+      if (!mounted || epoch != current) return;
+      setState(() {
+        confirmationFinished = receipt['state'] == 'completed';
+        final rows = (receipt['receipt'] as Map?)?['results'] as List? ?? [];
+        confirmationMessage = confirmationFinished
+            ? (rows.length == 1 && rows.first['result'] == 0
+                  ? localized('核销成功', 'Redeemed', '核銷成功', 'ใช้คูปองสำเร็จ')
+                  : localized(
+                      '本次未核销成功',
+                      'Redemption unsuccessful',
+                      '本次未核銷成功',
+                      'ใช้คูปองไม่สำเร็จ',
+                    ))
+            : localized(
+                '正在确认核销结果',
+                'Checking redemption result',
+                '正在確認核銷結果',
+                'กำลังตรวจสอบผล',
+              );
+      });
+    } catch (_) {
+      if (mounted && epoch == current)
+        setState(
+          () => confirmationMessage = localized(
+            '结果尚未确认，请查询原结果',
+            'Result unconfirmed. Check the original attempt.',
+            '結果尚未確認，請查詢原結果',
+            'ยังไม่ยืนยันผล โปรดตรวจสอบรายการเดิม',
+          ),
         );
     } finally {
       if (mounted && epoch == current) setState(() => busy = false);
@@ -201,7 +283,8 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
                       ? const Color(0xffe8eee8)
                       : null,
                 ),
-                onPressed: busy
+                onPressed:
+                    busy || confirmationId != null && !confirmationFinished
                     ? null
                     : () => setState(() {
                         epoch++;
@@ -236,11 +319,47 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         ),
       if (result != null) ...[
         const SizedBox(height: 16),
-        Text(t('voucherPreviewOnly')),
+        if (confirmationMessage != null)
+          Text(
+            confirmationMessage!,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          ),
+        for (final certificate
+            in (result!['selection'] as Map?)?['certificates'] as List? ?? [])
+          Card(
+            child: ListTile(
+              title: Text(
+                certificate['title'] as String? ?? t('voucherPackage'),
+              ),
+              subtitle: Text(
+                localized(
+                  '核销记入当前登录门店',
+                  'Recorded for the current store',
+                  '核銷記入目前登入門店',
+                  'บันทึกสำหรับร้านปัจจุบัน',
+                ),
+              ),
+              trailing: FilledButton(
+                onPressed:
+                    busy ||
+                        confirmationFinished ||
+                        (confirmationIndex != null &&
+                            confirmationIndex != certificate['selectionIndex'])
+                    ? null
+                    : () => confirm(certificate['selectionIndex'] as int),
+                child: Text(
+                  confirmationId == null
+                      ? localized('确认核销', 'Redeem', '確認核銷', 'ยืนยันใช้คูปอง')
+                      : localized('查询结果', 'Check result', '查詢結果', 'ตรวจสอบผล'),
+                ),
+              ),
+            ),
+          ),
         if ((result!['packages'] as List? ?? []).isEmpty)
           Text(t('voucherNoPackage')),
         for (final raw in result!['packages'] as List? ?? [])
-          packageCard(Map<String, dynamic>.from(raw as Map)),
+          if (raw['groupAdmission'] == null)
+            packageCard(Map<String, dynamic>.from(raw as Map)),
       ],
     ],
   );

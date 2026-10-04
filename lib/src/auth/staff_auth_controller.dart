@@ -1368,6 +1368,19 @@ class StaffAuthController extends ChangeNotifier {
     return result;
   }
 
+  Future<Map<String,dynamic>> confirmDouyinRedemption({required String preparationRef,required String requestId,required int selectionIndex}) async {
+    final identity=_session,api=_api,epoch=_epoch;
+    if(identity==null||api==null||!identity.expiresAt.isAfter(_now()))throw const CcsopFailure('SESSION_REQUIRED');
+    if(!identity.permissions.contains('voucher.douyin'))throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    final raw=await api.call('K261005002012',{'storeRef':identity.storeRef,'preparationRef':preparationRef,
+      'requestId':requestId,'selectionIndex':selectionIndex,'confirmed':true});
+    _check(epoch);
+    if(!identical(identity,_session))throw const CcsopFailure('SESSION_REQUIRED');
+    final result=raw is Map<String,dynamic>?raw['result']:null;
+    if(result is! Map<String,dynamic>||!['completed','unknown'].contains(result['state']))throw const FormatException();
+    return result;
+  }
+
   Future<VoucherLookup> lookupVoucher({
     required String provider,
     required String requestId,
