@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:math';
 
@@ -47,6 +48,16 @@ import '../live/together_admission.dart';
 
 /// Owns exactly one employee session. Saved projections are never accepted without a server refresh.
 class StaffAuthController extends ChangeNotifier {
+  final operatorAvatar = ValueNotifier<Uint8List?>(null);
+  String? _operatorAvatarEncoded;
+  void _updateOperatorAvatar(Object? encoded) {
+    final next = encoded is String && encoded.length <= 65536 ? encoded : null;
+    if (next == _operatorAvatarEncoded) return;
+    _operatorAvatarEncoded = next;
+    try { operatorAvatar.value = next == null ? null : base64Decode(next); }
+    catch (_) { operatorAvatar.value = null; }
+  }
+
   StaffAuthController({
     SessionVault? vault,
     AuthChannel Function(String)? authFactory,
@@ -1228,6 +1239,7 @@ class StaffAuthController extends ChangeNotifier {
     StaffSession? saved;
     bool refreshAttempted = false;
     _session = null;
+    _updateOperatorAvatar(null);
     _api?.close();
     _api = null;
     _changed();
@@ -1309,6 +1321,7 @@ class StaffAuthController extends ChangeNotifier {
     }
     checkInstallable();
     final api = _sessionFactory(session);
+    if (_session?.employeeRef != session.employeeRef) _updateOperatorAvatar(null);
     _session = session;
     _api = api;
   }
@@ -1316,6 +1329,7 @@ class StaffAuthController extends ChangeNotifier {
   Future<void> _fail(Object error, int epoch) async {
     if (!_current(epoch)) return;
     _session = null;
+    _updateOperatorAvatar(null);
     _api?.close();
     _api = null;
     _error = error is CcsopFailure ? error.code : 'AUTH_FAILED';
@@ -1418,6 +1432,8 @@ class StaffAuthController extends ChangeNotifier {
     if (!session.expiresAt.isAfter(_now())) {
       throw const CcsopFailure('SESSION_REQUIRED');
     }
+    final operator = value is Map ? value['operator'] : null;
+    _updateOperatorAvatar(operator is Map ? operator['avatarBase64'] : null);
     return value;
   }
 
@@ -3188,6 +3204,7 @@ class StaffAuthController extends ChangeNotifier {
     _auth?.close();
     _auth = null;
     _session = null;
+    _updateOperatorAvatar(null);
     _api = null;
     _busy = true;
     _error = null;
@@ -3233,6 +3250,8 @@ class StaffAuthController extends ChangeNotifier {
     _auth = null;
     _api = null;
     _session = null;
+    _updateOperatorAvatar(null);
+    operatorAvatar.dispose();
     super.dispose();
   }
 }

@@ -1,5 +1,6 @@
 import 'live/together_admission_dialog.dart';
 
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../main.dart';
@@ -129,12 +130,19 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     ),
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Color(0xffdce5df),
-                    child: Icon(Icons.person_outline, color: forest, size: 24),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: ValueListenableBuilder<Uint8List?>(
+                    valueListenable: widget.auth.operatorAvatar,
+                    builder: (context, bytes, _) => CircleAvatar(
+                      radius: 18,
+                      backgroundColor: const Color(0xffdce5df),
+                      child: bytes == null
+                        ? const Icon(Icons.person_outline, color: forest, size: 24)
+                        : ClipOval(child: Image.memory(bytes, width: 36, height: 36,
+                            fit: BoxFit.cover, gaplessPlayback: true,
+                            errorBuilder: (_, error, stack) => const Icon(Icons.person_outline, color: forest, size: 24))),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 28),
