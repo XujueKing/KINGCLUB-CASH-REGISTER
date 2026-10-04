@@ -59,7 +59,9 @@ class BarCounterStrip extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       side: BorderSide(
                         color: selectedSeat == seat
-                            ? const Color(0xff40544a)
+                            ? (seatColor(seat) == Colors.white
+                                  ? const Color(0xff2563eb)
+                                  : const Color(0xff40544a))
                             : const Color(0xffaab5ae),
                         width: selectedSeat == seat ? 2 : 1,
                       ),

@@ -1535,7 +1535,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(
           color: selected
-              ? Color.lerp(tableColor(table), Colors.black, 0.65)!
+              ? (tableColor(table) == Colors.white
+                    ? const Color(0xff2563eb)
+                    : Color.lerp(tableColor(table), Colors.black, 0.65)!)
               : empty
               ? const Color(0xFFABBCAF)
               : tableColor(table),
