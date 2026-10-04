@@ -1,4 +1,6 @@
 import 'opening_snapshot.dart';
+import 'bar_counter_strip.dart';
+import 'table_members_panel.dart';
 import 'quick_opening_dialog.dart';
 
 import 'dart:async';
@@ -453,6 +455,12 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                 ((focused == null ? 190 : 160) * scale))
                             .floor()
                             .clamp(1, 8);
+                    final ordinaryTables = data.tables
+                        .where((t) => !t.isBarCounter)
+                        .toList();
+                    final counters = data.tables
+                        .where((t) => t.isBarCounter)
+                        .toList();
                     final grid = Column(
                       children: [
                         workspaceHeader(),
@@ -462,9 +470,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                             key: ValueKey('table-page-$page'),
                             columns: columns,
                             tileHeight: (focused == null ? 124 : 104) * scale,
-                            itemCount: data.tables.length,
+                            itemCount: ordinaryTables.length,
                             itemBuilder: (context, index) =>
-                                tableCard(data.tables[index], data.currency),
+                                tableCard(ordinaryTables[index], data.currency),
                             hasPrevious: page > 0,
                             hasNext: data.nextAfterTable != null,
                             loading: loading,
@@ -472,6 +480,18 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                             onNext: next,
                           ),
                         ),
+                        for (final bar in counters) ...[
+                          const Divider(height: 16, thickness: 1),
+                          BarCounterStrip(
+                            table: bar,
+                            auth: widget.auth,
+                            language: widget.language,
+                            revision: data.observedAt,
+                            onEnter: () => selectTable(bar),
+                            onMembers: () => linkBarMember(bar),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                       ],
                     );
                     if (focused?.session != null &&
@@ -881,6 +901,47 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   ];
 
   bool enteringBar = false;
+  Future<void> linkBarMember(LiveTable table) async {
+    await selectTable(table);
+    if (!mounted) return;
+    final current = snapshot?.tables
+        .where((t) => t.reference == table.reference)
+        .firstOrNull;
+    if (current?.session == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          [
+            '扫码关联吧台会员',
+            'Link counter member',
+            '掃碼關聯吧檯會員',
+            'สแกนสมาชิกที่เคาน์เตอร์',
+          ][widget.language.index],
+        ),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: TableMembersPanel(
+              auth: widget.auth,
+              language: widget.language,
+              tableRef: table.reference,
+              sessionRef: current!.session!.reference,
+              onLinked: () => Navigator.pop(dialogContext),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(['关闭', 'Close', '關閉', 'ปิด'][widget.language.index]),
+          ),
+        ],
+      ),
+    );
+    if (mounted) await load();
+  }
+
   Future<void> selectTable(LiveTable table) async {
     if (table.isBarCounter) {
       if (enteringBar || table.status != 'active') return;

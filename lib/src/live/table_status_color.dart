@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'table_snapshot.dart';
 
-Color tableStatusColor(LiveTable table) => table.status != 'active'
+Color tableStatusColor(LiveTable table) => table.isBarCounter
+    ? const Color(0xFF64716B)
+    : table.status != 'active'
     ? const Color(0xFF64748B)
     : table.session == null
     ? (table.reservation == null ? Colors.white : const Color(0xFFFACC15))
@@ -19,6 +21,7 @@ LinearGradient tableStatusGradient(Color color) {
     0xFFDC2626 => const Color(0xFFF05252),
     0xFF1D4ED8 => const Color(0xFF3B82F6),
     0xFF64748B => const Color(0xFF8492A6),
+    0xFF64716B => const Color(0xFF64716B),
     _ => Colors.white,
   };
   return LinearGradient(
