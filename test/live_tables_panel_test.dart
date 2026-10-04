@@ -99,6 +99,7 @@ void main() {
     final tables = reply['result']['tables'] as List;
     for (var i = 0; i < 5; i++) {
       tables[i]['tableName'] = ['V1', 'C1', 'C2', 'K1', 'K2'][i];
+      tables[i]['maximumSeats'] = [10, 15, 8, 20, 10][i];
       tables[i]['session'] = null;
     }
     auth.reply = reply;
@@ -121,6 +122,22 @@ void main() {
     expect(find.text('V1'), findsNothing);
     for (final name in ['C1', 'C2', 'K1', 'K2']) {
       expect(find.text(name), findsOneWidget);
+    }
+    for (final (ref, count, columns) in [
+      ('test-001', 15, 4),
+      ('test-003', 20, 5),
+    ]) {
+      Finder square(int i) => find.byKey(ValueKey('table-seat-$ref-$i'));
+      expect(square(count - 1), findsOneWidget);
+      expect(square(count), findsNothing);
+      expect(
+        tester.getTopLeft(square(columns - 1)).dy,
+        tester.getTopLeft(square(0)).dy,
+      );
+      expect(
+        tester.getTopLeft(square(columns)).dy,
+        greaterThan(tester.getTopLeft(square(0)).dy),
+      );
     }
     expect(tester.takeException(), isNull);
   });

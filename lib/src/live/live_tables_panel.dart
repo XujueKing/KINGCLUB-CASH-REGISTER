@@ -1644,45 +1644,65 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         ),
                         const SizedBox(width: 4),
                         SizedBox(
-                          width: 46,
+                          width: table.maximumSeats <= 12
+                              ? 46
+                              : table.maximumSeats <= 16
+                              ? 62
+                              : 78,
                           child: Column(
                             children: [
                               Expanded(
                                 child: LayoutBuilder(
                                   builder: (context, bounds) {
-                                    final visible = table.maximumSeats.clamp(
-                                      0,
-                                      12,
-                                    );
-                                    final rows = (visible / 3).ceil().clamp(
-                                      1,
-                                      4,
-                                    );
+                                    final visible = table.maximumSeats;
+                                    final columns = visible <= 12
+                                        ? 3
+                                        : visible <= 16
+                                        ? 4
+                                        : 5;
+                                    final rows = (visible / columns)
+                                        .ceil()
+                                        .clamp(1, 100);
                                     final size =
                                         ((bounds.maxHeight - (rows - 1) * 2) /
                                                 rows)
-                                            .clamp(4.0, 16.0) *
-                                        0.875;
-                                    return Wrap(
-                                      spacing: 2,
-                                      runSpacing: 2,
-                                      children: [
-                                        for (var i = 0; i < visible; i++)
-                                          Container(
-                                            key: ValueKey(
-                                              'table-seat-${table.reference}-$i',
-                                            ),
-                                            width: size,
-                                            height: size,
-                                            color: i < (session?.partySize ?? 0)
-                                                ? textColor.withValues(
-                                                    alpha: 0.9,
-                                                  )
-                                                : textColor.withValues(
-                                                    alpha: 0.18,
-                                                  ),
-                                          ),
-                                      ],
+                                            .clamp(0.0, 14.0)
+                                            .clamp(
+                                              0.0,
+                                              (bounds.maxWidth -
+                                                      (columns - 1) * 2) /
+                                                  columns,
+                                            );
+                                    return Align(
+                                      alignment: Alignment.topRight,
+                                      child: SizedBox(
+                                        width:
+                                            columns * size + (columns - 1) * 2,
+                                        child: Wrap(
+                                          spacing: 2,
+                                          runSpacing: 2,
+                                          children: [
+                                            for (var i = 0; i < visible; i++)
+                                              Container(
+                                                key: ValueKey(
+                                                  'table-seat-${table.reference}-$i',
+                                                ),
+                                                width: size,
+                                                height: size,
+                                                color:
+                                                    i <
+                                                        (session?.partySize ??
+                                                            0)
+                                                    ? textColor.withValues(
+                                                        alpha: 0.9,
+                                                      )
+                                                    : textColor.withValues(
+                                                        alpha: 0.18,
+                                                      ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
                                     );
                                   },
                                 ),
