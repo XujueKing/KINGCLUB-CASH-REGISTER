@@ -1,3 +1,5 @@
+import 'unserved_bell.dart';
+import 'paid_order_alerts.dart';
 import 'bar_bill_header.dart';
 import 'opening_snapshot.dart';
 import 'bar_counter_strip.dart';
@@ -47,6 +49,7 @@ class LiveTablesPanel extends StatefulWidget {
   const LiveTablesPanel({
     super.key,
     this.menuVisible,
+    this.orderAlerts,
     this.voucherVisible = false,
     this.onMenuChanged,
     this.onStoreName,
@@ -55,6 +58,7 @@ class LiveTablesPanel extends StatefulWidget {
     this.enableRealtime = const bool.fromEnvironment('CASHIER_REALTIME'),
     this.realtimeFactory,
   });
+  final PaidOrderAlerts? orderAlerts;
   final bool? menuVisible;
   final bool voucherVisible;
   final ValueChanged<bool>? onMenuChanged;
@@ -287,7 +291,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   @override
   void didUpdateWidget(covariant LiveTablesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if(widget.voucherVisible&&!oldWidget.voucherVisible)selectedDate=null;
+    if (widget.voucherVisible && !oldWidget.voucherVisible) selectedDate = null;
     if (widget.menuVisible == true && oldWidget.menuVisible != true) {
       autoSeatPending = focusedTableRef == null;
       selectDefaultBarSeat();
@@ -674,110 +678,134 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         .where((t) => t.isBarCounter)
                         .toList();
                     final grid = widget.voucherVisible
-                        ? VoucherWorkspacePanel(auth:widget.auth,language:widget.language,tableName:focused?.name)
+                        ? VoucherWorkspacePanel(
+                            auth: widget.auth,
+                            language: widget.language,
+                            tableName: focused?.name,
+                          )
                         : Column(
-                      children: [
-                        workspaceHeader(),
-                        if (data.tables.isEmpty) Text(t('liveNoTables')),
-                        Expanded(
-                          child: SwipeGrid(
-                            key: ValueKey(
-                              'table-page-$page-floor-$selectedFloor',
-                            ),
-                            columns: columns,
-                            tileHeight: (focused == null ? 124 : 104) * scale,
-                            itemCount: ordinaryTables.length,
-                            itemBuilder: (context, index) =>
-                                tableCard(ordinaryTables[index], data.currency),
-                            hasPrevious: page > 0,
-                            hasNext: data.nextAfterTable != null,
-                            loading: loading,
-                            onPrevious: () => unawaited(load(target: page - 1)),
-                            onNext: next,
-                          ),
-                        ),
-                        for (final bar in counters) ...[
-                          const Divider(height: 16, thickness: 1),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: BarCounterStrip(
-                              table: bar,
-                              draftSeats: {
-                                for (final seat in data.tables.where(
-                                  (s) =>
-                                      s.parentBarRef == bar.reference &&
-                                      barDrafts.contains(s.reference),
-                                ))
-                                  seat.barSeatNumber!,
-                              },
-                              groups: [
-                                for (final refs in barGroups)
-                                  if (data.tables
+                            children: [
+                              workspaceHeader(),
+                              if (data.tables.isEmpty) Text(t('liveNoTables')),
+                              Expanded(
+                                child: SwipeGrid(
+                                  key: ValueKey(
+                                    'table-page-$page-floor-$selectedFloor',
+                                  ),
+                                  columns: columns,
+                                  tileHeight:
+                                      (focused == null ? 124 : 104) * scale,
+                                  itemCount: ordinaryTables.length,
+                                  itemBuilder: (context, index) => tableCard(
+                                    ordinaryTables[index],
+                                    data.currency,
+                                  ),
+                                  hasPrevious: page > 0,
+                                  hasNext: data.nextAfterTable != null,
+                                  loading: loading,
+                                  onPrevious: () =>
+                                      unawaited(load(target: page - 1)),
+                                  onNext: next,
+                                ),
+                              ),
+                              for (final bar in counters) ...[
+                                const Divider(height: 16, thickness: 1),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: BarCounterStrip(
+                                    table: bar,
+                                    alertSeats: {
+                                      for (final seat in data.tables.where(
+                                        (s) =>
+                                            s.parentBarRef == bar.reference &&
+                                            widget.orderAlerts?.hasTable(
+                                                  s.reference,
+                                                ) ==
+                                                true,
+                                      ))
+                                        seat.barSeatNumber!,
+                                    },
+                                    draftSeats: {
+                                      for (final seat in data.tables.where(
+                                        (s) =>
+                                            s.parentBarRef == bar.reference &&
+                                            barDrafts.contains(s.reference),
+                                      ))
+                                        seat.barSeatNumber!,
+                                    },
+                                    groups: [
+                                      for (final refs in barGroups)
+                                        if (data.tables
+                                                .where(
+                                                  (t) =>
+                                                      t.parentBarRef ==
+                                                          bar.reference &&
+                                                      refs.contains(
+                                                        t.session?.reference,
+                                                      ),
+                                                )
+                                                .length ==
+                                            refs.length)
+                                          (data.tables
+                                              .where(
+                                                (t) =>
+                                                    t.parentBarRef ==
+                                                        bar.reference &&
+                                                    refs.contains(
+                                                      t.session?.reference,
+                                                    ),
+                                              )
+                                              .map((t) => t.barSeatNumber!)
+                                              .toList()
+                                            ..sort()),
+                                    ],
+                                    seatTables: {
+                                      for (final seat in data.tables.where(
+                                        (t) => t.parentBarRef == bar.reference,
+                                      ))
+                                        seat.barSeatNumber!: seat,
+                                    },
+                                    seatAmounts: {
+                                      for (final seat in data.tables.where(
+                                        (t) => t.parentBarRef == bar.reference,
+                                      ))
+                                        seat.barSeatNumber!:
+                                            (seat.session?.paidCents ?? 0) +
+                                            (seat.session?.pendingCents ?? 0),
+                                    },
+                                    selectedSeat:
+                                        focusedTableRef == bar.reference ||
+                                            focused?.parentBarRef ==
+                                                bar.reference
+                                        ? selectedBarSeat
+                                        : null,
+                                    onSeat: (seat) {
+                                      final target = data.tables
                                           .where(
                                             (t) =>
                                                 t.parentBarRef ==
                                                     bar.reference &&
-                                                refs.contains(
-                                                  t.session?.reference,
-                                                ),
+                                                t.barSeatNumber == seat,
                                           )
-                                          .length ==
-                                      refs.length)
-                                    (data.tables
-                                        .where(
-                                          (t) =>
-                                              t.parentBarRef == bar.reference &&
-                                              refs.contains(
-                                                t.session?.reference,
-                                              ),
-                                        )
-                                        .map((t) => t.barSeatNumber!)
-                                        .toList()
-                                      ..sort()),
+                                          .firstOrNull;
+                                      if (target != null) {
+                                        unawaited(selectBarSeat(target));
+                                        return;
+                                      }
+                                      setState(() {
+                                        focusedTableRef = bar.reference;
+                                        selectedBarSeat = seat;
+                                      });
+                                      widget.onMenuChanged?.call(false);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
                               ],
-                              seatTables: {
-                                for (final seat in data.tables.where(
-                                  (t) => t.parentBarRef == bar.reference,
-                                ))
-                                  seat.barSeatNumber!: seat,
-                              },
-                              seatAmounts: {
-                                for (final seat in data.tables.where(
-                                  (t) => t.parentBarRef == bar.reference,
-                                ))
-                                  seat.barSeatNumber!:
-                                      (seat.session?.paidCents ?? 0) +
-                                      (seat.session?.pendingCents ?? 0),
-                              },
-                              selectedSeat:
-                                  focusedTableRef == bar.reference ||
-                                      focused?.parentBarRef == bar.reference
-                                  ? selectedBarSeat
-                                  : null,
-                              onSeat: (seat) {
-                                final target = data.tables
-                                    .where(
-                                      (t) =>
-                                          t.parentBarRef == bar.reference &&
-                                          t.barSeatNumber == seat,
-                                    )
-                                    .firstOrNull;
-                                if (target != null) {
-                                  unawaited(selectBarSeat(target));
-                                  return;
-                                }
-                                setState(() {
-                                  focusedTableRef = bar.reference;
-                                  selectedBarSeat = seat;
-                                });
-                                widget.onMenuChanged?.call(false);
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                      ],
-                    );
+                            ],
+                          );
                     if (focused?.isBarSeat == true &&
                         focused?.session == null) {
                       final seat = focused!;
@@ -1536,6 +1564,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   }
 
   Future<void> selectTable(LiveTable table) async {
+    widget.orderAlerts?.viewed(table);
     if (table.isBarCounter || table.isBarSeat) {
       if (table.status != 'active') return;
       setState(() {
@@ -1564,7 +1593,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     setState(() => focusedTableRef = table.reference);
   }
 
-  Color tableColor(LiveTable table) => tableStatusColor(table);
+  Color tableColor(LiveTable table) =>
+      widget.orderAlerts?.hasTable(table.reference) == true
+      ? const Color(0xffea580c)
+      : tableStatusColor(table);
 
   Widget tableCard(LiveTable table, String currency) {
     final selected = focusedTableRef == table.reference;
@@ -1610,14 +1642,24 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                table.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 23,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      table.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 23,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  if ((session?.unservedQuantity ?? 0) > 0) ...[
+                                    const SizedBox(width: 8),
+                                    const UnservedBell(),
+                                  ],
+                                ],
                               ),
                               if (tableFloor(table) == 2)
                                 Text(

@@ -58,6 +58,17 @@ class MainActivity : FlutterActivity() {
                 result.success(java.io.File(noBackupFilesDir, "product-images-v1").absolutePath)
             } else result.notImplemented()
         }
+        io.flutter.plugin.common.MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "cn.kingclub.cashier/order-alert").setMethodCallHandler { call, result ->
+            if (call.method == "play") {
+                try {
+                    val tone = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 90)
+                    tone.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 650)
+                    android.os.Handler(mainLooper).postDelayed({ tone.release() }, 900)
+                    result.success(null)
+                } catch (_: Exception) { result.error("AUDIO_UNAVAILABLE", "Audio unavailable", null) }
+            } else result.notImplemented()
+        }
         scanner?.dispose()
         scanner = ScannerBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         printerDiscovery?.dispose()

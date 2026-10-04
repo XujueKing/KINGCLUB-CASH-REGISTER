@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'live/paid_order_alerts.dart';
 import 'live/together_admission_dialog.dart';
 
 import 'dart:typed_data';
@@ -31,6 +34,24 @@ class WorkbenchPage extends StatefulWidget {
 }
 
 class _WorkbenchPageState extends State<WorkbenchPage> {
+  late final PaidOrderAlerts orderAlerts;
+  @override
+  void initState() {
+    super.initState();
+    orderAlerts = PaidOrderAlerts(widget.auth)..addListener(alertChanged);
+    unawaited(orderAlerts.start());
+  }
+
+  void alertChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    orderAlerts.dispose();
+    super.dispose();
+  }
+
   int page = 0;
   String? storeName, storeRef;
   String t(String key) => tr(widget.language, key);
@@ -87,7 +108,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                   child: ListView.separated(
                     itemCount: labels.length,
                     padding: EdgeInsets.zero,
-                    separatorBuilder: (_, _) => const SizedBox(height: 3),
+                    separatorBuilder: (_, _) => const SizedBox(height: 7),
                     itemBuilder: (context, position) {
                       final index = const [0, 1, 6, 2, 3, 4, 5][position];
                       return Padding(
@@ -110,16 +131,28 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                               ),
                               child: Column(
                                 children: [
-                                  Icon(
-                                    icons[index],
-                                    color: page == index
-                                        ? const Color(0xFFE2C88D)
-                                        : const Color(0xFFB9C9C2),
-                                    size: 23,
+                                  Badge(
+                                    isLabelVisible:
+                                        index == 0 && orderAlerts.count > 0,
+                                    label: Text(orderAlerts.count.toString()),
+                                    child: Icon(
+                                      icons[index],
+                                      color: page == index
+                                          ? const Color(0xFFE2C88D)
+                                          : const Color(0xFFB9C9C2),
+                                      size: 23,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    t(labels[index]),
+                                    index == 6
+                                        ? [
+                                            '\u6838\u5238',
+                                            'Vouchers',
+                                            '\u6838\u5238',
+                                            '\u0e04\u0e39\u0e1b\u0e2d\u0e07',
+                                          ][widget.language.index]
+                                        : t(labels[index]),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 11,
@@ -287,6 +320,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     // Order views require selection of a real table and its current session.
     0 || 1 || 2 || 6 => LiveTablesPanel(
       key: const ValueKey('tables'),
+      orderAlerts: orderAlerts,
       onStoreName: (name) {
         if (mounted &&
             (storeName != name || storeRef != widget.auth.session?.storeRef)) {

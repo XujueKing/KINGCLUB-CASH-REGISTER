@@ -1,3 +1,5 @@
+import 'unserved_bell.dart';
+
 import 'package:flutter/material.dart';
 
 import 'table_snapshot.dart';
@@ -13,6 +15,7 @@ class BarCounterStrip extends StatelessWidget {
     this.seatTables = const {},
     this.groups = const [],
     this.draftSeats = const {},
+    this.alertSeats = const {},
   });
   final LiveTable table;
   final ValueChanged<int> onSeat;
@@ -20,10 +23,12 @@ class BarCounterStrip extends StatelessWidget {
   final Map<int, int> seatAmounts;
   final Map<int, LiveTable> seatTables;
   final List<List<int>> groups;
-  final Set<int> draftSeats;
+  final Set<int> draftSeats, alertSeats;
   List<int> group(int seat) =>
       groups.where((g) => g.contains(seat)).firstOrNull ?? [seat];
-  Color seatColor(int seat) => group(seat).any(draftSeats.contains)
+  Color seatColor(int seat) => group(seat).any(alertSeats.contains)
+      ? const Color(0xffea580c)
+      : group(seat).any(draftSeats.contains)
       ? const Color(0xFFDC2626)
       : seatTables[seat] == null
       ? Colors.white
@@ -80,6 +85,13 @@ class BarCounterStrip extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              if (group(seat).any(
+                                (s) =>
+                                    (seatTables[s]?.session?.unservedQuantity ??
+                                        0) >
+                                    0,
+                              ))
+                                const UnservedBell(),
                               Text(
                                 group(seat).map((s) => 'B$s').join('+'),
                                 style: TextStyle(

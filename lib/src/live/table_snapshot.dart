@@ -49,6 +49,8 @@ class TableSessionSnapshot {
   TableSessionSnapshot(Map<String, dynamic> value)
     : reference = _ref(value['sessionRef']),
       linkedMembers = _number(value['linkedMembers'] ?? 0),
+      appPaidOrders = _number(value['appPaidOrders'] ?? 0),
+      unservedQuantity = _number(value['unservedQuantity'] ?? 0),
       hasConsumption =
           value['hasConsumption'] == true ||
           (value['paidOrders'] as num? ?? 0) > 0 ||
@@ -91,7 +93,7 @@ class TableSessionSnapshot {
   final String reference, status, paymentTiming, businessDate;
   final bool temporaryHold;
   final bool hasConsumption;
-  final int linkedMembers;
+  final int linkedMembers, appPaidOrders, unservedQuantity;
   final DateTime? openedAt;
   final int? partySize;
   final int partyRevision,
