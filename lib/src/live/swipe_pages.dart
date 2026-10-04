@@ -23,6 +23,14 @@ class SwipePages extends StatefulWidget {
 
 class _SwipePagesState extends State<SwipePages> {
   double distance = 0;
+  double direction = 1;
+  @override
+  void didUpdateWidget(covariant SwipePages oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.page != oldWidget.page)
+      direction = widget.page > oldWidget.page ? 1 : -1;
+  }
+
   @override
   Widget build(BuildContext context) {
     final count =
@@ -45,7 +53,29 @@ class _SwipePagesState extends State<SwipePages> {
                 widget.onPrevious();
               }
             },
-            child: widget.child,
+            child: ClipRect(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => SlideTransition(
+                  position: Tween<Offset>(
+                    begin: Offset(
+                      child.key == ValueKey(widget.page)
+                          ? direction
+                          : -direction,
+                      0,
+                    ),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey(widget.page),
+                  child: widget.child,
+                ),
+              ),
+            ),
           ),
         ),
         if (count > 1)

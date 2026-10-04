@@ -1154,7 +1154,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   }
 
   Widget workspaceHeader() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 12),
     child: Row(
       children: [
         Expanded(

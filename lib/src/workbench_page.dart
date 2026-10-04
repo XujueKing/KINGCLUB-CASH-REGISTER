@@ -200,7 +200,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             child: Column(
               children: [
                 Container(
-                  height: 48,
+                  height: 40,
                   color: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
@@ -216,7 +216,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                                   : null) ??
                               'KINGCLUB',
                           style: const TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
                         ),

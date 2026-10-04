@@ -198,7 +198,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
         ),
       SizedBox(
         height:
-            52 * math.max(1, MediaQuery.textScalerOf(context).scale(14) / 14),
+            44 * math.max(1, MediaQuery.textScalerOf(context).scale(14) / 14),
         child: ListView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -242,7 +242,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
                   return SwipeGrid(
                     key: ValueKey('catalog-page-$category'),
                     columns: columns,
-                    tileHeight: 150 * scale,
+                    tileHeight: 132 * scale,
                     loading: loading,
                     hasPrevious: false,
                     hasNext: false,
@@ -342,11 +342,11 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
         borderRadius: BorderRadius.circular(8),
         onTap: canSelect ? () => unawaited(chooseVariant(variants)) : null,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   ProductThumbnail(
