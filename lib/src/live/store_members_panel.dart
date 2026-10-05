@@ -13,6 +13,7 @@ import '../strings.dart';
 import 'member_identity.dart';
 import 'store_member_copy.dart';
 import 'recharge_touch_dialog.dart';
+import 'store_member_ledger.dart';
 
 class StoreMembersPanel extends StatefulWidget {
   const StoreMembersPanel({
@@ -35,7 +36,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   List<Map<String, dynamic>> members = [];
   Map<String, dynamic>? detail;
   String? next, notice;
-  bool busy = false, foreground = true;
+  bool busy = false, foreground = true, ledgerLoading = false;
   int epoch = 0;
   int listEpoch = 0, socketRevision = -1;
   String? selectedAccount;
@@ -122,10 +123,13 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
         socketRevision == socket!.revision)
       return;
     socketRevision = socket!.revision;
-    if (socket!.lastTopic != null && socket!.lastTopic != 'members') return;
+    if (socket!.lastTopic != null &&
+        !['members', 'orders'].contains(socket!.lastTopic))
+      return;
     refreshDelay?.cancel();
     refreshDelay = Timer(const Duration(milliseconds: 150), () {
       unawaited(load());
+      if (account != null) unawaited(select(account!, background: true));
     });
   }
 
@@ -203,6 +207,35 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
     } catch (_) {
       if (mounted && ticket == epoch)
         setState(() => notice = w('会员资料暂不可用', 'Member details unavailable'));
+    }
+  }
+
+  Future<void> loadMoreLedger() async {
+    if (ledgerLoading || account == null || detail?['ledgerBefore'] == null)
+      return;
+    final user = account!, cursor = detail!['ledgerBefore'], ticket = epoch;
+    setState(() => ledgerLoading = true);
+    try {
+      final result = await widget.auth.storeMembers({
+        'action': 'detail',
+        'targetAccount': user,
+        'ledgerBefore': cursor,
+      });
+      if (!mounted || ticket != epoch || account != user) return;
+      if (result['member']?['userAccount'] != user)
+        throw const FormatException();
+      setState(() {
+        detail!['ledger'] = [
+          ...(detail!['ledger'] as List? ?? []),
+          ...(result['ledger'] as List? ?? []),
+        ];
+        detail!['ledgerBefore'] = result['ledgerBefore'];
+      });
+    } catch (_) {
+      if (mounted && ticket == epoch)
+        setState(() => notice = w('会员资料暂不可用', 'Member details unavailable'));
+    } finally {
+      if (mounted) setState(() => ledgerLoading = false);
     }
   }
 
@@ -440,50 +473,17 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
                           child: Text(notice!),
                         ),
                       const SizedBox(height: 16),
-                      Text(
-                        w('充值记录', 'Recharge history'),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      StoreMemberLedger(
+                        language: widget.language,
+                        memberNumber: memberNumber(m),
+                        rows: (d['ledger'] as List? ?? [])
+                            .map((r) => Map<String, dynamic>.from(r))
+                            .toList(),
+                        loading: ledgerLoading,
+                        onMore: d['ledgerBefore'] == null
+                            ? null
+                            : loadMoreLedger,
                       ),
-                      for (final row in d['history'] as List)
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            '${w('充值', 'Recharge')} ¥${money(row['principalCents'])}  /  ${w('赠送', 'Gift')} ¥${money(row['giftCents'])}',
-                          ),
-                          subtitle: Text(
-                            '${row['createdDate']} · ${row['refundStatus'] == 'refunded'
-                                ? w('已退款', 'Refunded')
-                                : row['refundStatus'] == 'pending'
-                                ? w('退款处理中', 'Refund pending')
-                                : row['creditStatus'] == 'credited'
-                                ? w('已到账', 'Credited')
-                                : w('待付款／到账', 'Awaiting payment / credit')}',
-                          ),
-                          trailing: row['refundStatus'] == 'pending'
-                              ? TextButton(
-                                  onPressed: () => refund(
-                                    row: Map<String, dynamic>.from(row),
-                                    recover: true,
-                                  ),
-                                  child: Text(w('查询退款', 'Check refund')),
-                                )
-                              : row['creditStatus'] == 'credited' &&
-                                    row['refundStatus'] == 'none'
-                              ? TextButton(
-                                  onPressed: null,
-                                  child: Text(w('退款', 'Refund')),
-                                )
-                              : row['creditStatus'] != 'credited'
-                              ? TextButton(
-                                  onPressed: () =>
-                                      payment(Map<String, dynamic>.from(row)),
-                                  child: Text(w('收款／查询', 'Pay / check')),
-                                )
-                              : null,
-                        ),
                     ],
                   ),
                 ),
@@ -924,123 +924,6 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
         ),
       );
       if (mounted) await select(owner, background: true);
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  Future<void> payment(Map<String, dynamic> row) async {
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => RechargeScanDialog(
-        auth: widget.auth,
-        row: row,
-        language: widget.language,
-      ),
-    );
-    if (mounted && account != null) await select(account!);
-  }
-
-  Future<void> refund({Map<String, dynamic>? row, bool recover = false}) async {
-    row ??= await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: Text(w('选择充值记录', 'Select recharge')),
-        children: [
-          for (final r in detail!['history'] as List)
-            if (r['creditStatus'] == 'credited' &&
-                r['refundStatus'] != 'refunded')
-              SimpleDialogOption(
-                onPressed: () =>
-                    Navigator.pop(ctx, Map<String, dynamic>.from(r)),
-                child: Text(
-                  '${r['createdDate']} · ¥${money(r['principalCents'])}',
-                ),
-              ),
-        ],
-      ),
-    );
-    if (row == null || !mounted) return;
-    setState(() => busy = true);
-    final selected = row;
-    try {
-      final scope = {
-        'targetAccount': account,
-        'rechargeRef': selected['rechargeRef'],
-      };
-      var r = await widget.auth.storeMembers({
-        'action': recover ? 'refundQuery' : 'refundQuote',
-        ...scope,
-      });
-      if (!recover && r['state'] == 'quote' && mounted) {
-        final q = r['quote'] as Map;
-        final yes = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(
-              r['channel'] == 'cash'
-                  ? rechargeText(
-                      widget.language,
-                      '退还现金',
-                      'Return cash',
-                      '退還現金',
-                      'คืนเงินสด',
-                    )
-                  : w('原路退款', 'Refund to original payment'),
-            ),
-            content: Text(
-              '${w('已消费', 'Consumed')} ¥${money(q['consumedCents'])}\n${w('取消赠送', 'Cancel gift')} ¥${money(q['cancelledGiftCents'])}\n${w('可退金额', 'Refund')} ¥${money(q['refundCents'])}',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(w('取消', 'Cancel')),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(
-                  r['channel'] == 'cash'
-                      ? rechargeText(
-                          widget.language,
-                          '确认已退现金',
-                          'Confirm cash returned',
-                          '確認已退現金',
-                          'ยืนยันคืนเงินสดแล้ว',
-                        )
-                      : w('确认退款', 'Confirm refund'),
-                ),
-              ),
-            ],
-          ),
-        );
-        if (yes == true)
-          r = await widget.auth.storeMembers({
-            'action': 'refund',
-            ...scope,
-            'requestId': newRequestId(),
-            'expectedRefundCents': q['refundCents'],
-          });
-        else
-          return;
-      }
-      if (mounted) {
-        await select(scope['targetAccount'] as String);
-        setState(
-          () => notice = r['state'] == 'refunded'
-              ? w('退款完成，赠送已取消', 'Refund completed; gifts cancelled')
-              : w('退款处理中，可在记录中查询', 'Refund pending; check in history'),
-        );
-      }
-    } catch (_) {
-      if (mounted)
-        setState(
-          () => notice = w(
-            '退款未完成，请刷新原充值记录核对',
-            'Refund not completed; check the original recharge',
-          ),
-        );
     } finally {
       if (mounted) setState(() => busy = false);
     }
