@@ -1807,6 +1807,21 @@ class StaffAuthController extends ChangeNotifier {
     return value;
   }
 
+  Future<Map<String,dynamic>> readOrderHistory({required String from,required String to,
+    String search='',String status='all',int page=0}) async {
+    final identity=_session,api=_api,epoch=_epoch;
+    if(identity==null||api==null||!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    if(!identity.permissions.contains('orders.read')) throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    final timer=Stopwatch()..start();
+    final raw=await api.call('K261006002015',{'storeRef':identity.storeRef,'from':from,'to':to,'search':search,'status':status,'page':page});
+    _check(epoch);
+    if(!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    final result=raw is Map?raw['result']:null;
+    if(result is! Map||result['storeRef']!=identity.storeRef||result['from']!=from||result['to']!=to||result['page']!=page||result['orders'] is! List) throw const FormatException();
+    debugPrint('cashier_order_history elapsed_ms=${timer.elapsedMilliseconds}');
+    return Map<String,dynamic>.from(result);
+  }
+
   Future<Map<String,dynamic>> storeMembers(Map<String,dynamic> params) async {
     final identity=_session,api=_api,epoch=_epoch;
     if(identity==null||api==null||!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');

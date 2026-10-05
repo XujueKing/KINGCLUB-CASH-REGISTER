@@ -15,6 +15,7 @@ import 'hardware/printer_discovery_dialog.dart';
 import 'live/store_members_panel.dart';
 import 'live/receipt_accounts_settings.dart';
 import 'live/live_tables_panel.dart';
+import 'live/order_history_panel.dart';
 import 'live/voucher_report_panel.dart';
 import 'strings.dart';
 import 'power_icon.dart';
@@ -329,8 +330,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
   );
 
   Widget content() => switch (page) {
-    // Order views require selection of a real table and its current session.
-    0 || 1 || 2 => LiveTablesPanel(
+    0 || 1 => LiveTablesPanel(
       key: tablesKey,
       orderAlerts: orderAlerts,
       onStoreName: (name) {
@@ -347,6 +347,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
       auth: widget.auth,
       language: widget.language,
     ),
+    2 => OrderHistoryPanel(auth: widget.auth, language: widget.language),
     3 => StoreMembersPanel(auth: widget.auth, language: widget.language),
     4 =>
       widget.auth.session?.permissions.contains('report.read') == true

@@ -8,6 +8,17 @@ import 'receipt_document_test.dart' show document, parse, partialDocument;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('history copy preserves original price, payment and refund separately', () {
+    final plan=ReceiptRasterPlan.orderHistory(language:UiLanguage.zh,
+      caption:const ReceiptCaption(storeName:'Test store',tableName:'V1'),
+      orderRef:'D00000000001',createdAt:DateTime.utc(2026,10,1,22),status:'部分退款',paymentMethod:'微信支付',
+      totalCents:1200,paidCents:1200,dueCents:0,refundCents:600,
+      items:[(name:'测试商品',specification:'500ML',quantity:2,priceCents:600)]);
+    final content=[...plan.header,...plan.pages.expand((p)=>p)].join('\n');
+    expect(content,contains('D00000000001'));expect(content,contains('2026-10-02 06:00:00'));
+    expect(content,contains('500ML'));expect(content,contains('12.00'));expect(content,contains('已退款'));
+    expect(content,contains('6.00'));expect(content,contains('历史订单副本'));expect(content,isNot(contains('实收金额')));
+  });
   test('consumption print includes drafts and paid lines without claiming receipt', () {
     final plan=ReceiptRasterPlan.bill(language:UiLanguage.zh,caption:const ReceiptCaption(tableName:'V1'),filterLabel:'全部消费',items:[
       (name:'已购酒',specification:'750ml',quantity:2,priceCents:100,state:'已付款'),

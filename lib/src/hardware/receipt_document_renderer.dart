@@ -301,6 +301,25 @@ class ReceiptRasterPlan {
     null,
   );
 
+  /// Original transaction snapshot, including closed/unpaid orders; read-only copy.
+  factory ReceiptRasterPlan.orderHistory({required UiLanguage language,required ReceiptCaption caption,
+    required String orderRef,required DateTime createdAt,required String status,required String paymentMethod,
+    required int totalCents,required int paidCents,required int dueCents,required int refundCents,
+    required List<({String name,String specification,int quantity,int priceCents})> items}) => _paginate(
+      _head(language,caption,_label(language,'订单明细','Order details','訂單明細','รายละเอียดคำสั่งซื้อ'),status:status,reprint:true),
+      [
+        _Row(['${_label(language,'订单号','Order','訂單號','เลขคำสั่งซื้อ')}: $orderRef'],size:20),
+        _Row([_time(createdAt)],size:20),_rule,_columns(language),
+        for(final item in items) _item(language,item.name,item.specification,item.quantity,item.priceCents,item.quantity*item.priceCents),
+        _rule,_money(_label(language,'订单金额','Order total','訂單金額','ยอดคำสั่งซื้อ'),totalCents,large:true),
+        _money(_label(language,'已付','Paid','已付','ชำระแล้ว'),paidCents),
+        _money(_label(language,'未付','Unpaid','未付','ยังไม่ชำระ'),dueCents),
+        if(refundCents>0) _money(_label(language,'已退款','Refunded','已退款','คืนเงินแล้ว'),refundCents),
+        _Row([paymentMethod]),_rule,
+        _Row([_label(language,'历史订单副本，非再次收款','History copy — no new charge','歷史訂單副本，非再次收款','สำเนาประวัติ ไม่มีการเรียกเก็บใหม่')],size:20),
+        _footer(language),
+      ],576,null);
+
   /// Current consumption list, including local selections. Never a payment proof.
   factory ReceiptRasterPlan.bill({
     required UiLanguage language,
