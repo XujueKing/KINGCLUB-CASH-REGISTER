@@ -1776,6 +1776,15 @@ class StaffAuthController extends ChangeNotifier {
     return value;
   }
 
+  Future<Map<String,dynamic>> storeMembers(Map<String,dynamic> params) async {
+    final identity=_session,api=_api,epoch=_epoch;
+    if(identity==null||api==null||!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    final raw=await api.call('K261005002010',{...params,'storeRef':identity.storeRef});
+    _check(epoch);final result=raw is Map?raw['result']:null;
+    if(result is! Map||result['storeRef']!=identity.storeRef)throw const FormatException();
+    return Map<String,dynamic>.from(result);
+  }
+
   Future<Map<String, dynamic>> wineStorage(Map<String, dynamic> params) async {
     final identity = _session, api = _api, epoch = _epoch;
     if (identity == null ||

@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import 'auth/staff_auth_controller.dart';
 import 'hardware/printer_discovery_dialog.dart';
-import 'live/member_seating_panel.dart';
+import 'live/store_members_panel.dart';
 import 'live/live_tables_panel.dart';
 import 'live/voucher_report_panel.dart';
 import 'strings.dart';
@@ -110,7 +110,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     padding: EdgeInsets.zero,
                     separatorBuilder: (_, _) => const SizedBox(height: 7),
                     itemBuilder: (context, position) {
-                      final index = const [0, 1, 6, 2, 3, 4, 5][position];
+                      final index = const [0, 1, 6, 3, 2, 4, 5][position];
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Material(
@@ -336,7 +336,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
       auth: widget.auth,
       language: widget.language,
     ),
-    3 => MemberSeatingPanel(auth: widget.auth, language: widget.language),
+    3 => StoreMembersPanel(auth: widget.auth, language: widget.language),
     4 =>
       widget.auth.session?.permissions.contains('report.read') == true
           ? VoucherReportPanel(
