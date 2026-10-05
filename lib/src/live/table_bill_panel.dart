@@ -1087,7 +1087,7 @@ class _TableBillPanelState extends State<TableBillPanel>
               drafts.isEmpty &&
               storedWineServed.isEmpty)
             Text(t('billNoItems')),
-          if (filter == 'all')
+          if (filter == 'all' || filter == 'paid')
             for (final wine in storedWineServed)
               Card(
                 child: ListTile(
@@ -1095,16 +1095,40 @@ class _TableBillPanelState extends State<TableBillPanel>
                   leading: const Icon(Icons.wine_bar_outlined),
                   title: Text('${wine['name']}'),
                   subtitle: Text(
-                    '${wine['locationCode'] ?? ''} ? ${wine['remainingPercent']}%',
+                    '${wine['locationCode'] ?? ''} / ${wine['remainingPercent']}%',
                   ),
-                  trailing: Text(
-                    [
-                      '取存酒·已上',
-                      'Stored wine ? served',
-                      '取存酒·已上',
-                      'Served stored wine',
-                    ][widget.language.index],
-                    style: const TextStyle(color: Colors.green),
+                  trailing: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        [
+                          '存酒',
+                          'Stored wine',
+                          '存酒',
+                          'Stored wine',
+                        ][widget.language.index],
+                      ),
+                      Text(
+                        t('tableBillPaid'),
+                        style: const TextStyle(color: Colors.green),
+                      ),
+                      Text(
+                        wine['served'] == true
+                            ? [
+                                '已上',
+                                'Served',
+                                '已上',
+                                'Served',
+                              ][widget.language.index]
+                            : [
+                                '未上',
+                                'Not served',
+                                '未上',
+                                'Not served',
+                              ][widget.language.index],
+                      ),
+                    ],
                   ),
                 ),
               ),

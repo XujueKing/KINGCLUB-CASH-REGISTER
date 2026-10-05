@@ -15,22 +15,19 @@ class PickupAuth extends TableAuth {
   @override
   Future<Map<String, dynamic>> wineStorage(Map<String, dynamic> p) async {
     calls.add(p);
-    if (p['action'] == 'inventory')
+    if (p['action'] == 'requestPickup')
       return {
-        'state': 'inventory',
-        'nickname': 'Member',
-        'memberNumber': 'KM0000000001',
+        'state': 'requested',
         'locations': ['A1-1'],
-        'items': [
-          {
-            'itemRef': 'test-item',
-            'name': 'Test wine',
-            'quantity': 1,
-            'remainingPercent': 50,
-            'locationCode': 'A1-1',
-            'specification': '750ml',
-          },
-        ],
+        'receipt': {
+          'itemRef': 'test-item',
+          'name': 'Test wine',
+          'quantity': 1,
+          'remainingPercent': 50,
+          'locationCode': 'A1-1',
+          'paid': true,
+          'served': false,
+        },
       };
     if (p['action'] == 'collectionLookup')
       return receipt == null
@@ -51,7 +48,7 @@ class PickupAuth extends TableAuth {
 void main() {
   for (final lost in [false, true])
     testWidgets(
-      'member then physical bottle, lost response $lost never repeats collection',
+      'pickup code then physical bottle, lost response $lost never repeats collection',
       (tester) async {
         final scans = StreamController<String>.broadcast(),
             auth = PickupAuth()..loseReply = lost,
@@ -71,10 +68,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        scans.add('KC:W:' + 'B' * 32);
-        await tester.pumpAndSettle();
-        expect(auth.calls.where((c) => c['action'] == 'collect'), isEmpty);
-        scans.add('KC:M:' + 'A' * 32);
+        scans.add('X' * 43);
         await tester.pumpAndSettle();
         expect(find.textContaining('A1-1'), findsOneWidget);
         scans.add('KC:W:' + 'B' * 32);
@@ -86,6 +80,7 @@ void main() {
         }
         expect(find.textContaining('Collected and served:'), findsOneWidget);
         expect(auth.calls.where((c) => c['action'] == 'collect'), hasLength(1));
+        expect(auth.calls.every((c) => !c.containsKey('identityCode')), isTrue);
         expect(vault.values, isEmpty);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());

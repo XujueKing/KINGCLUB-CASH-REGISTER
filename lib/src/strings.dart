@@ -12,6 +12,7 @@ const copy = <String, String>{
   'voucherChannel_king':'KING 券|KING vouchers|KING 券|คูปอง KING',
   'voucherChannel_wine':'KING 取存酒|Stored wine|KING 取存酒|รับเครื่องดื่มที่ฝาก',
   'voucherScanHint':'请扫描顾客的团购券码|Scan the guest’s voucher|請掃描顧客的團購券碼|สแกนคูปองของลูกค้า',
+  'voucherSelectTable':'请先选择桌台|Select a table first|請先選擇桌台|Select a table first',
   'voucherChooseChannel':'请先选择券的渠道，再扫码|Select the channel, then scan again|請先選擇券的渠道，再掃碼|เลือกช่องทางแล้วสแกนอีกครั้ง',
   'voucherChannelPending':'该渠道暂未开通核销|Redemption is not available for this channel yet|該渠道暫未開通核銷|ยังไม่เปิดใช้การแลกช่องทางนี้',
   'voucherWrongCode':'请出示团购券码，不是付款码或会员码|Use a voucher code, not a payment or member code|請出示團購券碼，不是付款碼或會員碼|กรุณาใช้รหัสคูปอง ไม่ใช่รหัสชำระเงินหรือสมาชิก',

@@ -35,6 +35,8 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
     with WidgetsBindingObserver {
   StreamSubscription<String>? scanner;
   Timer? expiry;
+  final wineCodes = StreamController<String>.broadcast();
+  String? wineInitialCode;
   String? channel, message;
   Map<String, dynamic>? result;
   bool busy = false, foreground = true;
@@ -55,8 +57,7 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     scanner = (widget.scannerEvents ?? ScannerInput.codes).listen(
       (value) {
-        if (channel != 'wine' &&
-            mounted &&
+        if (mounted &&
             foreground &&
             !busy &&
             ModalRoute.of(context)?.isCurrent == true)
@@ -78,6 +79,7 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         choices.clear();
         message = null;
         channel = null;
+        wineInitialCode = null;
         confirmationId = null;
         confirmationIndex = null;
         confirmationMessage = null;
@@ -98,7 +100,9 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
       old.auth.removeListener(clear);
       widget.auth.addListener(clear);
       clear();
-    } else if (old.tableName != widget.tableName)
+    } else if (old.tableName != widget.tableName ||
+        old.tableRef != widget.tableRef ||
+        old.sessionRef != widget.sessionRef)
       clear();
   }
 
@@ -106,6 +110,7 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
   void dispose() {
     expiry?.cancel();
     epoch++;
+    unawaited(wineCodes.close());
     unawaited(scanner?.cancel());
     widget.auth.removeListener(clear);
     WidgetsBinding.instance.removeObserver(this);
@@ -118,6 +123,24 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         value.isEmpty ||
         confirmationId != null && !confirmationFinished)
       return;
+    if (RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(value) ||
+        RegExp(r'^KC:W:[0-9A-F]{32}$').hasMatch(value)) {
+      if (widget.tableRef == null || widget.sessionRef == null) {
+        setState(() => message = 'voucherSelectTable');
+        return;
+      }
+      if (channel == 'wine') {
+        wineCodes.add(value);
+      } else {
+        setState(() {
+          channel = 'wine';
+          wineInitialCode = value;
+          result = null;
+          message = null;
+        });
+      }
+      return;
+    }
     // Never forward payment or member identity credentials to a voucher provider.
     if (value.length > 8192 ||
         value.startsWith('KC:') ||
@@ -135,7 +158,7 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
     final detected = uri?.scheme == 'https' && uri?.host == 'v.douyin.com'
         ? 'douyin'
         : null;
-    final selected = detected ?? channel;
+    final selected = detected ?? (channel == 'wine' ? null : channel);
     if (selected == null) {
       setState(() => message = 'voucherChooseChannel');
       return;
@@ -148,6 +171,7 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
       setState(() => message = 'staffAuthFailure');
       return;
     }
+    setState(() => channel = 'douyin');
     final current = ++epoch;
     expiry?.cancel();
     expiry = Timer(const Duration(seconds: 30), () {
@@ -262,7 +286,7 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
       Row(
         children: [
           Text(
-            t('voucherWorkspace'),
+            ['核券', 'Redeem', '核券', 'Redeem'][widget.language.index],
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           ),
           if (widget.tableName != null) ...[
@@ -272,44 +296,18 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         ],
       ),
       const SizedBox(height: 20),
-      Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          for (final item in ['douyin', 'meituan', 'king', 'wine'])
-            SizedBox(
-              width: 150,
-              height: 76,
-              child: OutlinedButton.icon(
-                key: ValueKey('voucher-channel-$item'),
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: channel == item
-                      ? const Color(0xffe8eee8)
-                      : null,
-                ),
-                onPressed:
-                    busy || confirmationId != null && !confirmationFinished
-                    ? null
-                    : () => setState(() {
-                        epoch++;
-                        channel = item;
-                        result = null;
-                        choices.clear();
-                        message = item == 'douyin' || item == 'wine'
-                            ? null
-                            : 'voucherChannelPending';
-                      }),
-                icon: Icon(
-                  item == 'wine'
-                      ? Icons.wine_bar_outlined
-                      : Icons.confirmation_number_outlined,
-                ),
-                label: Text(t('voucherChannel_$item')),
+      if (message == 'voucherChooseChannel')
+        Wrap(
+          spacing: 12,
+          children: [
+            for (final item in ['douyin', 'meituan', 'king'])
+              OutlinedButton(
+                onPressed: () => setState(() => channel = item),
+                child: Text(t('voucherChannel_$item')),
               ),
-            ),
-        ],
-      ),
-      const SizedBox(height: 28),
+          ],
+        ),
+      const SizedBox(height: 16),
       if (channel == 'wine')
         WinePickupPanel(
           key: ValueKey(
@@ -319,13 +317,21 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
           language: widget.language,
           tableRef: widget.tableRef,
           sessionRef: widget.sessionRef,
-          scannerEvents: widget.scannerEvents,
+          scannerEvents: wineCodes.stream,
+          initialCode: wineInitialCode,
         )
       else ...[
         const Icon(Icons.qr_code_scanner, size: 48),
         const SizedBox(height: 12),
         Text(
-          t(busy ? 'voucherReading' : 'voucherScanHint'),
+          busy
+              ? t('voucherReading')
+              : [
+                  '请扫团购券、KING券或取酒码',
+                  'Scan voucher or wine pickup code',
+                  '請掃團購券、KING券或取酒碼',
+                  'Scan voucher or pickup code',
+                ][widget.language.index],
           textAlign: TextAlign.center,
         ),
         if (message != null)

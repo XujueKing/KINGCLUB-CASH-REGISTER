@@ -8,10 +8,17 @@ Backend migration 325 adds store presets and a nullable location to the existing
 
 New deposits now create one physical holding/QR per bottle. Fixed 80mm printer output contains location, nickname, existing public member number, wine/specification, remaining percentage, expiry and the opaque bottle QR. Printing is automatic with cut and no preview. Output is 576x216 dots (27mm content); the printer cutter feed is reserved for a 35-40mm total label, pending physical measurement. Print failure offers explicit reprint without repeating deposit; accepted labels are fenced per bottle across restart.
 
-Select a current table, choose voucher > stored wine, scan the member code, retrieve the indicated bottle and scan its label. Only the same member/store available bottle can be collected; one transaction records pickup and served state, links membership and updates the storage bag. No sales stock or money is moved. Table bills show the collected bottle as served, including closed-session history. Lost replies are recovered by original request; raw member codes are held only in memory.
+Select a current table and open the unified voucher scanner. Scan the customer's existing APP pickup code (43-character short-lived token), not a member identity code. The server resolves the owner, validates the member session and holding version, attaches the member, and registers paid/not-served stored wine in the bill. Then scan the physical bottle label to collect and serve it. Registration does not decrement storage quantity or create a sale; physical collection does, without sales-stock or money movement. Bills show stored wine under all/paid filters. Durable request lookup recovers lost replies; raw customer credentials remain only in memory.
+
+The scanner routes known Douyin links, APP pickup tokens and physical bottle labels automatically. Ambiguous codes ask for a channel; Meituan/KING voucher adapters remain unavailable rather than guessing or reporting success.
 
 Older one-bottle records can be labeled by choosing their actual shelf with Print label. Their holdings, expiry and ownership are retained. Old multi-bottle records are not split without verifying physical bottles. No actual deposit or pickup was fabricated during deployment.
 
 Backend migration 326 and the three affected compiled modules deployed with backups, runtime health/readiness and real read-only served query passed. Cashier installed with matching certificate and install -r, preserving data.
 
 Verification: 3808 backend tests passed; two deployment-check process timeouts passed on isolated rerun (3/3), build/migration/static checks passed. Cashier full suite: 1005 passed, 5 skipped, 7 failed. Three printer tests require CASHIER_USB_RASTER_OUTPUT=true and passed with that flag; the remaining four failures reproduced unchanged at baseline f52cc98 in opening/cart/recovery tests. Targeted printer, labels, pickup, deposit, voucher and bill tests passed (29). Monochrome QR independently decoded with ZXing. Physical paper output/height and customer-operated pickup still require on-device confirmation.
+
+
+## Pickup-code-first correction (2026-10-05)
+
+Migration 327 extends existing holding/pickup records for requested state and request lookup; no parallel inventory or customer identity table. Backend 39 targeted tests and 20 cashier tests passed. Backend build/static/migration checks passed; deployed health/readiness passed. ARM32 build signed with matching installed certificate, install -r succeeded. Device is at V1 unified scanner; real customer scan and bottle scan are pending user cooperation. Flutter analyzer reports informational lint only.

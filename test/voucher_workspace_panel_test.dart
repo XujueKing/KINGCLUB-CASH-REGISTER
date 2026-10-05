@@ -80,13 +80,11 @@ void main() {
     'native scan needs no input focus, blocks payment codes and shows package options',
     (tester) async {
       final (auth, scanner) = await mount(tester);
-      await tester.tap(find.byKey(const ValueKey('voucher-channel-douyin')));
-      await tester.pump();
       scanner.add('130000000000000000');
       await tester.pump();
       expect(auth.requests, isEmpty);
       expect(find.text(tr(UiLanguage.en, 'voucherWrongCode')), findsOneWidget);
-      scanner.add('123456789012');
+      scanner.add('https://v.douyin.com/test/');
       await tester.pump();
       expect(auth.requests, hasLength(1));
       auth.requests.single.complete(preview());
@@ -162,8 +160,8 @@ void main() {
         'packages': [],
       });
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Redeem'));
-      await tester.tap(find.text('Redeem'));
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Redeem'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Redeem'));
       await tester.pumpAndSettle();
       expect(auth.confirmations, hasLength(1));
       scanner.add('https://v.douyin.com/another/');

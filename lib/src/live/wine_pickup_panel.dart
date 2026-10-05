@@ -10,7 +10,7 @@ import '../auth/session_vault.dart';
 import '../hardware/scanner_input.dart';
 import '../hardware/wine_label_printer.dart';
 import '../strings.dart';
-import 'member_identity.dart';
+
 import 'wine_location_picker.dart';
 
 class WinePickupPanel extends StatefulWidget {
@@ -22,12 +22,14 @@ class WinePickupPanel extends StatefulWidget {
     required this.sessionRef,
     this.scannerEvents,
     this.storage,
+    this.initialCode,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String? tableRef, sessionRef;
   final Stream<String>? scannerEvents;
   final SecretStorage? storage;
+  final String? initialCode;
   @override
   State<WinePickupPanel> createState() => _WinePickupPanelState();
 }
@@ -38,9 +40,10 @@ class _WinePickupPanelState extends State<WinePickupPanel>
   StreamSubscription<String>? scanner;
   List<Map<String, dynamic>> items = [];
   List<String> locations = [];
-  String? memberCode, nickname, memberNumber, message, key;
+  String? message, key;
   Map<String, dynamic>? pending;
   bool busy = false, foreground = true, initializing = true;
+  bool initialHandled = false;
   String t(List<String> values) => values[widget.language.index];
   Map<String, dynamic> get scope => {
     'tableRef': widget.tableRef,
@@ -68,9 +71,6 @@ class _WinePickupPanelState extends State<WinePickupPanel>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
-    if (!foreground) {
-      memberCode = null;
-    }
     if (foreground && !busy) unawaited(restore());
   }
 
@@ -111,6 +111,10 @@ class _WinePickupPanelState extends State<WinePickupPanel>
     } finally {
       if (mounted) setState(() => initializing = false);
     }
+    if (current && !initialHandled && widget.initialCode != null) {
+      initialHandled = true;
+      await scan(widget.initialCode!);
+    }
   }
 
   String requestId() {
@@ -125,11 +129,14 @@ class _WinePickupPanelState extends State<WinePickupPanel>
     if (pending == null) return false;
     final result = await widget.auth.wineStorage({
       ...scope,
-      'action': 'collectionLookup',
+      'action': pending!['action'] == 'requestPickup'
+          ? 'requestLookup'
+          : 'collectionLookup',
       'requestId': pending!['requestId'],
     });
     if (!current) return true;
-    if (result['state'] == 'confirmed') {
+    if (result['state'] == 'confirmed' || result['state'] == 'requested') {
+      locations = List<String>.from(result['locations'] as List? ?? locations);
       await accept(Map<String, dynamic>.from(result['receipt'] as Map));
       return true;
     }
@@ -142,6 +149,22 @@ class _WinePickupPanelState extends State<WinePickupPanel>
   }
 
   Future<void> accept(Map<String, dynamic> receipt) async {
+    if (receipt['served'] == false && receipt['paid'] == true) {
+      await vault.delete(key!);
+      pending = null;
+      if (mounted)
+        setState(() {
+          items.removeWhere((r) => r['itemRef'] == receipt['itemRef']);
+          items.add(receipt);
+          message = t([
+            '已加入消费明细：存酒，已付款／未上。请取实物扫瓶身码',
+            'Stored wine added: paid / not served. Scan bottle to deliver',
+            '已加入消費明細：存酒，已付款／未上。請掃瓶身碼',
+            'Added: paid / not served. Scan bottle',
+          ]);
+        });
+      return;
+    }
     if (receipt['served'] != true || receipt['collectedQuantity'] != 1)
       throw const FormatException();
     await vault.delete(key!);
@@ -166,34 +189,23 @@ class _WinePickupPanelState extends State<WinePickupPanel>
     setState(() => busy = true);
     try {
       if (pending != null && await recover()) return;
-      if (MemberIdentity.codePattern.hasMatch(code)) {
-        final result = await widget.auth.wineStorage({
-          ...scope,
-          'action': 'inventory',
-          'identityCode': code,
-        });
-        if (!current || !identical(identity, widget.auth.session)) return;
-        memberCode = code;
-        nickname = result['nickname'] as String?;
-        memberNumber = result['memberNumber'] as String;
-        locations = (result['locations'] as List).cast<String>();
-        items = (result['items'] as List)
-            .map((v) => Map<String, dynamic>.from(v as Map))
-            .toList();
-        message = null;
-        return;
-      }
-      if (!RegExp(r'^KC:W:[0-9A-F]{32}$').hasMatch(code) ||
-          memberCode == null) {
+      final isPickup = RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(code);
+      final isBottle = RegExp(r'^KC:W:[0-9A-F]{32}$').hasMatch(code);
+      if (!isPickup && !isBottle) {
         message = t([
-          '请先扫会员码，再扫酒瓶上的存酒标签',
-          'Scan member code, then the bottle label',
-          '請先掃會員碼，再掃酒瓶上的存酒標籤',
-          'สแกนสมาชิกก่อนแล้วสแกนฉลากขวด',
+          '请扫顾客取酒码或瓶身存酒标签',
+          'Scan guest pickup code or bottle label',
+          '請掃顧客取酒碼或瓶身存酒標籤',
+          'Scan pickup code or bottle label',
         ]);
         return;
       }
-      pending = {'requestId': requestId(), 'bottleCode': code};
+      // Keep the short-lived customer credential only in memory.
+      pending = {
+        'requestId': requestId(),
+        'action': isPickup ? 'requestPickup' : 'collect',
+        if (isBottle) 'bottleCode': code,
+      };
       final encoded = jsonEncode(pending);
       await vault.write(key!, encoded);
       if (await vault.read(key!) != encoded) throw const FormatException();
@@ -201,19 +213,19 @@ class _WinePickupPanelState extends State<WinePickupPanel>
       final result = await widget.auth.wineStorage({
         ...scope,
         ...pending!,
-        'action': 'collect',
-        'identityCode': memberCode,
+        if (isPickup) 'pickupCode': code,
       });
       if (!current || !identical(identity, widget.auth.session)) return;
-      if (result['state'] != 'confirmed') throw const FormatException();
+      if (result['state'] != 'confirmed' && result['state'] != 'requested')
+        throw const FormatException();
+      locations = List<String>.from(result['locations'] as List? ?? locations);
       await accept(Map<String, dynamic>.from(result['receipt'] as Map));
     } catch (_) {
       if (mounted) {
-        memberCode = null;
         message = t([
-          '未确认取酒，请重试查询；重新扫会员码后再扫瓶身码',
-          'Pickup unconfirmed. Retry lookup, then rescan member and bottle',
-          '未確認取酒，請重試查詢；重新掃會員碼後再掃瓶身碼',
+          '未确认取酒，请重试查询；重新扫取酒码后再扫瓶身码',
+          'Pickup unconfirmed. Retry lookup, then rescan pickup code and bottle',
+          '未確認取酒，請重試查詢；重新掃取酒碼後再掃瓶身碼',
           'ยังไม่ยืนยัน โปรดลองตรวจสอบแล้วสแกนสมาชิกและขวดใหม่',
         ]);
       }
@@ -223,7 +235,7 @@ class _WinePickupPanelState extends State<WinePickupPanel>
   }
 
   Future<void> label(Map<String, dynamic> item) async {
-    if (busy || !current || memberCode == null) return;
+    if (busy || !current) return;
     setState(() => busy = true);
     try {
       String? location = item['locationCode'] as String?;
@@ -252,7 +264,7 @@ class _WinePickupPanelState extends State<WinePickupPanel>
       final result = await widget.auth.wineStorage({
         ...scope,
         'action': 'label',
-        'identityCode': memberCode,
+
         'itemRef': item['itemRef'],
         'locationCode': location,
       });
@@ -284,11 +296,10 @@ class _WinePickupPanelState extends State<WinePickupPanel>
       }
     } catch (_) {
       if (mounted) {
-        memberCode = null;
         message = t([
-          '请重新扫会员码后补打；旧存酒多瓶合并记录需先核实实物',
+          '请重新扫取酒码后补打；旧存酒多瓶合并记录需先核实实物',
           'Rescan member; legacy multi-bottle records need physical verification',
-          '請重新掃會員碼後補印；舊存酒多瓶合併紀錄需先核實實物',
+          '請重新掃取酒碼後補印；舊存酒多瓶合併紀錄需先核實實物',
           'สแกนสมาชิกใหม่เพื่อตรวจสอบและพิมพ์',
         ]);
       }
@@ -304,8 +315,8 @@ class _WinePickupPanelState extends State<WinePickupPanel>
       Text(
         widget.sessionRef == null
             ? t(['请先选择桌台', 'Select a table first', '請先選擇桌台', 'เลือกโต๊ะก่อน'])
-            : memberCode == null
-            ? t(['请出示会员码', 'Scan member code', '請出示會員碼', 'สแกนรหัสสมาชิก'])
+            : items.isEmpty
+            ? t(['请出示取酒码', 'Scan pickup code', '請出示取酒碼', 'สแกนรหัสสมาชิก'])
             : t([
                 '找到存放位置，扫描瓶身码即出库并已上',
                 'Find the shelf and scan the bottle to collect and serve',
@@ -314,8 +325,6 @@ class _WinePickupPanelState extends State<WinePickupPanel>
               ]),
         style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
       ),
-      if (nickname != null || memberNumber != null)
-        Text('${nickname ?? ''}  ${memberNumber ?? ''}'),
       if (busy || initializing) const LinearProgressIndicator(),
       if (message != null)
         Padding(
@@ -337,15 +346,6 @@ class _WinePickupPanelState extends State<WinePickupPanel>
                 },
           child: Text(t(['重试查询', 'Retry lookup', '重試查詢', 'ตรวจสอบอีกครั้ง'])),
         ),
-      if (memberCode != null && items.isEmpty)
-        Text(
-          t([
-            '本店没有可领取的存酒',
-            'No available stored wine here',
-            '本店沒有可領取的存酒',
-            'ไม่มีไวน์ที่รับได้ในร้านนี้',
-          ]),
-        ),
       for (final item in items)
         Card(
           child: ListTile(
@@ -354,7 +354,7 @@ class _WinePickupPanelState extends State<WinePickupPanel>
               '${item['specification'] ?? ''} · ${item['remainingPercent']}% · ${item['quantity']}',
             ),
             trailing: TextButton(
-              onPressed: busy || memberCode == null || item['quantity'] != 1
+              onPressed: busy || item['quantity'] != 1
                   ? null
                   : () => label(item),
               child: Text(t(['补打标签', 'Print label', '補印標籤', 'พิมพ์ฉลาก'])),
