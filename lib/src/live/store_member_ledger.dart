@@ -65,6 +65,7 @@ class StoreMemberLedger extends StatelessWidget {
     'wechat' => t('微信', 'WeChat', '微信', 'WeChat'),
     'alipay' => t('支付宝', 'Alipay', '支付寶', 'Alipay'),
     'cash' => t('现金', 'Cash', '現金', 'เงินสด'),
+    'bank_code' => t('银行码', 'Bank QR', '銀行碼', 'QR ธนาคาร'),
     'store_balance' => t('本店储值', 'Store balance', '本店儲值', 'ยอดร้านค้า'),
     'gift' => t('赠送', 'Gift', '贈送', 'โบนัส'),
     _ => '—',
@@ -231,7 +232,44 @@ class StoreMemberLedger extends StatelessWidget {
                             4,
                             color: const Color(0xffbd533f),
                           ),
-                          cell(method(r['paymentMethod']), 5),
+                          InkWell(
+                            onTap:
+                                r['confirmedBy'] == null &&
+                                    r['receivingAccount'] == null
+                                ? null
+                                : () => showDialog<void>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: Text(
+                                        t(
+                                          '收款记录',
+                                          'Receipt details',
+                                          '收款記錄',
+                                          'รายละเอียดการรับเงิน',
+                                        ),
+                                      ),
+                                      content: Text(
+                                        [
+                                          method(r['paymentMethod']),
+                                          if (r['receivingAccount'] != null)
+                                            '${r['receivingAccount']}',
+                                          if (r['confirmedBy'] != null)
+                                            '${t('确认员工', 'Confirmed by', '確認員工', 'ผู้ยืนยัน')}：${r['confirmedBy']}',
+                                        ].join('\n'),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context),
+                                          child: Text(
+                                            t('关闭', 'Close', '關閉', 'ปิด'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                            child: cell(method(r['paymentMethod']), 5),
+                          ),
                           cell('${r['operationRef']}', 6, selectable: true),
                           cell(amount(r['balanceAfterCents']), 7),
                         ],

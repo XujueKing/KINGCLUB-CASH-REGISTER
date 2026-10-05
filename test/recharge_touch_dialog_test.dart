@@ -168,10 +168,13 @@ void main() {
       await t.pump();
       await t.tap(find.byKey(const ValueKey('recharge-cash-pay')));
       await t.pumpAndSettle();
-      await t.tap(find.text('Cash received'));
+      await t.enterText(find.byType(TextField), 'KC:M:${'A' * 32}');
+      await t.testTextInput.receiveAction(TextInputAction.done);
       await t.pumpAndSettle();
       expect(s.data.length, 1);
-      expect(find.text('Check cash credit'), findsOneWidget);
+      await t.tap(find.text('Cancel'));
+      await t.pumpAndSettle();
+      expect(find.text('Check receipt'), findsOneWidget);
       await t.tap(find.byIcon(Icons.close));
       await t.pumpAndSettle();
       await t.tap(find.text('Open'));
@@ -188,6 +191,35 @@ void main() {
       );
       expect(s.data, isEmpty);
       expect(find.byType(RechargeTouchDialog), findsNothing);
+      await t.pumpWidget(const SizedBox());
+      a.dispose();
+    },
+  );
+  testWidgets(
+    'bank sticker requires employee scan and records receipt label separately',
+    (t) async {
+      final a = RechargeAuth();
+      final s = TestStorage();
+      await open(t, a, s);
+      await t.tap(find.byKey(const ValueKey('recharge-offer-0')));
+      await t.pump();
+      await t.tap(find.byKey(const ValueKey('recharge-bank-pay')));
+      await t.pumpAndSettle();
+      expect(a.calls, isEmpty);
+      final fields = find.byType(TextField);
+      await t.enterText(fields.first, 'Test bank sticker');
+      await t.enterText(fields.last, 'KC:M:${'A' * 32}');
+      await t.testTextInput.receiveAction(TextInputAction.done);
+      await t.pumpAndSettle();
+      final confirmed = a.calls.singleWhere(
+        (p) => p['action'] == 'cashConfirm',
+      );
+      expect(confirmed['channel'], 'bank_code');
+      expect(confirmed['receivingAccount'], 'Test bank sticker');
+      expect(confirmed['identityCode'], startsWith('KC:M:'));
+      expect(s.data.values.join(), isNot(contains('KC:M:')));
+      expect(find.byType(RechargeTouchDialog), findsNothing);
+      expect(t.takeException(), isNull);
       await t.pumpWidget(const SizedBox());
       a.dispose();
     },

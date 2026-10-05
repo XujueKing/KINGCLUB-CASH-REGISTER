@@ -169,88 +169,113 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
         return;
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         error = t(
           '请重新打开核对原充值',
           'Reopen to check original recharge',
           '請重新開啟核對原充值',
           'เปิดใหม่เพื่อตรวจสอบรายการเติมเงินเดิม',
         );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
 
-  Future<void> cash() async {
+  Future<void> cash({bool bank = false}) async {
     if (busy ||
         !current ||
         !storageReady ||
         paymentRow != null ||
-        (!valid && pendingCash == null))
+        (!valid && pendingCash == null)) {
       return;
-    if (pendingCash == null) {
-      final yes = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(
-            t('确认收到现金', 'Confirm cash received', '確認收到現金', 'ยืนยันรับเงินสด'),
-          ),
-          content: Text(
-            '¥ ${rechargeMoney(cents)}',
-            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(t('取消', 'Cancel', '取消', 'ยกเลิก')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(
-                t('已收到现金', 'Cash received', '已收到現金', 'รับเงินสดแล้ว'),
-              ),
-            ),
-          ],
-        ),
-      );
-      if (yes != true || !mounted || !current) return;
-      pendingCash = {
-        ...selection,
-        'requestId': widget.newRequestId(),
-        'displayPrincipalCents': cents,
-        'displayGiftCents': gift,
-      };
     }
     setState(() => busy = true);
     try {
-      await storage.write(storageKey, jsonEncode(pendingCash));
-      if (!mounted || !current) return;
-      final params = {...pendingCash!}
+      Map<String, dynamic> params() => {...pendingCash!}
         ..remove('displayPrincipalCents')
         ..remove('displayGiftCents');
-      var result = await widget.auth.storeMembers({
-        'action': 'cashLookup',
-        ...params,
-      });
-      if (result['state'] == 'not_found') {
-        result = await widget.auth.storeMembers({
-          'action': 'cashConfirm',
-          ...params,
+      if (pendingCash != null) {
+        final result = await widget.auth.storeMembers({
+          'action': 'cashLookup',
+          ...params(),
         });
+        if (result['state'] == 'credited') {
+          await storage.delete(storageKey);
+          if (mounted && current) Navigator.pop(context, true);
+          return;
+        }
+        if (result['state'] != 'not_found') {
+          throw StateError('Receipt unresolved');
+        }
+        bank = pendingCash!['channel'] == 'bank_code';
       }
-      if (result['state'] != 'credited') throw StateError('Cash not confirmed');
-      await storage.delete(storageKey);
-      if (mounted && current) Navigator.pop(context, true);
+      final bankKey =
+          'recharge-bank-account:${original.base}:${original.storeRef}';
+      final savedAccount = bank ? await storage.read(bankKey) : null;
+      if (!mounted || !current) return;
+      final done = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => RechargeOfflineReceiptDialog(
+          language: widget.language,
+          bank: bank,
+          amountCents: pendingCash?['displayPrincipalCents'] ?? cents,
+          account:
+              pendingCash?['receivingAccount'] ??
+              savedAccount ??
+              t('门店收款贴纸', 'Store payment QR', '門店收款貼紙', 'QR รับเงินของร้าน'),
+          accountLocked: pendingCash != null,
+          confirm: (code, account) async {
+            if (!current) throw StateError('Session changed');
+            pendingCash ??= {
+              ...selection,
+              'requestId': widget.newRequestId(),
+              'channel': bank ? 'bank_code' : 'cash',
+              if (bank) 'receivingAccount': account,
+              'displayPrincipalCents': cents,
+              'displayGiftCents': gift,
+            };
+            // Save only original scope. Raw employee QR remains in memory.
+            await storage.write(storageKey, jsonEncode(pendingCash));
+            if (!current) throw StateError('Session changed');
+            var result = await widget.auth.storeMembers({
+              'action': 'cashLookup',
+              ...params(),
+            });
+            if (result['state'] == 'not_found') {
+              result = await widget.auth.storeMembers({
+                'action': 'cashConfirm',
+                ...params(),
+                'identityCode': code,
+              });
+            }
+            if (result['state'] != 'credited') {
+              throw StateError('Receipt unresolved');
+            }
+            await storage.delete(storageKey);
+            if (bank) {
+              try {
+                await storage.write(bankKey, account);
+              } catch (_) {
+                /* Credit already confirmed. */
+              }
+            }
+          },
+        ),
+      );
+      if (done == true && mounted && current) Navigator.pop(context, true);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => error = t(
-            '现金入账未确认，请核对原收款',
-            'Cash credit unconfirmed. Check original receipt.',
-            '現金入帳未確認，請核對原收款',
-            'ยังไม่ยืนยันยอดเงินสด โปรดตรวจสอบรายการเดิม',
+            '请重新打开核对原收款',
+            'Reopen to check the original receipt.',
+            '請重新開啟核對原收款',
+            'กรุณาเปิดใหม่เพื่อตรวจสอบรายการเดิม',
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -402,24 +427,24 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
                                           child: FittedBox(
                                             fit: BoxFit.scaleDown,
                                             child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Text(
-                                                '${t('充', 'Pay', '充', 'เติม')} ${rechargeMoney(c['principalCents'])}',
-                                                style: const TextStyle(
-                                                  fontSize: 24,
-                                                  fontWeight: FontWeight.bold,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  '${t('充', 'Pay', '充', 'เติม')} ${rechargeMoney(c['principalCents'])}',
+                                                  style: const TextStyle(
+                                                    fontSize: 24,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
                                                 ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                '${t('送', 'Gift', '送', 'โบนัส')} ${rechargeMoney(c['giftCents'])}',
-                                                style: const TextStyle(
-                                                  fontSize: 18,
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  '${t('送', 'Gift', '送', 'โบนัส')} ${rechargeMoney(c['giftCents'])}',
+                                                  style: const TextStyle(
+                                                    fontSize: 18,
+                                                  ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
                                             ),
                                           ),
                                         );
@@ -545,7 +570,7 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
                               'WeChat / Alipay',
                             ),
                             style: const TextStyle(
-                              fontSize: 22,
+                              fontSize: 19,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -566,19 +591,50 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
                                   !storageReady ||
                                   !original.permissions.contains('payment.cash')
                               ? null
-                              : cash,
+                              : () => cash(),
                           icon: const Icon(Icons.payments_outlined),
                           label: Text(
                             pendingCash == null
                                 ? t('现金收款', 'Cash', '現金收款', 'รับเงินสด')
                                 : t(
-                                    '核对现金入账',
-                                    'Check cash credit',
-                                    '核對現金入帳',
-                                    'ตรวจสอบยอดเงินสด',
+                                    '核对收款',
+                                    'Check receipt',
+                                    '核對收款',
+                                    'ตรวจสอบการรับเงิน',
                                   ),
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 19,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: SizedBox(
+                        height: 60,
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('recharge-bank-pay'),
+                          onPressed:
+                              busy ||
+                                  !valid ||
+                                  pendingCash != null ||
+                                  paymentRow != null ||
+                                  !original.permissions.contains('payment.cash')
+                              ? null
+                              : () => cash(bank: true),
+                          icon: const Icon(Icons.account_balance_outlined),
+                          label: Text(
+                            t(
+                              '扫银行码支付',
+                              'Bank QR payment',
+                              '掃銀行碼支付',
+                              'ชำระผ่าน QR ธนาคาร',
+                            ),
+                            style: const TextStyle(
+                              fontSize: 19,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -594,6 +650,186 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
       ),
     );
   }
+}
+
+/// The employee scan attests an offline receipt; it does not debit a member.
+class RechargeOfflineReceiptDialog extends StatefulWidget {
+  const RechargeOfflineReceiptDialog({
+    super.key,
+    required this.language,
+    required this.bank,
+    required this.amountCents,
+    required this.account,
+    required this.accountLocked,
+    required this.confirm,
+  });
+  final UiLanguage language;
+  final bool bank, accountLocked;
+  final int amountCents;
+  final String account;
+  final Future<void> Function(String code, String account) confirm;
+  @override
+  State<RechargeOfflineReceiptDialog> createState() =>
+      _RechargeOfflineReceiptDialogState();
+}
+
+class _RechargeOfflineReceiptDialogState
+    extends State<RechargeOfflineReceiptDialog> {
+  late final account = TextEditingController(text: widget.account);
+  final code = TextEditingController();
+  StreamSubscription<String>? subscription;
+  bool busy = false, failed = false, submitted = false;
+  String t(String zh, String en, String tw, String th) =>
+      rechargeText(widget.language, zh, en, tw, th);
+  @override
+  void initState() {
+    super.initState();
+    subscription = ScannerInput.codes.listen((value) {
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+        unawaited(scan(value));
+      }
+    });
+  }
+
+  Future<void> scan(String value) async {
+    if (busy || !mounted) return;
+    code.clear();
+    if (!RegExp(r'^KC:M:[0-9A-F]{32}$').hasMatch(value.trim()) ||
+        (widget.bank && account.text.trim().length < 2)) {
+      setState(() => failed = true);
+      return;
+    }
+    setState(() {
+      busy = true;
+      failed = false;
+      submitted = true;
+    });
+    try {
+      await widget.confirm(value.trim(), account.text.trim());
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          busy = false;
+          failed = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    subscription?.cancel();
+    account.dispose();
+    code.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !busy,
+    child: AlertDialog(
+      title: Text(
+        widget.bank
+            ? t(
+                '银行码收款确认',
+                'Confirm bank receipt',
+                '銀行碼收款確認',
+                'ยืนยันรับเงินผ่านธนาคาร',
+              )
+            : t('现金收款确认', 'Confirm cash received', '現金收款確認', 'ยืนยันรับเงินสด'),
+      ),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '¥ ${rechargeMoney(widget.amountCents)}',
+              style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
+            ),
+            if (widget.bank) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: account,
+                readOnly: widget.accountLocked || submitted,
+                maxLength: 100,
+                decoration: InputDecoration(
+                  labelText: t(
+                    '收款码名称',
+                    'Payment QR name',
+                    '收款碼名稱',
+                    'ชื่อ QR รับเงิน',
+                  ),
+                  hintText: t(
+                    '例如：收钱吧／银行收款码',
+                    'For example: bank or third-party QR',
+                    '例如：收錢吧／銀行收款碼',
+                    'เช่น QR ธนาคาร',
+                  ),
+                  counterText: '',
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            const Icon(Icons.qr_code_scanner, size: 54),
+            const SizedBox(height: 12),
+            Text(
+              t(
+                '确认已收款后，收银员扫自己的会员码',
+                'After receiving payment, scan your own staff member code.',
+                '確認已收款後，收銀員掃自己的會員碼',
+                'รับเงินแล้ว ให้พนักงานสแกนรหัสสมาชิกของตน',
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: code,
+              autofocus: !widget.bank,
+              obscureText: true,
+              enableSuggestions: false,
+              autocorrect: false,
+              decoration: InputDecoration(
+                hintText: t(
+                  '等待员工扫码',
+                  'Waiting for staff code',
+                  '等待員工掃碼',
+                  'รอสแกนรหัสพนักงาน',
+                ),
+              ),
+              onSubmitted: scan,
+            ),
+            if (busy)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(),
+              ),
+            if (failed)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  t(
+                    '未确认入账，请检查收款账户，并用当前登录员工的新会员码重扫',
+                    'Not confirmed. Check the account and rescan the signed-in employee’s current code.',
+                    '未確認入帳，請檢查收款帳戶，並用當前登入員工的新會員碼重掃',
+                    'ยังไม่ยืนยัน ตรวจสอบบัญชีและสแกนรหัสปัจจุบันของพนักงานที่เข้าสู่ระบบ',
+                  ),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: busy ? null : () => Navigator.pop(context, false),
+          child: Text(t('取消', 'Cancel', '取消', 'ยกเลิก')),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Payment code selects the channel before preparing the original recharge.
@@ -647,8 +883,9 @@ class _RechargeScanDialogState extends State<RechargeScanDialog>
     WidgetsBinding.instance.addObserver(this);
     widget.auth.addListener(authChanged);
     scans = ScannerInput.codes.listen((value) {
-      if (mounted && foreground && ModalRoute.of(context)?.isCurrent == true)
+      if (mounted && foreground && ModalRoute.of(context)?.isCurrent == true) {
         unawaited(pay(value));
+      }
     });
     if (row != null) {
       canScan = false;
@@ -664,10 +901,11 @@ class _RechargeScanDialogState extends State<RechargeScanDialog>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
     input.clear();
-    if (!foreground)
+    if (!foreground) {
       timer?.cancel();
-    else if (row != null)
+    } else if (row != null) {
       unawaited(check());
+    }
   }
 
   @override
