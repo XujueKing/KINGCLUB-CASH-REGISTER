@@ -50,7 +50,6 @@ class LiveTablesPanel extends StatefulWidget {
     super.key,
     this.menuVisible,
     this.orderAlerts,
-    this.voucherVisible = false,
     this.onMenuChanged,
     this.onStoreName,
     required this.auth,
@@ -60,7 +59,6 @@ class LiveTablesPanel extends StatefulWidget {
   });
   final PaidOrderAlerts? orderAlerts;
   final bool? menuVisible;
-  final bool voucherVisible;
   final ValueChanged<bool>? onMenuChanged;
   final ValueChanged<String>? onStoreName;
   final StaffAuthController auth;
@@ -291,7 +289,6 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   @override
   void didUpdateWidget(covariant LiveTablesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.voucherVisible && !oldWidget.voucherVisible) selectedDate = null;
     if (widget.menuVisible == true && oldWidget.menuVisible != true) {
       autoSeatPending = focusedTableRef == null;
       selectDefaultBarSeat();
@@ -690,137 +687,120 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                     final counters = data.tables
                         .where((t) => t.isBarCounter)
                         .toList();
-                    final grid = widget.voucherVisible
-                        ? VoucherWorkspacePanel(
-                            auth: widget.auth,
-                            language: widget.language,
-                            tableName: focused?.name,
-                            tableRef: focused?.reference,
-                            sessionRef: focused?.session?.reference,
-                          )
-                        : Column(
-                            children: [
-                              workspaceHeader(),
-                              if (data.tables.isEmpty) Text(t('liveNoTables')),
-                              Expanded(
-                                child: SwipeGrid(
-                                  key: ValueKey(
-                                    'table-page-$page-floor-$selectedFloor',
-                                  ),
-                                  columns: columns,
-                                  tileHeight:
-                                      (focused == null ? 124 : 104) * scale,
-                                  itemCount: ordinaryTables.length,
-                                  itemBuilder: (context, index) => tableCard(
-                                    ordinaryTables[index],
-                                    data.currency,
-                                  ),
-                                  hasPrevious: page > 0,
-                                  hasNext: data.nextAfterTable != null,
-                                  loading: loading,
-                                  onPrevious: () =>
-                                      unawaited(load(target: page - 1)),
-                                  onNext: next,
-                                ),
-                              ),
-                              for (final bar in counters) ...[
-                                const Divider(height: 16, thickness: 1),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  child: BarCounterStrip(
-                                    table: bar,
-                                    alertSeats: {
-                                      for (final seat in data.tables.where(
-                                        (s) =>
-                                            s.parentBarRef == bar.reference &&
-                                            widget.orderAlerts?.hasTable(
-                                                  s.reference,
-                                                ) ==
-                                                true,
-                                      ))
-                                        seat.barSeatNumber!,
-                                    },
-                                    draftSeats: {
-                                      for (final seat in data.tables.where(
-                                        (s) =>
-                                            s.parentBarRef == bar.reference &&
-                                            barDrafts.contains(s.reference),
-                                      ))
-                                        seat.barSeatNumber!,
-                                    },
-                                    groups: [
-                                      for (final refs in barGroups)
-                                        if (data.tables
-                                                .where(
-                                                  (t) =>
-                                                      t.parentBarRef ==
-                                                          bar.reference &&
-                                                      refs.contains(
-                                                        t.session?.reference,
-                                                      ),
-                                                )
-                                                .length ==
-                                            refs.length)
-                                          (data.tables
-                                              .where(
-                                                (t) =>
-                                                    t.parentBarRef ==
-                                                        bar.reference &&
-                                                    refs.contains(
-                                                      t.session?.reference,
-                                                    ),
-                                              )
-                                              .map((t) => t.barSeatNumber!)
-                                              .toList()
-                                            ..sort()),
-                                    ],
-                                    seatTables: {
-                                      for (final seat in data.tables.where(
-                                        (t) => t.parentBarRef == bar.reference,
-                                      ))
-                                        seat.barSeatNumber!: seat,
-                                    },
-                                    seatAmounts: {
-                                      for (final seat in data.tables.where(
-                                        (t) => t.parentBarRef == bar.reference,
-                                      ))
-                                        seat.barSeatNumber!:
-                                            (seat.session?.paidCents ?? 0) +
-                                            (seat.session?.pendingCents ?? 0),
-                                    },
-                                    selectedSeat:
-                                        focusedTableRef == bar.reference ||
-                                            focused?.parentBarRef ==
-                                                bar.reference
-                                        ? selectedBarSeat
-                                        : null,
-                                    onSeat: (seat) {
-                                      final target = data.tables
+                    final grid = Column(
+                      children: [
+                        workspaceHeader(),
+                        if (data.tables.isEmpty) Text(t('liveNoTables')),
+                        Expanded(
+                          child: SwipeGrid(
+                            key: ValueKey(
+                              'table-page-$page-floor-$selectedFloor',
+                            ),
+                            columns: columns,
+                            tileHeight: (focused == null ? 124 : 104) * scale,
+                            itemCount: ordinaryTables.length,
+                            itemBuilder: (context, index) =>
+                                tableCard(ordinaryTables[index], data.currency),
+                            hasPrevious: page > 0,
+                            hasNext: data.nextAfterTable != null,
+                            loading: loading,
+                            onPrevious: () => unawaited(load(target: page - 1)),
+                            onNext: next,
+                          ),
+                        ),
+                        for (final bar in counters) ...[
+                          const Divider(height: 16, thickness: 1),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: BarCounterStrip(
+                              table: bar,
+                              alertSeats: {
+                                for (final seat in data.tables.where(
+                                  (s) =>
+                                      s.parentBarRef == bar.reference &&
+                                      widget.orderAlerts?.hasTable(
+                                            s.reference,
+                                          ) ==
+                                          true,
+                                ))
+                                  seat.barSeatNumber!,
+                              },
+                              draftSeats: {
+                                for (final seat in data.tables.where(
+                                  (s) =>
+                                      s.parentBarRef == bar.reference &&
+                                      barDrafts.contains(s.reference),
+                                ))
+                                  seat.barSeatNumber!,
+                              },
+                              groups: [
+                                for (final refs in barGroups)
+                                  if (data.tables
                                           .where(
                                             (t) =>
                                                 t.parentBarRef ==
                                                     bar.reference &&
-                                                t.barSeatNumber == seat,
+                                                refs.contains(
+                                                  t.session?.reference,
+                                                ),
                                           )
-                                          .firstOrNull;
-                                      if (target != null) {
-                                        unawaited(selectBarSeat(target));
-                                        return;
-                                      }
-                                      setState(() {
-                                        focusedTableRef = bar.reference;
-                                        selectedBarSeat = seat;
-                                      });
-                                      widget.onMenuChanged?.call(false);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
+                                          .length ==
+                                      refs.length)
+                                    (data.tables
+                                        .where(
+                                          (t) =>
+                                              t.parentBarRef == bar.reference &&
+                                              refs.contains(
+                                                t.session?.reference,
+                                              ),
+                                        )
+                                        .map((t) => t.barSeatNumber!)
+                                        .toList()
+                                      ..sort()),
                               ],
-                            ],
-                          );
+                              seatTables: {
+                                for (final seat in data.tables.where(
+                                  (t) => t.parentBarRef == bar.reference,
+                                ))
+                                  seat.barSeatNumber!: seat,
+                              },
+                              seatAmounts: {
+                                for (final seat in data.tables.where(
+                                  (t) => t.parentBarRef == bar.reference,
+                                ))
+                                  seat.barSeatNumber!:
+                                      (seat.session?.paidCents ?? 0) +
+                                      (seat.session?.pendingCents ?? 0),
+                              },
+                              selectedSeat:
+                                  focusedTableRef == bar.reference ||
+                                      focused?.parentBarRef == bar.reference
+                                  ? selectedBarSeat
+                                  : null,
+                              onSeat: (seat) {
+                                final target = data.tables
+                                    .where(
+                                      (t) =>
+                                          t.parentBarRef == bar.reference &&
+                                          t.barSeatNumber == seat,
+                                    )
+                                    .firstOrNull;
+                                if (target != null) {
+                                  unawaited(selectBarSeat(target));
+                                  return;
+                                }
+                                setState(() {
+                                  focusedTableRef = bar.reference;
+                                  selectedBarSeat = seat;
+                                });
+                                widget.onMenuChanged?.call(false);
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    );
                     if (focused?.isBarSeat == true &&
                         focused?.session == null) {
                       final seat = focused!;
@@ -868,6 +848,12 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                   color: Colors.white,
                                   language: widget.language,
                                   filter: filter,
+                                  voucherAction: VoucherScanButton(
+                                    auth: widget.auth,
+                                    language: widget.language,
+                                    tableName: seat.name,
+                                    tableRef: seat.reference,
+                                  ),
                                   member: IconButton(
                                     key: const ValueKey('empty-bar-member'),
                                     onPressed: () => linkEmptyBarMember(seat),

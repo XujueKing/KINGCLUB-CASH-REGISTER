@@ -65,7 +65,6 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     'members',
     'reports',
     'settings',
-    'voucherWorkspace',
   ];
   static const icons = [
     Icon(Icons.grid_view_rounded),
@@ -74,7 +73,6 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     Icon(Icons.people_outline),
     Icon(Icons.bar_chart_rounded),
     Icon(Icons.tune_rounded),
-    ScanIcon(),
   ];
 
   @override
@@ -113,7 +111,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     padding: EdgeInsets.zero,
                     separatorBuilder: (_, _) => const SizedBox(height: 7),
                     itemBuilder: (context, position) {
-                      final index = const [0, 1, 6, 3, 2, 4, 5][position];
+                      final index = const [0, 1, 3, 2, 4, 5][position];
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Material(
@@ -150,14 +148,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    index == 6
-                                        ? [
-                                            '\u6838\u5238',
-                                            'Vouchers',
-                                            '\u6838\u5238',
-                                            '\u0e04\u0e39\u0e1b\u0e2d\u0e07',
-                                          ][widget.language.index]
-                                        : t(labels[index]),
+                                    t(labels[index]),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 11,
@@ -323,7 +314,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
 
   Widget content() => switch (page) {
     // Order views require selection of a real table and its current session.
-    0 || 1 || 2 || 6 => LiveTablesPanel(
+    0 || 1 || 2 => LiveTablesPanel(
       key: const ValueKey('tables'),
       orderAlerts: orderAlerts,
       onStoreName: (name) {
@@ -336,7 +327,6 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
         }
       },
       menuVisible: page == 1,
-      voucherVisible: page == 6,
       onMenuChanged: (value) => setState(() => page = value ? 1 : 0),
       auth: widget.auth,
       language: widget.language,

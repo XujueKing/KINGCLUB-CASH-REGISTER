@@ -1,4 +1,5 @@
 import 'bar_bill_header.dart';
+import 'voucher_workspace_panel.dart';
 import 'table_members_panel.dart';
 import 'item_price_dialog.dart';
 import 'bill_product_card.dart';
@@ -644,6 +645,13 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   Widget billHeader(Widget filter) {
     final table = widget.liveTable;
     final session = table?.session;
+    final voucher = VoucherScanButton(
+      auth: widget.auth,
+      language: widget.language,
+      tableName: table?.name,
+      tableRef: currentContext.tableRef,
+      sessionRef: currentContext.sessionRef,
+    );
     final color = table?.isBarSeat == true && items.isNotEmpty && !attempted
         ? const Color(0xFFDC2626)
         : table == null
@@ -655,6 +663,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         color: color,
         language: widget.language,
         filter: filter,
+        voucherAction: voucher,
         member: TableMembersButton(
           auth: widget.auth,
           language: widget.language,
@@ -826,6 +835,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           ),
         ),
         filter,
+        voucher,
         TableMembersButton(
           auth: widget.auth,
           language: widget.language,

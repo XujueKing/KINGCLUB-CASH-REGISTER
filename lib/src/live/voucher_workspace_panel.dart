@@ -13,6 +13,58 @@ import 'provider_payment.dart';
 import 'voucher_group_admission_card.dart';
 import 'wine_pickup_panel.dart';
 
+/// Redeem against the selected bill without replacing the ordering workspace.
+class VoucherScanButton extends StatelessWidget {
+  const VoucherScanButton({
+    super.key,
+    required this.auth,
+    required this.language,
+    this.tableName,
+    this.tableRef,
+    this.sessionRef,
+  });
+  final StaffAuthController auth;
+  final UiLanguage language;
+  final String? tableName, tableRef, sessionRef;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('bill-voucher-scan'),
+    tooltip: tr(language, 'billVoucher'),
+    icon: const ScanIcon(size: 24),
+    onPressed: () => showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        child: SizedBox(
+          width: 560,
+          height: MediaQuery.sizeOf(context).height * 0.8,
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+              Expanded(
+                child: VoucherWorkspacePanel(
+                  auth: auth,
+                  language: language,
+                  tableName: tableName,
+                  tableRef: tableRef,
+                  sessionRef: sessionRef,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// Official single-coupon redemption is separate from package fulfillment.
 /// No preview or redemption alone adds AA drinks to the table bill.
 class VoucherWorkspacePanel extends StatefulWidget {

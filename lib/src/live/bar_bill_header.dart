@@ -13,6 +13,7 @@ class BarBillHeader extends StatelessWidget {
     required this.filter,
     required this.member,
     this.mergeAction,
+    this.voucherAction,
   });
 
   final int number;
@@ -20,6 +21,7 @@ class BarBillHeader extends StatelessWidget {
   final UiLanguage language;
   final Widget filter, member;
   final Widget? mergeAction;
+  final Widget? voucherAction;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -65,6 +67,7 @@ class BarBillHeader extends StatelessWidget {
         ),
       ),
       filter,
+      if (voucherAction != null) voucherAction!,
       member,
     ],
   );
