@@ -17,6 +17,9 @@ Color tableStatusColor(LiveTable table) => table.status != 'active'
     : const Color(0xFF1D4ED8);
 
 LinearGradient tableStatusGradient(Color color) {
+  if (color.toARGB32() == 0xFFEA580C || color.toARGB32() == 0xFFDC2626) {
+    return LinearGradient(colors: [color, color]);
+  }
   final start = switch (color.toARGB32()) {
     0xFFFACC15 => const Color(0xFFFDE047),
     0xFF15803D => const Color(0xFF22A65A),
@@ -24,7 +27,7 @@ LinearGradient tableStatusGradient(Color color) {
     0xFF1D4ED8 => const Color(0xFF3B82F6),
     0xFF64748B => const Color(0xFF8492A6),
     0xFF64716B => const Color(0xFF64716B),
-    _ => Colors.white,
+    _ => color,
   };
   return LinearGradient(
     begin: Alignment.topLeft,
