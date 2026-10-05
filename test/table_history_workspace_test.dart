@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:kingclub_cash_register/src/workbench_page.dart';
 import 'package:kingclub_cash_register/src/live/live_tables_panel.dart';
 import 'package:kingclub_cash_register/src/live/table_calendar_panel.dart';
 import 'package:kingclub_cash_register/src/live/table_history_data.dart';
@@ -80,6 +82,81 @@ class HistoryAuth extends BillAuth {
 }
 
 void main() {
+  testWidgets(
+    'sidebar ordering asks before leaving history and switches date with data',
+    (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = HistoryAuth();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WorkbenchPage(
+            auth: auth,
+            language: UiLanguage.en,
+            onLanguage: (_) {},
+            onLogout: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final day = tableBusinessDay(DateTime.now())
+          .subtract(const Duration(days: 1));
+      await tester.tap(find.byKey(const ValueKey('table-calendar')));
+      await tester.pumpAndSettle();
+      Navigator.of(tester.element(find.byType(DatePickerDialog))).pop(day);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
+      await tester.pumpAndSettle();
+      final historical = tester.state<LiveTablesPanelState>(
+        find.byType(LiveTablesPanel),
+      );
+      await tester.tap(find.byKey(const ValueKey('nav-1')));
+      await tester.pumpAndSettle();
+      expect(find.text('Return to today first'), findsOneWidget);
+      expect(historical.selectedDate, day);
+      expect(
+        tester
+            .widget<LiveTablesPanel>(find.byType(LiveTablesPanel))
+            .menuVisible,
+        isFalse,
+      );
+      await tester.tap(find.text('Keep viewing'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('nav-0')));
+      await tester.pumpAndSettle();
+      expect(find.text('Yesterday'), findsOneWidget);
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).readOnly,
+        isTrue,
+      );
+      final reads = auth.requested.length;
+      await tester.tap(find.byKey(const ValueKey('nav-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('history-return-today')));
+      await tester.pumpAndSettle();
+      expect(historical.selectedDate, isNull);
+      expect(historical.history, isNull);
+      expect(historical.focusedTableRef, isNull);
+      expect(auth.requested.length, greaterThan(reads));
+      expect(
+        tester
+            .widget<LiveTablesPanel>(find.byType(LiveTablesPanel))
+            .menuVisible,
+        isTrue,
+      );
+      await tester.tap(find.byKey(const ValueKey('nav-0')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Today'), findsOneWidget);
+      expect(historical.snapshot!.tables.first.session!.pendingCents, 7800);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+
   test(
     'history aggregates both sessions and never borrows current-day totals',
     () async {

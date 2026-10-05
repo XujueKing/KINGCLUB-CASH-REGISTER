@@ -37,6 +37,22 @@ class WorkbenchPage extends StatefulWidget {
 }
 
 class _WorkbenchPageState extends State<WorkbenchPage> {
+  final tablesKey = GlobalKey<LiveTablesPanelState>();
+  bool changingPage = false;
+
+  Future<void> selectPage(int index) async {
+    if (changingPage || page == index) return;
+    changingPage = true;
+    try {
+      if (index == 1 &&
+          await tablesKey.currentState?.requestOrdering() == false)
+        return;
+      if (mounted) setState(() => page = index);
+    } finally {
+      changingPage = false;
+    }
+  }
+
   late final PaidOrderAlerts orderAlerts;
   @override
   void initState() {
@@ -124,7 +140,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                             borderRadius: BorderRadius.circular(14),
                             onTap: page == index
                                 ? null
-                                : () => setState(() => page = index),
+                                : () => unawaited(selectPage(index)),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                 vertical: 8,
@@ -315,7 +331,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
   Widget content() => switch (page) {
     // Order views require selection of a real table and its current session.
     0 || 1 || 2 => LiveTablesPanel(
-      key: const ValueKey('tables'),
+      key: tablesKey,
       orderAlerts: orderAlerts,
       onStoreName: (name) {
         if (mounted &&

@@ -69,10 +69,10 @@ class LiveTablesPanel extends StatefulWidget {
   final bool enableRealtime;
   final CashierRealtimeClient Function(StaffSession)? realtimeFactory;
   @override
-  State<LiveTablesPanel> createState() => _LiveTablesPanelState();
+  State<LiveTablesPanel> createState() => LiveTablesPanelState();
 }
 
-class _LiveTablesPanelState extends State<LiveTablesPanel>
+class LiveTablesPanelState extends State<LiveTablesPanel>
     with WidgetsBindingObserver {
   TableSnapshot? snapshot;
   String? focusedTableRef;
@@ -250,6 +250,49 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       selectedDate != null &&
       selectedDate!.isBefore(tableBusinessDay(DateTime.now()));
 
+  /// Navigation must resolve the displayed business day before opening a cart.
+  Future<bool> requestOrdering() async {
+    if (selectedDate == null) return true;
+    final switchToday = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          barText(
+            '请先切回今日',
+            'Return to today first',
+            '請先切回今日',
+            'กรุณากลับไปวันนี้ก่อน',
+          ),
+        ),
+        content: Text(
+          barText(
+            '当前查看的不是今日营业日，不能点单。是否切回今日？',
+            'You are viewing another business day. Switch to today to order?',
+            '目前查看的不是今日營業日，不能點單。是否切回今日？',
+            'กำลังดูวันทำการอื่น ต้องการกลับไปวันนี้เพื่อสั่งอาหารหรือไม่?',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(barText('继续查看', 'Keep viewing', '繼續查看', 'ดูต่อ')),
+          ),
+          FilledButton(
+            key: const ValueKey('history-return-today'),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              barText('切回今日', 'Switch to today', '切回今日', 'กลับไปวันนี้'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || switchToday != true) return false;
+    await changeDate(null);
+    await load(reset: true);
+    return mounted && selectedDate == null && snapshot != null && !failed;
+  }
+
   Future<void> changeDate(DateTime? date) async {
     if (date == tableBusinessDay(DateTime.now())) date = null;
     final generation = ++historyEpoch;
@@ -260,6 +303,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       historyLoading = historyMode;
       emptyBarMenu = false;
       autoSeatPending = false;
+      // Drop any cart/table subtree that captured a previous date's grid/header.
+      focusedTableRef = null;
+      selectedBarSeat = null;
+      orderingTable = null;
     });
     widget.onMenuChanged?.call(false);
     if (!historyMode) return;
@@ -290,6 +337,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   bool autoSeatPending = false;
 
   void selectDefaultBarSeat() {
+    if (selectedDate != null) {
+      autoSeatPending = false;
+      return;
+    }
     if (!autoSeatPending || snapshot == null) return;
     autoSeatPending = false;
     if (focusedTableRef != null) return;
@@ -311,7 +362,6 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     if (seats.isNotEmpty) {
       focusedTableRef = seats.first.reference;
       selectedBarSeat = seats.first.barSeatNumber;
-      selectedDate = null;
       emptyBarMenu = true;
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -335,7 +385,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   @override
   void didUpdateWidget(covariant LiveTablesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!historyMode &&
+    if (selectedDate == null &&
         widget.menuVisible == true &&
         oldWidget.menuVisible != true) {
       autoSeatPending = focusedTableRef == null;
