@@ -510,9 +510,11 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
               ),
               mark(
                 Image.asset(
-                  'assets/brand/platform-coupon.png',
+                  'assets/brand/kingclub-gold.png',
                   width: 54,
-                  height: 32,
+                  height: 30,
+                  color: ink,
+                  colorBlendMode: BlendMode.srcIn,
                   fit: BoxFit.contain,
                 ),
                 localized(
