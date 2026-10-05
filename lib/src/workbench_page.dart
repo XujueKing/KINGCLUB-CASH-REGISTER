@@ -18,6 +18,7 @@ import 'live/live_tables_panel.dart';
 import 'live/order_history_panel.dart';
 import 'live/business_report_panel.dart';
 import 'live/inventory_panel.dart';
+import 'live/reservations_panel.dart';
 import 'strings.dart';
 import 'power_icon.dart';
 
@@ -84,6 +85,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     'reports',
     'settings',
     'inventory',
+    'reservations',
   ];
   static const icons = [
     Icon(Icons.grid_view_rounded),
@@ -93,6 +95,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     Icon(Icons.bar_chart_rounded),
     Icon(Icons.tune_rounded),
     Icon(Icons.inventory_2_outlined),
+    Icon(Icons.event_seat_outlined),
   ];
 
   @override
@@ -131,7 +134,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     padding: EdgeInsets.zero,
                     separatorBuilder: (_, _) => const SizedBox(height: 7),
                     itemBuilder: (context, position) {
-                      final index = const [0, 1, 3, 2, 6, 4, 5][position];
+                      final index = const [0, 1, 3, 2, 7, 6, 4, 5][position];
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Material(
@@ -354,12 +357,10 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     3 => StoreMembersPanel(auth: widget.auth, language: widget.language),
     4 =>
       widget.auth.session?.permissions.contains('report.read') == true
-          ? BusinessReportPanel(
-              auth: widget.auth,
-              language: widget.language,
-            )
+          ? BusinessReportPanel(auth: widget.auth, language: widget.language)
           : Center(child: Text(t('staffAuthFailure'))),
-    6 => InventoryPanel(auth:widget.auth,language:widget.language),
+    6 => InventoryPanel(auth: widget.auth, language: widget.language),
+    7 => ReservationsPanel(auth: widget.auth, language: widget.language),
     _ => Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,

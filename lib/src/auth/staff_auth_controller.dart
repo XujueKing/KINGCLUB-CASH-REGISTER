@@ -1832,6 +1832,28 @@ class StaffAuthController extends ChangeNotifier {
     return Map<String,dynamic>.from(result);
   }
 
+  Future<Map<String, dynamic>> reservations(
+    Map<String, dynamic> command,
+  ) async {
+    final identity = _session, api = _api, epoch = _epoch;
+    if (identity == null || api == null || !identity.expiresAt.isAfter(_now()))
+      throw const CcsopFailure('SESSION_REQUIRED');
+    final raw = await api.call('K261006002018', {
+      ...command,
+      'storeRef': identity.storeRef,
+    });
+    _check(epoch);
+    if (!identity.expiresAt.isAfter(_now()))
+      throw const CcsopFailure('SESSION_REQUIRED');
+    final result = raw is Map ? raw['result'] : null;
+    if (result is! Map ||
+        result['storeRef'] != identity.storeRef ||
+        result['reservations'] is! List ||
+        result['tables'] is! List)
+      throw const FormatException();
+    return Map<String, dynamic>.from(result);
+  }
+
   Future<Map<String,dynamic>> readOrderHistory({required String from,required String to,
     String search='',String status='all',int page=0}) async {
     final identity=_session,api=_api,epoch=_epoch;
