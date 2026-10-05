@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../auth/staff_auth_controller.dart';
 import '../auth/session_vault.dart';
 import '../hardware/scanner_input.dart';
+import '../network/ccsop_client.dart';
 import '../strings.dart';
 import 'provider_payment.dart';
 
@@ -227,7 +228,7 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
           accounts: accounts,
           account: pendingCash?['receivingAccount'] ?? '',
           confirm: (code, account) async {
-            if (!current) throw StateError('Session changed');
+            if (!current) throw const CcsopFailure('SESSION_REQUIRED');
             pendingCash ??= {
               ...selection,
               'requestId': widget.newRequestId(),
@@ -239,7 +240,7 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
             if (bank) pendingCash!['receivingAccount'] = account;
             // Save only original scope. Raw employee QR remains in memory.
             await storage.write(storageKey, jsonEncode(pendingCash));
-            if (!current) throw StateError('Session changed');
+            if (!current) throw const CcsopFailure('SESSION_REQUIRED');
             var result = await widget.auth.storeMembers({
               'action': 'cashLookup',
               ...params(),
@@ -674,7 +675,59 @@ class _RechargeOfflineReceiptDialogState
       ? widget.account
       : (widget.accounts.length == 1 ? widget.accounts.single : '');
   StreamSubscription<String>? subscription;
-  bool busy = false, failed = false, submitted = false;
+  bool busy = false, submitted = false;
+  String? failureCode;
+  bool get ready => !widget.bank || widget.accounts.contains(account);
+  String failureMessage(String code) => switch (code) {
+    'RECEIPT_ACCOUNT_REQUIRED' => t(
+      '请先选择收款码，再扫员工会员码',
+      'Select a payment QR option before scanning your staff code.',
+      '請先選擇收款碼，再掃員工會員碼',
+      'เลือกช่องทางรับเงินก่อนสแกนรหัสพนักงาน',
+    ),
+    'EMPLOYEE_CODE_FORMAT' || 'RECHARGE_EMPLOYEE_SCAN_REQUIRED' => t(
+      '请出示收银员 KING APP 的会员码，不是付款码',
+      'Scan the cashier’s KING member code, not a payment code.',
+      '請出示收銀員 KING APP 的會員碼，不是付款碼',
+      'สแกนรหัสสมาชิก KING ของพนักงาน ไม่ใช่รหัสชำระเงิน',
+    ),
+    'RECHARGE_EMPLOYEE_SCAN_MISMATCH' => t(
+      '扫码会员与当前登录收银员不一致，请扫收银员本人的会员码',
+      'This member is not the signed-in cashier. Scan the cashier’s own member code.',
+      '掃碼會員與目前登入收銀員不一致，請掃收銀員本人的會員碼',
+      'สมาชิกนี้ไม่ใช่พนักงานที่เข้าสู่ระบบ กรุณาสแกนรหัสของพนักงานเอง',
+    ),
+    'CASHIER_MEMBER_IDENTITY_INVALID' || 'MEMBER_QR_INVALID' => t(
+      '会员码已失效，请在 KING APP 重新打开会员码后再扫',
+      'Member code expired. Reopen the member code in KING APP and scan again.',
+      '會員碼已失效，請在 KING APP 重新打開會員碼後再掃',
+      'รหัสสมาชิกหมดอายุ เปิดรหัสใน KING APP ใหม่แล้วสแกนอีกครั้ง',
+    ),
+    'CASHIER_PERMISSION_DENIED' || 'CASHIER_STORE_FORBIDDEN' => t(
+      '当前收银员没有本店收款权限，请由有权限的员工登录操作',
+      'The signed-in cashier lacks receipt permission for this store.',
+      '目前收銀員沒有本店收款權限，請由有權限的員工登入操作',
+      'พนักงานที่เข้าสู่ระบบไม่มีสิทธิ์รับเงินสำหรับร้านนี้',
+    ),
+    'SESSION_REQUIRED' || 'SESSION_EXPIRED' || 'AUTH_SESSION_EXPIRED' => t(
+      '收银员登录已失效，请重新登录后核对本笔充值',
+      'Cashier session expired. Sign in again and check this recharge.',
+      '收銀員登入已失效，請重新登入後核對本筆充值',
+      'การเข้าสู่ระบบหมดอายุ เข้าสู่ระบบใหม่แล้วตรวจสอบรายการนี้',
+    ),
+    'RECHARGE_RECEIVING_ACCOUNT_UNAVAILABLE' => t(
+      '所选收款码已停用，请取消后重新选择已配置的收款码',
+      'This payment QR option is unavailable. Cancel and select a configured option again.',
+      '所選收款碼已停用，請取消後重新選擇已配置的收款碼',
+      'ช่องทางรับเงินนี้ใช้ไม่ได้ ยกเลิกแล้วเลือกช่องทางใหม่',
+    ),
+    _ => t(
+      '暂未取得入账结果，请取消后重新打开核对本笔充值',
+      'Receipt result unavailable. Cancel and reopen to check this recharge.',
+      '暫未取得入帳結果，請取消後重新打開核對本筆充值',
+      'ยังไม่ได้รับผลการบันทึกเงิน ยกเลิกแล้วเปิดใหม่เพื่อตรวจสอบรายการนี้',
+    ),
+  };
   String t(String zh, String en, String tw, String th) =>
       rechargeText(widget.language, zh, en, tw, th);
   @override
@@ -689,24 +742,35 @@ class _RechargeOfflineReceiptDialogState
 
   Future<void> scan(String value) async {
     if (busy || !mounted) return;
-    if (!RegExp(r'^KC:M:[0-9A-F]{32}$').hasMatch(value.trim()) ||
-        (widget.bank && !widget.accounts.contains(account))) {
-      setState(() => failed = true);
+    if (widget.bank && widget.accounts.isEmpty) return;
+    if (!ready) {
+      setState(() => failureCode = 'RECEIPT_ACCOUNT_REQUIRED');
+      return;
+    }
+    if (!RegExp(r'^KC:M:[0-9A-F]{32}$').hasMatch(value.trim())) {
+      setState(() => failureCode = 'EMPLOYEE_CODE_FORMAT');
       return;
     }
     setState(() {
       busy = true;
-      failed = false;
+      failureCode = null;
       submitted = true;
     });
     try {
       await widget.confirm(value.trim(), account);
       if (mounted) Navigator.pop(context, true);
-    } catch (_) {
+    } catch (error) {
+      // Only a bounded error identifier, never the employee QR or receipt data.
+      if (error is CcsopFailure &&
+          RegExp(r'^[A-Z][A-Z0-9_]{0,79}$').hasMatch(error.code)) {
+        debugPrint('KING receipt confirmation rejected: ${error.code}');
+      }
       if (mounted) {
         setState(() {
           busy = false;
-          failed = true;
+          failureCode = error is CcsopFailure
+              ? error.code
+              : 'RECEIPT_UNCONFIRMED';
         });
       }
     }
@@ -766,48 +830,51 @@ class _RechargeOfflineReceiptDialogState
                             selected: account == name,
                             onSelected: busy || submitted
                                 ? null
-                                : (_) => setState(() => account = name),
+                                : (_) => setState(() {
+                                    account = name;
+                                    failureCode = null;
+                                  }),
                           ),
                       ],
                     ),
                   ),
                 ),
             ],
-            const SizedBox(height: 20),
-            const Icon(Icons.qr_code_scanner, size: 54),
-            const SizedBox(height: 12),
-            Text(
-              t(
-                '确认已收款后，收银员扫自己的会员码',
-                'After receiving payment, scan your own staff member code.',
-                '確認已收款後，收銀員掃自己的會員碼',
-                'รับเงินแล้ว ให้พนักงานสแกนรหัสสมาชิกของตน',
+            if (ready) ...[
+              const SizedBox(height: 20),
+              const Icon(Icons.qr_code_scanner, size: 54),
+              const SizedBox(height: 12),
+              Text(
+                t(
+                  '确认已收款后，收银员扫自己的会员码',
+                  'After receiving payment, scan your own staff member code.',
+                  '確認已收款後，收銀員掃自己的會員碼',
+                  'รับเงินแล้ว ให้พนักงานสแกนรหัสสมาชิกของตน',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              t('等待员工扫码', 'Ready to scan', '等待員工掃碼', 'พร้อมสแกนรหัสพนักงาน'),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              const SizedBox(height: 12),
+              Text(
+                t('等待员工扫码', 'Ready to scan', '等待員工掃碼', 'พร้อมสแกนรหัสพนักงาน'),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
+            ],
             if (busy)
               const Padding(
                 padding: EdgeInsets.all(12),
                 child: CircularProgressIndicator(),
               ),
-            if (failed)
+            if (failureCode != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  t(
-                    '未确认入账，请检查收款账户，并用当前登录员工的新会员码重扫',
-                    'Not confirmed. Check the account and rescan the signed-in employee’s current code.',
-                    '未確認入帳，請檢查收款帳戶，並用當前登入員工的新會員碼重掃',
-                    'ยังไม่ยืนยัน ตรวจสอบบัญชีและสแกนรหัสปัจจุบันของพนักงานที่เข้าสู่ระบบ',
-                  ),
+                  failureMessage(failureCode!),
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),

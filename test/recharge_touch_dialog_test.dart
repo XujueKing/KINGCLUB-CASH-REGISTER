@@ -7,6 +7,7 @@ import 'package:kingclub_cash_register/src/live/recharge_touch_dialog.dart';
 import 'package:kingclub_cash_register/src/live/recharge_journal.dart';
 import 'package:kingclub_cash_register/src/live/recharge_result.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
+import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 
 import 'live_tables_panel_test.dart' show TableAuth;
 import 'staff_session_test.dart' show TestStorage;
@@ -27,25 +28,29 @@ class RechargeAuth extends TableAuth {
   bool lost = false, credited = false;
   List<String> accounts = ['Test bank sticker', 'Second QR'];
   String? collectedChannel;
+  String? rejectCode;
   @override
   Future<Map<String, dynamic>> storeMembers(Map<String, dynamic> p) async {
     calls.add({...p});
-    if (p['action'] == 'receiptAccounts')
+    if (p['action'] == 'receiptAccounts') {
       return {
         'receiptSettings': {'revision': 0, 'accounts': accounts},
       };
+    }
     if (p['action'] == 'receiptAccountsSave') {
       accounts = List<String>.from(p['receiptSettings']['accounts']);
       return {};
     }
-    if (p['action'] == 'prepare')
+    if (p['action'] == 'prepare') {
       return {
         'rechargeRef': request,
         'channel': p['channel'],
         'principalCents': '100000',
         'giftCents': '10000',
       };
+    }
     if (p['action'] == 'cashConfirm') {
+      if (rejectCode != null) throw CcsopFailure(rejectCode!);
       credited = true;
       if (lost) {
         lost = false;
@@ -271,10 +276,51 @@ void main() {
     );
     await employeeScan(t);
     expect(a.calls.where((p) => p['action'] == 'cashConfirm'), isEmpty);
+    expect(find.text('Ready to scan'), findsNothing);
+    expect(find.textContaining('not the signed-in cashier'), findsNothing);
     await t.pumpWidget(const SizedBox());
     a.dispose();
     debugDefaultTargetPlatformOverride = null;
   });
+  for (final entry in {
+    'RECHARGE_EMPLOYEE_SCAN_MISMATCH':
+        'This member is not the signed-in cashier.',
+    'MEMBER_QR_INVALID': 'Member code expired.',
+    'CASHIER_PERMISSION_DENIED':
+        'The signed-in cashier lacks receipt permission',
+    'RECHARGE_RECEIVING_ACCOUNT_UNAVAILABLE':
+        'This payment QR option is unavailable.',
+  }.entries) {
+    testWidgets('bank receipt reports ${entry.key} without crediting', (
+      t,
+    ) async {
+      final a = RechargeAuth()..rejectCode = entry.key;
+      final s = TestStorage();
+      await open(t, a, s);
+      await t.tap(find.byKey(const ValueKey('recharge-offer-0')));
+      await t.pump();
+      await t.tap(find.byKey(const ValueKey('recharge-bank-pay')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Test bank sticker'));
+      await t.pumpAndSettle();
+      await employeeScan(t);
+      expect(find.textContaining(entry.value), findsOneWidget);
+      expect(a.credited, isFalse);
+      expect(s.data.values.join(), isNot(contains('KC:M:')));
+      expect(find.byType(RechargeOfflineReceiptDialog), findsOneWidget);
+      // A fresh employee scan retries the same original receipt, not a new credit.
+      a.rejectCode = null;
+      await employeeScan(t);
+      final attempts = a.calls.where((p) => p['action'] == 'cashConfirm');
+      expect(attempts.length, 2);
+      expect(attempts.every((p) => p['requestId'] == request), isTrue);
+      expect(find.byType(RechargeTouchDialog), findsNothing);
+      expect(s.data, isEmpty);
+      await t.pumpWidget(const SizedBox());
+      a.dispose();
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
   testWidgets('settings maintains server-backed choices', (t) async {
     final a = RechargeAuth();
     t.view.physicalSize = const Size(1366, 768);
@@ -306,7 +352,7 @@ void main() {
     a.dispose();
     debugDefaultTargetPlatformOverride = null;
   });
-  for (final channel in ['wechat', 'alipay'])
+  for (final channel in ['wechat', 'alipay']) {
     testWidgets(
       'one payment entry routes $channel and closes after confirmed credit',
       (t) async {
@@ -333,4 +379,5 @@ void main() {
         debugDefaultTargetPlatformOverride = null;
       },
     );
+  }
 }
