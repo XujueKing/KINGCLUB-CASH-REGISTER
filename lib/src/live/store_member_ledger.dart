@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../strings.dart';
@@ -79,6 +81,52 @@ class StoreMemberLedger extends StatelessWidget {
       t('流水号', 'Transaction no.', '流水號', 'เลขรายการ'),
       t('可用余额', 'Available', '可用餘額', 'ยอดใช้ได้'),
     ];
+    final values = [
+      for (final r in rows)
+        [
+          statementTime(r['occurredAt']),
+          memberNumber,
+          item(r['item']),
+          amount(r['incomeCents'], hideZero: true),
+          amount(r['expenseCents'], hideZero: true),
+          method(r['paymentMethod']),
+          '${r['operationRef']}',
+          amount(r['balanceAfterCents']),
+        ],
+    ];
+    TextStyle style(int index, {bool header = false, Color? color}) =>
+        DefaultTextStyle.of(context).style.copyWith(
+          fontSize: header || index == 0
+              ? 13
+              : index == 6
+              ? 12
+              : 14,
+          height: 1.35,
+          color: color,
+          fontFeatures: const [FontFeature.tabularFigures()],
+          fontWeight: header || index == 7
+              ? FontWeight.w600
+              : FontWeight.normal,
+        );
+    double measure(String text, TextStyle textStyle) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: textStyle),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: 1,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width.ceilToDouble() + 24;
+    }
+
+    final naturalWidths = List.generate(8, (i) {
+      var width = measure(headers[i], style(i, header: true));
+      for (final row in values) {
+        width = math.max(width, measure(row[i], style(i)));
+      }
+      return width;
+    });
     Widget cell(
       String text,
       int index, {
@@ -86,25 +134,20 @@ class StoreMemberLedger extends StatelessWidget {
       Color? color,
       bool selectable = false,
     }) => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       child: selectable
-          ? SelectableText(
-              text,
-              style: const TextStyle(fontSize: 11, height: 1.5),
+          ? Tooltip(
+              message: text,
+              child: SelectableText(text, maxLines: 1, style: style(index)),
             )
           : Text(
               text,
+              maxLines: 1,
+              softWrap: false,
               textAlign: [3, 4, 7].contains(index)
                   ? TextAlign.right
                   : TextAlign.left,
-              style: TextStyle(
-                fontSize: header ? 12 : 13,
-                height: 1.5,
-                color: color,
-                fontWeight: header || index == 7
-                    ? FontWeight.w600
-                    : FontWeight.normal,
-              ),
+              style: style(index, header: header, color: color),
             ),
     );
     return Column(
@@ -121,56 +164,83 @@ class StoreMemberLedger extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: constraints.maxWidth < 900 ? 900 : constraints.maxWidth,
-              child: Table(
-                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                columnWidths: {
-                  for (final (i, v) in [17, 13, 12, 8, 8, 9, 21, 12].indexed)
-                    i: FlexColumnWidth(v.toDouble()),
-                },
-                border: const TableBorder(
-                  horizontalInside: BorderSide(color: Color(0xffdce3df)),
-                ),
-                children: [
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: const Color(0xffe8eeea),
-                      borderRadius: BorderRadius.circular(8),
+          builder: (context, constraints) {
+            // Short fields take only their measured width; the reference takes
+            // the remaining space. Very narrow screens retain horizontal scroll.
+            final widths = [...naturalWidths];
+            final fixed = widths
+                .asMap()
+                .entries
+                .where((e) => e.key != 6)
+                .fold<double>(0, (sum, e) => sum + e.value);
+            widths[6] = math.max(
+              naturalWidths[6],
+              constraints.maxWidth - fixed,
+            );
+            final tableWidth = widths.fold<double>(
+              0,
+              (sum, width) => sum + width,
+            );
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: tableWidth,
+                child: Table(
+                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                  columnWidths: {
+                    for (final (i, width) in widths.indexed)
+                      i: FixedColumnWidth(width),
+                  },
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xffdce3df)),
+                    verticalInside: BorderSide(
+                      color: Color(0xffe8eeea),
+                      width: 0.5,
                     ),
-                    children: [
-                      for (var i = 0; i < headers.length; i++)
-                        cell(headers[i], i, header: true),
-                    ],
                   ),
-                  for (final r in rows)
+                  children: [
                     TableRow(
-                      key: ValueKey('statement-${r['rowRef']}'),
+                      decoration: BoxDecoration(
+                        color: const Color(0xffe8eeea),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       children: [
-                        cell(statementTime(r['occurredAt']), 0),
-                        cell(memberNumber, 1),
-                        cell(item(r['item']), 2),
-                        cell(
-                          amount(r['incomeCents'], hideZero: true),
-                          3,
-                          color: const Color(0xff247653),
-                        ),
-                        cell(
-                          amount(r['expenseCents'], hideZero: true),
-                          4,
-                          color: const Color(0xffbd533f),
-                        ),
-                        cell(method(r['paymentMethod']), 5),
-                        cell('${r['operationRef']}', 6, selectable: true),
-                        cell(amount(r['balanceAfterCents']), 7),
+                        for (var i = 0; i < headers.length; i++)
+                          cell(headers[i], i, header: true),
                       ],
                     ),
-                ],
+                    for (final (rowIndex, r) in rows.indexed)
+                      TableRow(
+                        key: ValueKey('statement-${r['rowRef']}'),
+                        decoration: BoxDecoration(
+                          color: rowIndex.isEven
+                              ? const Color(0xfffafcfb)
+                              : Colors.transparent,
+                        ),
+                        children: [
+                          cell(statementTime(r['occurredAt']), 0),
+                          cell(memberNumber, 1),
+                          cell(item(r['item']), 2),
+                          cell(
+                            amount(r['incomeCents'], hideZero: true),
+                            3,
+                            color: const Color(0xff247653),
+                          ),
+                          cell(
+                            amount(r['expenseCents'], hideZero: true),
+                            4,
+                            color: const Color(0xffbd533f),
+                          ),
+                          cell(method(r['paymentMethod']), 5),
+                          cell('${r['operationRef']}', 6, selectable: true),
+                          cell(amount(r['balanceAfterCents']), 7),
+                        ],
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
         if (rows.isEmpty)
           Padding(
