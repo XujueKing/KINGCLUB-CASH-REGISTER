@@ -17,6 +17,7 @@ import 'live/receipt_accounts_settings.dart';
 import 'live/live_tables_panel.dart';
 import 'live/order_history_panel.dart';
 import 'live/business_report_panel.dart';
+import 'live/inventory_panel.dart';
 import 'strings.dart';
 import 'power_icon.dart';
 
@@ -82,6 +83,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     'members',
     'reports',
     'settings',
+    'inventory',
   ];
   static const icons = [
     Icon(Icons.grid_view_rounded),
@@ -90,6 +92,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     Icon(Icons.people_outline),
     Icon(Icons.bar_chart_rounded),
     Icon(Icons.tune_rounded),
+    Icon(Icons.inventory_2_outlined),
   ];
 
   @override
@@ -128,7 +131,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     padding: EdgeInsets.zero,
                     separatorBuilder: (_, _) => const SizedBox(height: 7),
                     itemBuilder: (context, position) {
-                      final index = const [0, 1, 3, 2, 4, 5][position];
+                      final index = const [0, 1, 3, 2, 6, 4, 5][position];
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Material(
@@ -356,6 +359,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
               language: widget.language,
             )
           : Center(child: Text(t('staffAuthFailure'))),
+    6 => InventoryPanel(auth:widget.auth,language:widget.language),
     _ => Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
