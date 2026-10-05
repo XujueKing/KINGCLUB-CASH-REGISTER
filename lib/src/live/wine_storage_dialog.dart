@@ -27,7 +27,9 @@ class WineStorageDialog extends StatefulWidget {
     required this.isCurrent,
     this.storage,
     this.printLabel,
+    this.restoredFromItemRef,
   });
+  final String? restoredFromItemRef;
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef, sessionRef, orderRef, productRef, name;
@@ -50,7 +52,7 @@ class _WineStorageDialogState extends State<WineStorageDialog>
   bool printFailed = false;
   final sentLabels = <String>{};
   String? locationCode;
-  int maximum = 0, stored = 0, percent = 50;
+  int maximum = 0, stored = 0, percent = 50, maximumPercent = 100;
   bool loading = true,
       busy = false,
       ready = false,
@@ -62,6 +64,8 @@ class _WineStorageDialogState extends State<WineStorageDialog>
     'sessionRef': widget.sessionRef,
     'orderRef': widget.orderRef,
     'productRef': widget.productRef,
+    if (widget.restoredFromItemRef != null)
+      'restoredFromItemRef': widget.restoredFromItemRef,
   };
   bool get current => mounted && foreground && widget.isCurrent();
   @override
@@ -147,6 +151,9 @@ class _WineStorageDialogState extends State<WineStorageDialog>
           result['storageDays'] != 30)
         throw const FormatException();
       maximum = available;
+      maximumPercent =
+          (result['maximumRemainingPercent'] as num?)?.toInt() ?? 100;
+      if (pending == null && percent > maximumPercent) percent = maximumPercent;
       stored = previous;
       locations = (result['locations'] as List).cast<String>();
       if (pending == null && !locations.contains(locationCode))
@@ -305,7 +312,12 @@ class _WineStorageDialogState extends State<WineStorageDialog>
                 Wrap(
                   spacing: 8,
                   children: [
-                    for (final p in [100, 75, 50, 25])
+                    for (final p in [
+                      100,
+                      75,
+                      50,
+                      25,
+                    ].where((p) => p <= maximumPercent))
                       ChoiceChip(
                         label: Text('$p%'),
                         selected: percent == p,
@@ -399,7 +411,14 @@ class _WineStorageDialogState extends State<WineStorageDialog>
             onPressed: locationCode == null
                 ? null
                 : () => setState(() => ready = true),
-            child: Text(text(['存酒', 'Store wine', '存酒', 'ฝากสุรา'])),
+            child: Text(
+              text([
+                widget.restoredFromItemRef == null ? '存酒' : '再次存酒',
+                'Store wine',
+                '存酒',
+                'ฝากสุรา',
+              ]),
+            ),
           ),
       ],
     ),

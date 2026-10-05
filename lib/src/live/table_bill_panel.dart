@@ -1117,42 +1117,66 @@ class _TableBillPanelState extends State<TableBillPanel>
                   const Color(0xff216344),
                 ),
                 leadingBadge: status(
-                  '${t('billServed')} ${wine['served'] == true ? 1 : 0} / ${t('billNotServed')} ${wine['served'] == true ? 0 : 1}',
+                  wine['restoredItemRef'] != null
+                      ? [
+                          '已再次存酒',
+                          'Stored again',
+                          '已再次存酒',
+                          'Stored again',
+                        ][widget.language.index]
+                      : '${t('billServed')} ${wine['served'] == true ? 1 : 0} / ${t('billNotServed')} ${wine['served'] == true ? 0 : 1}',
                   wine['served'] == true
                       ? const Color(0xff216344)
                       : const Color(0xff994a16),
                 ),
-                onTap: () async {
-                  await showDialog<bool>(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      content: SizedBox(
-                        width: 420,
-                        child: WinePickupPanel(
-                          auth: widget.auth,
-                          language: widget.language,
-                          tableRef: widget.tableRef,
-                          sessionRef: widget.sessionRef,
-                          bottleItem: wine,
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            [
-                              '关闭',
-                              'Close',
-                              '關閉',
-                              'Close',
-                            ][widget.language.index],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (mounted) await loadStoredWine(epoch);
-                },
+                onTap: wine['restoredItemRef'] != null
+                    ? null
+                    : () async {
+                        await showDialog<bool>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => wine['served'] == true
+                              ? WineStorageDialog(
+                                  auth: widget.auth,
+                                  language: widget.language,
+                                  tableRef: widget.tableRef,
+                                  sessionRef: widget.sessionRef,
+                                  orderRef: wine['sourceOrderRef'] as String,
+                                  productRef:
+                                      wine['sourceProductRef'] as String,
+                                  name: wine['name'] as String,
+                                  restoredFromItemRef:
+                                      wine['itemRef'] as String,
+                                  isCurrent: () => mounted && foreground,
+                                )
+                              : AlertDialog(
+                                  content: SizedBox(
+                                    width: 420,
+                                    child: WinePickupPanel(
+                                      auth: widget.auth,
+                                      language: widget.language,
+                                      tableRef: widget.tableRef,
+                                      sessionRef: widget.sessionRef,
+                                      bottleItem: wine,
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: Text(
+                                        [
+                                          '关闭',
+                                          'Close',
+                                          '關閉',
+                                          'Close',
+                                        ][widget.language.index],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        );
+                        if (mounted) await loadStoredWine(epoch);
+                      },
               ),
           for (final group in groups)
             BillProductCard(

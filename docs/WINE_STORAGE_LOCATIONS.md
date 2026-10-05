@@ -33,3 +33,10 @@ Tap the stored wine card for its large shelf location, then Serve to arm the sca
 StaffAccessPage now retains the same workspace element during a same-session credential refresh, with touch input blocked while authentication is unavailable. Stable identity keys exclude rotating credential objects; failed refresh/revocation removes the workspace. A widget regression verifies retained state across refresh and removal on revocation. This addresses the timed return to the table overview.
 
 Backend 23 pickup tests passed. Cashier pickup, bill, voucher, access and refresh regressions passed; ARM32 signed upgrade installed preserving data. Real bottle picture/name confirmed on the attached terminal. New physical serving still requires the customer's next real bottle scan; no transaction was simulated.
+
+
+## Re-deposit after serving
+
+Served stored-wine cards open the existing deposit dialog directly instead of showing the obsolete shelf. One bottle, remaining percent no greater than the last pickup, a newly chosen shelf, and a fresh scan of the same owner's member card are required. Existing auto-print and lost-response recovery apply. On success the old card shows Stored again, and the APP bag receives a new holding and bottle QR with a new 30-day expiry. Old labels remain collected. No sales stock/payment movement or repeated source-order allocation. Backend migration 328 adds one nullable unique previous-holding reference on the existing holding, and extends the existing interface parameter catalog.
+
+Verification: 49 backend pickup/storage tests, 17 bill/storage widget tests, and 4 deposit/redeposit lost-reply tests passed. Real re-deposit requires a customer scan; no real holding was created by automated verification.

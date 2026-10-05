@@ -33,7 +33,8 @@ class StorageAuth extends TableAuth {
     if (params['action'] == 'context')
       return {
         'state': 'context',
-        'availableQuantity': 2,
+        'availableQuantity': params['restoredFromItemRef'] == null ? 2 : 1,
+        'maximumRemainingPercent': params['restoredFromItemRef'] == null ? 100 : 25,
         'storedQuantity': 0,
         'storageDays': 30,
         'locations': ['A1-1', 'A6-4'],
@@ -73,9 +74,10 @@ void main() {
         );
   });
   tearDown(() => debugDefaultTargetPlatformOverride = null);
+  for (final restored in [false, true])
   for (final lost in [false, true]) {
     testWidgets(
-      'scan deposits without another confirmation; lost reply $lost recovers',
+      'scan deposits without another confirmation; lost reply $lost redeposit $restored recovers',
       (tester) async {
         debugDefaultTargetPlatformOverride = TargetPlatform.android;
         final auth = StorageAuth()..loseReply = lost, vault = MemoryStorage();
@@ -87,6 +89,7 @@ void main() {
                   onPressed: () => showDialog<void>(
                     context: context,
                     builder: (_) => WineStorageDialog(
+                      restoredFromItemRef: restored ? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' : null,
                       auth: auth,
                       language: UiLanguage.zh,
                       tableRef: 'test-table',
@@ -108,10 +111,11 @@ void main() {
         await tester.tap(find.text('OPEN'));
         await tester.pumpAndSettle();
         expect(find.byType(TextField), findsNothing);
+        if(restored) { expect(find.text('50%'), findsNothing); expect(find.text('25%'), findsOneWidget); }
         await tester.tap(find.text('A1-1'));
         await tester.pumpAndSettle();
         expect(find.textContaining('30天'), findsOneWidget);
-        await tester.tap(find.widgetWithText(FilledButton, '存酒'));
+        await tester.tap(find.widgetWithText(FilledButton, restored ? '再次存酒' : '存酒'));
         await tester.pumpAndSettle();
         await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
           'kingclub/scanner',
