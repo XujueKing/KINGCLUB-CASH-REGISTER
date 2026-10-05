@@ -42,6 +42,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   int epoch = 0;
   int listEpoch = 0, socketRevision = -1;
   String? selectedAccount;
+  final avatarImages = <String, MemoryImage>{};
   StaffSession? session;
   CashierRealtimeClient? socket;
   Timer? fallback, refreshDelay;
@@ -98,6 +99,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
         members = [];
         detail = null;
         selectedAccount = null;
+        avatarImages.clear();
       });
     }
     if (session == null) return;
@@ -273,8 +275,15 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   Widget avatar(Map m, {double radius = 24}) {
     ImageProvider? image;
     try {
-      if (m['avatarBase64'] != null)
-        image = MemoryImage(base64Decode(m['avatarBase64']));
+      final encoded = m['avatarBase64'];
+      if (encoded is String) {
+        image = avatarImages[encoded];
+        if (image == null) {
+          if (avatarImages.length >= 64)
+            avatarImages.remove(avatarImages.keys.first);
+          image = avatarImages[encoded] = MemoryImage(base64Decode(encoded));
+        }
+      }
     } catch (_) {}
     return CircleAvatar(
       radius: radius,

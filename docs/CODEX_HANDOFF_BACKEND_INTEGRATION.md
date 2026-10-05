@@ -1,3 +1,9 @@
+## 2026-10-06 Stable member avatars during table switching
+
+TableMembersButton now synchronously restores the selected table/session badge under the current staff identity before its first frame. Background reads retain the current display; changed avatar bytes are decoded before atomically replacing the badge. Unchanged bytes reuse the same MemoryImage cache key. Late responses cannot cross staff/table/session boundaries; a confirmed empty membership list still clears the badge. First visits with no known member retain the normal neutral placeholder, not another table's identity.
+
+The member list also reuses avatar image providers instead of base64-decoding into a new provider during every build. Display-cache capacity now accommodates four slots per table for a whole store. No extra endpoint or image request was introduced. Twelve focused member/page/cache tests passed, including a blocked refresh, remount, wrong-table response and confirmed unlink. Static analysis has no errors/warnings. Same-certificate ARM32 upgrade retained data. A real-device recording of V1/V2/return-V1, after both tables were read, showed the correct cached avatar in the inspected transition frames with no intermediate neutral badge. No transaction or member-link write was performed.
+
 ## 2026-10-06 Remove hidden catalog work during table selection
 
 The aggregate detail endpoint alone did not eliminate all work on a table switch: LiveCartPanel used IndexedStack, which mounted, fetched and laid out the invisible full catalog every time a session-keyed workspace was created. The left pane now mounts only the visible table grid or catalog. Opening ordering uses the existing session-scoped catalog display cache and retains the selected category across remounts. No new endpoints or business rules were added.

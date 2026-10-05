@@ -11,6 +11,7 @@ import '../hardware/scanner_input.dart';
 import '../strings.dart';
 import 'member_identity.dart';
 import 'table_detail_snapshot.dart';
+import 'workspace_read_cache.dart';
 
 class TableMembersPanel extends StatefulWidget {
   const TableMembersPanel({
@@ -285,14 +286,34 @@ class TableMembersButton extends StatefulWidget {
   State<TableMembersButton> createState() => _TableMembersButtonState();
 }
 
+class _MemberBadgeDisplay {
+  const _MemberBadgeDisplay(this.members, this.avatar);
+  final List<Map<String, String?>> members;
+  final Uint8List? avatar;
+}
+
 class _TableMembersButtonState extends State<TableMembersButton> {
   List<Map<String, String?>> members = [];
   Uint8List? avatar;
   int epoch = 0;
+  String get displayKey =>
+      'member-badge/${widget.tableRef}/${widget.sessionRef}';
+
+  void restoreDisplay() {
+    final cached = WorkspaceReadCache.read<_MemberBadgeDisplay>(
+      widget.auth.session,
+      displayKey,
+      maxAge: const Duration(minutes: 5),
+    );
+    members = cached?.members ?? [];
+    avatar = cached?.avatar;
+  }
+
   @override
   void initState() {
     super.initState();
     widget.auth.addListener(reset);
+    restoreDisplay();
     unawaited(load());
   }
 
@@ -319,8 +340,9 @@ class _TableMembersButtonState extends State<TableMembersButton> {
     }
     if (changed) {
       epoch++;
-      members = [];
-      avatar = null;
+      // Read the target table's snapshot synchronously. Never paint a blank
+      // frame first, or retain another table's member while awaiting its read.
+      restoreDisplay();
     }
     if (changed ||
         old.revision != widget.revision ||
@@ -330,6 +352,13 @@ class _TableMembersButtonState extends State<TableMembersButton> {
 
   Future<void> load({bool refresh = false}) async {
     final generation = ++epoch;
+    final identity = widget.auth.session;
+    final key = displayKey;
+    bool current() =>
+        mounted &&
+        generation == epoch &&
+        identical(identity, widget.auth.session) &&
+        key == displayKey;
     try {
       final rows = !refresh && widget.detailRead != null
           ? (await widget.detailRead!).members
@@ -337,15 +366,25 @@ class _TableMembersButtonState extends State<TableMembersButton> {
               tableRef: widget.tableRef,
               sessionRef: widget.sessionRef,
             );
-      if (!mounted || generation != epoch) return;
+      if (!current()) return;
       Uint8List? bytes;
       try {
         final raw = rows.isEmpty ? null : rows.first['avatarBase64'];
-        if (raw != null) bytes = base64Decode(raw);
+        final oldRaw = members.isEmpty ? null : members.first['avatarBase64'];
+        if (raw != null) {
+          // Keep the MemoryImage cache key stable for unchanged avatar content.
+          bytes = raw == oldRaw && avatar != null ? avatar : base64Decode(raw);
+          if (!identical(bytes, avatar)) {
+            await precacheImage(MemoryImage(bytes!), context);
+          }
+        }
       } catch (_) {}
+      if (!current()) return;
+      final display = _MemberBadgeDisplay(List.unmodifiable(rows), bytes);
+      WorkspaceReadCache.put(identity, key, display);
       setState(() {
-        members = rows;
-        avatar = bytes;
+        members = display.members;
+        avatar = display.avatar;
       });
     } catch (_) {
       /* Retain this session's last successful image without flashing. */

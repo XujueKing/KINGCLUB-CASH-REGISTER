@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,7 +51,79 @@ class MemberAuth extends TableAuth {
   }
 }
 
+class BadgeAuth extends MemberAuth {
+  var read = Completer<List<Map<String, String?>>>();
+  @override
+  Future<List<Map<String, String?>>> tableMembers({
+    required String tableRef,
+    required String sessionRef,
+    String? identityCode,
+  }) => read.future;
+}
+
 void main() {
+  testWidgets(
+    'avatar survives refresh and table remount without a blank frame',
+    (tester) async {
+      final auth = BadgeAuth();
+      const rows = <Map<String, String?>>[
+        {
+          'userAccount': 'test-a',
+          'nickname': 'Alice',
+          'avatarBase64': 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP8zwACTGCSAQANHQEDgslx/wAAAABJRU5ErkJggg==',
+        },
+      ];
+      Future<void> show(String table, {int revision = 0}) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TableMembersButton(
+              key: ValueKey(table),
+              auth: auth,
+              language: UiLanguage.zh,
+              tableRef: table,
+              sessionRef: 'session-$table',
+              revision: revision,
+            ),
+          ),
+        ),
+      );
+      await show('a');
+      await tester.runAsync(() async {
+        auth.read.complete(rows);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pumpAndSettle();
+      expect(find.byType(Image), findsOneWidget);
+      final original = tester.widget<Image>(find.byType(Image)).image;
+      auth.read = Completer();
+      await show('a', revision: 1);
+      expect(tester.widget<Image>(find.byType(Image)).image, original);
+      auth.read.complete(rows);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Image>(find.byType(Image)).image, original);
+
+      auth.read = Completer();
+      await show('b');
+      expect(find.byType(Image), findsNothing); // Never misattribute A to B.
+      final lateB = auth.read;
+      auth.read = Completer();
+      await show('a');
+      expect(auth.read.isCompleted, isFalse);
+      expect(tester.widget<Image>(find.byType(Image)).image, original);
+      expect(find.byIcon(Icons.person), findsNothing);
+      lateB.complete([]);
+      await tester.pump();
+      expect(tester.widget<Image>(find.byType(Image)).image, original);
+      auth.read.complete(
+        [],
+      ); // A confirmed removal is not a loading placeholder.
+      await tester.pumpAndSettle();
+      expect(find.byType(Image), findsNothing);
+      expect(find.byIcon(Icons.person), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(

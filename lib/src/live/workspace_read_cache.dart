@@ -39,7 +39,9 @@ class WorkspaceReadCache {
     if (identity == null) return;
     final entries = _sessions[identity] ??= {};
     entries.remove(key);
-    if (entries.length >= 24) entries.remove(entries.keys.first);
+    // Context, bill, stored wine and avatar use separate slots per table.
+    // Keep a full store's table display data, not only six recently viewed tables.
+    if (entries.length >= 128) entries.remove(entries.keys.first);
     entries[key] = (at: DateTime.now(), value: value);
   }
 }
