@@ -84,9 +84,9 @@ class TableBillPanel extends StatefulWidget {
   final Widget Function(Widget filter)? headerBuilder;
   final Future<void> Function(String productRef)? onAddProduct;
   final Map<String, BillProductCard> draftCards;
-  final Future<void> Function(String productRef)? onQuickAddProduct;
+  final Future<void> Function(CatalogProduct product)? onQuickAddProduct;
   final Future<void> Function(
-    String productRef,
+    CatalogProduct product,
     int unitPriceCents,
     String selectionRef, [
     String? expenseOwnerUserAccount,
@@ -285,6 +285,14 @@ class _TableBillPanelState extends State<TableBillPanel>
       if (cached != null) {
         snapshot = cached.snapshot;
         orders = List.of(cached.orders);
+        final products = WorkspaceReadCache.read<List<CatalogProduct>>(
+          widget.auth.session,
+          'products/$displayKey',
+          maxAge: const Duration(minutes: 5),
+        );
+        inventory.addEntries(
+          (products ?? []).map((p) => MapEntry(p.reference, p)),
+        );
       }
       storedWineServed = List.of(
         WorkspaceReadCache.read<List<Map<String, dynamic>>>(
@@ -308,8 +316,8 @@ class _TableBillPanelState extends State<TableBillPanel>
       snapshot = null;
       loading = false;
       failed = false;
-      if (useCache) restoreDisplayCache();
       inventory.clear();
+      if (useCache) restoreDisplayCache();
     });
     if (foreground) {
       unawaited(load());
@@ -422,6 +430,11 @@ class _TableBillPanelState extends State<TableBillPanel>
           snapshot: detail.bill,
           orders: List<LiveOrder>.unmodifiable(allOrders),
         ));
+        WorkspaceReadCache.put(
+          identity,
+          'products/$displayKey',
+          List<CatalogProduct>.unmodifiable(allProducts),
+        );
         WorkspaceReadCache.put(
           identity,
           'wine/$displayKey',
@@ -1375,13 +1388,15 @@ class _TableBillPanelState extends State<TableBillPanel>
                         ? draftFor(group)!.onPlus
                         : group.specialPrice
                         ? () => widget.onQuickAddSpecialProduct!(
-                            group.productRef,
+                            inventory[group.productRef]!,
                             group.item.priceCents,
                             group.item.pricingRef!,
                             group.item.expenseOwnerUserAccount,
                             group.item.authorizationRef,
                           )
-                        : () => widget.onQuickAddProduct!(group.productRef))
+                        : () => widget.onQuickAddProduct!(
+                            inventory[group.productRef]!,
+                          ))
                   : null,
               badges: status(
                 group.item.priceCents == 0
@@ -1574,7 +1589,6 @@ class _TableBillPanelState extends State<TableBillPanel>
                             pending != null &&
                                 pending.totalCents == 0 &&
                                 !widget.recording &&
-                                !loading &&
                                 !failed
                             ? t('billSettled')
                             : t('tableCheckoutTitle'),

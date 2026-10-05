@@ -91,7 +91,10 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   int epoch = 0;
   int billRevision = 0;
   bool confirming = false;
-  bool get acceptingAdds => editable;
+  bool checkingPending = true;
+  late final Future<void> initialRead;
+  bool get acceptingAdds =>
+      editable || (checkingPending && !busy && !stale && !attempted);
   bool refreshingSelection = false;
   bool refreshAgain = false;
   String? message;
@@ -106,11 +109,21 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     return t('orderMemberUnnamed');
   }
 
+  // Selecting quantities is local. A background page read must not disable it;
+  // submitting and server-side draft operations still require a fresh context.
   bool get draftAction =>
       widget.contextVerified && ready && !busy && !stale && !attempted;
-  bool get editable => draftAction && (savedDraft == null || draftLoaded);
+  bool get editable =>
+      ready &&
+      (!busy || refreshingSelection) &&
+      (!stale || refreshingSelection) &&
+      !attempted &&
+      (savedDraft == null || draftLoaded);
   bool get canSubmit =>
-      editable && items.isNotEmpty && (savedDraft == null || !dirty);
+      draftAction &&
+      editable &&
+      items.isNotEmpty &&
+      (savedDraft == null || !dirty);
   int get total => items.values.fold(
     0,
     (sum, item) => sum + item.quantity * item.priceCents,
@@ -121,7 +134,8 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     super.initState();
     widget.auth.addListener(invalidate);
     WidgetsBinding.instance.addObserver(this);
-    unawaited(checkPending());
+    initialRead = checkPending();
+    unawaited(initialRead);
   }
 
   Future<void> checkPending() async {
@@ -158,6 +172,8 @@ class _LiveCartPanelState extends State<LiveCartPanel>
           message = 'orderRecoveryFailed';
         });
       }
+    } finally {
+      if (mounted) setState(() => checkingPending = false);
     }
   }
 
@@ -181,7 +197,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
   }
 
   Future<void> draftOperation(String action) async {
-    if (!draftAction) return;
+    if (!draftAction || !widget.contextVerified) return;
     if (action == 'save' && (!editable || items.isEmpty)) return;
     if (action != 'save' && savedDraft == null) return;
     final generation = epoch, identity = widget.auth.session;
@@ -325,6 +341,14 @@ class _LiveCartPanelState extends State<LiveCartPanel>
 
   Future<void> refreshSelection() async {
     refreshAgain = false;
+    if (ready && items.isEmpty) {
+      setState(() {
+        stale = false;
+        refreshingSelection = false;
+        message = null;
+      });
+      return;
+    }
     final generation = ++epoch, identity = widget.auth.session;
     final original = List<OrderSelection>.unmodifiable(items.values);
     final dialog = activeDialog;
@@ -397,8 +421,28 @@ class _LiveCartPanelState extends State<LiveCartPanel>
     String? expenseOwnerUserAccount,
     String? authorizationRef,
   }) {
+    if (checkingPending) {
+      final generation = epoch;
+      unawaited(
+        initialRead.then((_) {
+          if (!mounted || generation != epoch) return;
+          change(
+            product,
+            delta,
+            selectionRef: selectionRef,
+            unitPriceCents: unitPriceCents,
+            expenseOwnerUserAccount: expenseOwnerUserAccount,
+            authorizationRef: authorizationRef,
+          );
+        }),
+      );
+      return;
+    }
     if (!editable) return;
     if (delta > 0 && !canAdd(product)) return;
+    // A read started with an older quantity must never overwrite a later tap.
+    // Revalidate the latest selection once that in-flight read completes.
+    if (refreshingSelection) refreshAgain = true;
     final key = selectionRef ?? product.reference;
     final old = items[key];
     final quantity = (old?.quantity ?? 0) + delta;
@@ -502,13 +546,31 @@ class _LiveCartPanelState extends State<LiveCartPanel>
 
   Future<void> addExistingProduct(
     String productRef, {
+    CatalogProduct? knownProduct,
     bool edit = true,
     String? selectionRef,
     int? unitPriceCents,
     String? expenseOwnerUserAccount,
     String? authorizationRef,
   }) async {
+    final initialEpoch = epoch;
+    if (checkingPending) await initialRead;
+    if (!mounted || initialEpoch != epoch) return;
     if (!editable) return;
+    // The aggregate bill already carries this product and its stock. Do not
+    // fetch the whole catalog or toggle the cart's global busy state for '+'.
+    if (knownProduct != null) {
+      if (knownProduct.reference != productRef) return;
+      change(
+        knownProduct,
+        1,
+        selectionRef: selectionRef,
+        unitPriceCents: unitPriceCents,
+        expenseOwnerUserAccount: expenseOwnerUserAccount,
+        authorizationRef: authorizationRef,
+      );
+      return;
+    }
     final selected = items[selectionRef ?? productRef];
     if (selected != null && !edit) {
       change(
@@ -914,13 +976,14 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     detailRead: widget.detailRead,
                     onQuickAddSpecialProduct: acceptingAdds
                         ? (
-                            ref,
+                            product,
                             price,
                             selectionRef, [
                             expenseOwner,
                             authorization,
                           ]) => addExistingProduct(
-                            ref,
+                            product.reference,
+                            knownProduct: product,
                             edit: false,
                             selectionRef: selectionRef,
                             unitPriceCents: price,
@@ -954,7 +1017,11 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                         },
                     onAddProduct: editable ? addExistingProduct : null,
                     onQuickAddProduct: acceptingAdds
-                        ? (ref) => addExistingProduct(ref, edit: false)
+                        ? (product) => addExistingProduct(
+                            product.reference,
+                            knownProduct: product,
+                            edit: false,
+                          )
                         : null,
                     // Once sent, only server orders contribute to consumption.
                     // The outbox owns an uncertain command, not a second draft.
@@ -1020,13 +1087,16 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                         ? null
                         : OutlinedButton(
                             key: const ValueKey('workspace-toggle-menu'),
-                            onPressed: busy ? null : () => setMenu(!menuOpen),
+                            onPressed: busy && !refreshingSelection
+                                ? null
+                                : () => setMenu(!menuOpen),
                             child: Text(
                               t(menuOpen ? 'ordersBack' : 'tableOrderStart'),
                             ),
                           ),
                     primaryAction:
-                        widget.tablePanel != null && (items.isNotEmpty || busy)
+                        widget.tablePanel != null &&
+                            (items.isNotEmpty || (busy && !refreshingSelection))
                         ? FilledButton(
                             key: const ValueKey('cart-submit'),
                             onPressed: canSubmit
@@ -1041,7 +1111,9 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                             child: Text.rich(
                               TextSpan(
                                 text: t(
-                                  busy ? 'cartRecording' : 'cartConfirmOrder',
+                                  busy && !refreshingSelection
+                                      ? 'cartRecording'
+                                      : 'cartConfirmOrder',
                                 ),
                                 children: [
                                   TextSpan(
@@ -1056,7 +1128,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                             ),
                           )
                         : null,
-                    recording: busy,
+                    recording: busy && !refreshingSelection,
                     beforeActions: widget.tablePanel == null
                         ? null
                         : Column(
@@ -1079,7 +1151,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
                     tableRef: widget.orderContext.tableRef,
                     sessionRef: widget.orderContext.sessionRef,
                     revision: widget.revision + billRevision,
-                    changesAllowed: acceptingAdds && widget.contextVerified,
+                    changesAllowed: editable && draftAction,
                     checkoutAllowed:
                         widget.contextVerified &&
                         !busy &&

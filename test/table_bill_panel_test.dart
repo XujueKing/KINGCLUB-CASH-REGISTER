@@ -179,6 +179,14 @@ void main() {
         find.descendant(of: finder, matching: find.text('Settled')),
         findsOneWidget,
       );
+      auth.ordersGate = Completer<Object?>();
+      await tester.pumpWidget(page(auth, 2));
+      await tester.pump();
+      expect(
+        find.descendant(of: finder, matching: find.text('Settled')),
+        findsOneWidget,
+      );
+      expect(tester.widget<FilledButton>(finder).onPressed, isNull);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();
     },

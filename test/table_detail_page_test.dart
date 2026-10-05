@@ -14,12 +14,14 @@ import 'package:kingclub_cash_register/src/strings.dart';
 import 'live_tables_panel_test.dart';
 import 'support/order_fixture.dart';
 import 'order_context_test.dart' as ctx;
+import 'catalog_snapshot_test.dart' as catalog;
 
 class DetailAuth extends TableAuth {
   DetailAuth()
     : super(permissions: ['workbench.read', 'orders.read', 'orders.create']);
   int detailReads = 0;
   int catalogReads = 0;
+  Completer<List<PendingOrder>>? pendingGate;
   var detailGate = Completer<TableDetailSnapshot>();
   @override
   Future<TableDetailSnapshot> readTableDetail({
@@ -33,7 +35,8 @@ class DetailAuth extends TableAuth {
   @override
   Future<List<CartDraft>> cartDrafts() async => [];
   @override
-  Future<List<PendingOrder>> pendingOrders() async => [];
+  Future<List<PendingOrder>> pendingOrders() async =>
+      pendingGate == null ? [] : pendingGate!.future;
 
   @override
   Future<CatalogSnapshot> readCatalog({
@@ -74,7 +77,15 @@ Map<String, dynamic> detailFixture() {
         'served': false,
       },
     ],
-    'products': [],
+    'products': [
+      {
+        ...catalog.product('test-product'),
+        'priceCents': 600,
+        'inventoryKnown': true,
+        'available': 3,
+        'soldOut': false,
+      },
+    ],
   };
   return value;
 }
@@ -122,6 +133,19 @@ void main() {
       );
       expect(find.byType(TableBillPanel), findsOneWidget);
       expect(tester.takeException(), isNull);
+      // Adding an existing bill product uses the product already in the page
+      // response; neither another catalog request nor a grey busy frame.
+      final plus = find.byKey(const ValueKey('cart-plus-test-product'));
+      await tester.tap(plus);
+      await tester.pump();
+      expect(tester.widget<IconButton>(plus).onPressed, isNotNull);
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        600,
+      );
+      expect(auth.catalogReads, 0);
+      await tester.tap(find.byKey(const ValueKey('cart-minus-test-product')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('workspace-toggle-menu')));
       await tester.pumpAndSettle();
       expect(auth.catalogReads, 1);
@@ -134,6 +158,7 @@ void main() {
       // Returning to the same table paints its cached bill without waiting for
       // either the fresh snapshot or an invisible product catalog.
       auth.detailGate = Completer<TableDetailSnapshot>();
+      auth.pendingGate = Completer<List<PendingOrder>>();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -158,6 +183,28 @@ void main() {
       );
       expect(find.byType(LiveCatalogPanel, skipOffstage: false), findsNothing);
       expect(tester.takeException(), isNull);
+      expect(tester.widget<IconButton>(plus).onPressed, isNotNull);
+      await tester.tap(plus);
+      await tester.pump();
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        0,
+      );
+      auth.pendingGate!.complete([]);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        600,
+      );
+      // Cached stock permits local selection, never submission before validation.
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('cart-submit')))
+            .onPressed,
+        isNull,
+      );
+      expect(auth.catalogReads, 1);
+      expect(auth.detailReads, 2);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();
     },

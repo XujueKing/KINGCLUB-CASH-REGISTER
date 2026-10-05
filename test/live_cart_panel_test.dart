@@ -33,6 +33,7 @@ class CartAuth extends m.MemberAuth {
   int available = 3;
   int priceCents = 1234;
   List<PendingOrder> pending = [];
+  Completer<List<PendingOrder>>? pendingGate;
   Completer<OrderRequestResult>? submitGate;
   Completer<RestoredCart>? refreshGate;
   RestoredCart? refreshResult;
@@ -62,6 +63,7 @@ class CartAuth extends m.MemberAuth {
   @override
   Future<List<PendingOrder>> pendingOrders() async {
     if (failJournal) throw StateError('PRIVATE_JOURNAL');
+    if (pendingGate != null) return pendingGate!.future;
     return pending;
   }
 
@@ -177,6 +179,28 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
   testWidgets(
+    'early local tap waits for journal and fails closed on read error',
+    (tester) async {
+      final auth = CartAuth()..pendingGate = Completer<List<PendingOrder>>();
+      await show(tester, auth);
+      await tap(tester, 'catalog-add-p001');
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        0,
+      );
+      auth.pendingGate!.completeError(StateError('journal unavailable'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        0,
+      );
+      expect(enabled(tester), false);
+      expect(auth.submits, 0);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
     'special-card plus retains its unit price while menu selection uses normal price',
     (tester) async {
       final auth = CartAuth();
@@ -184,7 +208,11 @@ void main() {
       final add = tester
           .widget<TableBillPanel>(find.byType(TableBillPanel))
           .onQuickAddSpecialProduct!;
-      await add('p001', 500, 'price-existing');
+      await add(
+        (await auth.readCatalog()).products.single,
+        500,
+        'price-existing',
+      );
       await tester.pumpAndSettle();
       expect(
         tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
@@ -505,6 +533,17 @@ void main() {
       revision.value++;
       await tester.pump();
       final reads = auth.refreshes;
+      final plus = find.byKey(const ValueKey('cart-plus-p001'));
+      final minus = find.byKey(const ValueKey('cart-minus-p001'));
+      expect(tester.widget<IconButton>(plus).onPressed, isNotNull);
+      expect(tester.widget<IconButton>(minus).onPressed, isNotNull);
+      await tester.tap(plus);
+      await tester.pump();
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        total * 2,
+      );
+      expect(enabled(tester), false);
       revision.value++;
       await tester.pump();
       expect(auth.refreshes, reads);
@@ -516,8 +555,28 @@ void main() {
       expect(enabled(tester), true);
       expect(
         tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
-        total,
+        total * 2,
       );
+      // Removing every local item while validation is pending must not restore
+      // the old selection or leave an empty cart permanently locked.
+      auth.refreshGate = Completer<RestoredCart>();
+      revision.value++;
+      await tester.pump();
+      final emptyGate = auth.refreshGate!;
+      final oldSelection = auth.refreshResult!;
+      await tester.tap(minus);
+      await tester.pump();
+      await tester.tap(minus);
+      await tester.pump();
+      auth.refreshGate = null;
+      emptyGate.complete(oldSelection);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TableBillPanel>(find.byType(TableBillPanel)).draftCents,
+        0,
+      );
+      await tap(tester, 'catalog-add-p001');
+      expect(enabled(tester), true);
       auth.refreshGate = Completer<RestoredCart>();
       revision.value++;
       await tester.pump();
