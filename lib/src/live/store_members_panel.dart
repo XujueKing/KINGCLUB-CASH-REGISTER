@@ -420,18 +420,9 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
                             label: Text(w('充值', 'Recharge')),
                           ),
                           OutlinedButton.icon(
-                            onPressed: busy ? null : () => refund(),
+                            onPressed: null,
                             icon: const Icon(Icons.undo),
                             label: Text(w('退款', 'Refund')),
-                          ),
-                          OutlinedButton(
-                            onPressed: () => setState(
-                              () => notice = w(
-                                '充值记录在下方，可查看收款和退款状态',
-                                'Recharge history and status are below',
-                              ),
-                            ),
-                            child: Text(w('充值记录', 'History')),
                           ),
                           if (widget.auth.session?.permissions.contains(
                                 'price.adjust',
@@ -482,9 +473,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
                               : row['creditStatus'] == 'credited' &&
                                     row['refundStatus'] == 'none'
                               ? TextButton(
-                                  onPressed: () => refund(
-                                    row: Map<String, dynamic>.from(row),
-                                  ),
+                                  onPressed: null,
                                   child: Text(w('退款', 'Refund')),
                                 )
                               : row['creditStatus'] != 'credited'
@@ -504,173 +493,415 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   }
 
   Future<void> campaigns() async {
-    await showDialog<void>(
+    final offers = (detail!['campaigns'] as List)
+        .where((c) => c['enabled'] == true)
+        .toList();
+    final chosen = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(w('充值设置', 'Recharge settings')),
-        content: SizedBox(
-          width: 480,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final c in detail!['campaigns'] as List)
-                if (c['enabled'] == true)
-                  ListTile(
-                    title: Text(
-                      '${w('充', 'Pay')} ¥${money(c['principalCents'])} · ${w('送', 'Gift')} ¥${money(c['giftCents'])}',
+      builder: (ctx) => Dialog(
+        child: SizedBox(
+          width: 900,
+          height: 610,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        w('充值设置', 'Recharge settings'),
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        editCampaign(Map<String, dynamic>.from(c));
-                      },
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisExtent: 150,
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                        ),
+                    itemCount: offers.length,
+                    itemBuilder: (_, i) {
+                      final c = Map<String, dynamic>.from(offers[i]);
+                      return OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, c),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xffedf2ef),
+                          padding: const EdgeInsets.all(20),
+                          side: const BorderSide(color: Color(0xffcbd4cf)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Align(
+                              alignment: Alignment.centerRight,
+                              child: Icon(Icons.edit_outlined, size: 20),
+                            ),
+                            const Spacer(),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '${w('充', 'Pay')} ¥ ${money(c['principalCents'])}',
+                                style: const TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              '${w('送', 'Gift')} ¥ ${money(c['giftCents'])}',
+                              style: const TextStyle(
+                                fontSize: 19,
+                                color: Color(0xff99701e),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  height: 60,
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(ctx, <String, dynamic>{}),
+                    icon: const Icon(Icons.add),
+                    label: Text(
+                      w('新增档位', 'New offer'),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  editCampaign(null);
-                },
-                child: Text(w('新增档位', 'New offer')),
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(w('关闭', 'Close')),
-          ),
-        ],
       ),
     );
+    if (!mounted || chosen == null) return;
+    await editCampaign(chosen.isEmpty ? null : chosen);
   }
 
   Future<void> editCampaign(Map<String, dynamic>? old) async {
     final values = [
-      old == null ? '' : money(old['principalCents']),
-      old == null ? '' : money(old['giftCents']),
+      old == null ? '0' : money(old['principalCents']),
+      old == null ? '0' : money(old['giftCents']),
     ];
     var field = 0;
+    final replace = [true, true];
     bool saving = false;
     String? error;
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => AlertDialog(
-          title: Text(w('充多少，送多少', 'Recharge and gift')),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    for (var i = 0; i < 2; i++)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => set(() => field = i),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: field == i
-                                ? const Color(0xffdcebe2)
-                                : null,
+        builder: (ctx, set) {
+          void digit(String key) => set(() {
+            error = null;
+            if (key == 'C') {
+              values[field] = '0';
+              replace[field] = true;
+              return;
+            }
+            if (key == 'back') {
+              values[field] = values[field].length > 1
+                  ? values[field].substring(0, values[field].length - 1)
+                  : '0';
+              replace[field] = false;
+              return;
+            }
+            if (replace[field]) {
+              values[field] = '0';
+              replace[field] = false;
+            }
+            if (key == '.') {
+              if (!values[field].contains('.')) values[field] += '.';
+              return;
+            }
+            if (values[field].contains('.') &&
+                values[field].split('.').last.length >= 2)
+              return;
+            if (values[field].replaceAll('.', '').length >= 9) return;
+            values[field] = values[field] == '0' ? key : values[field] + key;
+          });
+          return PopScope(
+            canPop: !saving,
+            child: Dialog(
+              child: SizedBox(
+                width: 900,
+                height: 610,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              w('充多少，送多少', 'Recharge and gift'),
+                              style: const TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
+                          IconButton(
+                            onPressed: saving ? null : () => Navigator.pop(ctx),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  for (var i = 0; i < 2; i++) ...[
+                                    if (i > 0) const SizedBox(height: 20),
+                                    SizedBox(
+                                      height: 142,
+                                      child: OutlinedButton(
+                                        onPressed: saving
+                                            ? null
+                                            : () => set(() {
+                                                field = i;
+                                                replace[i] = true;
+                                              }),
+                                        style: OutlinedButton.styleFrom(
+                                          alignment: Alignment.centerLeft,
+                                          padding: const EdgeInsets.all(20),
+                                          backgroundColor: field == i
+                                              ? const Color(0xfffff2cc)
+                                              : const Color(0xffedf2ef),
+                                          side: BorderSide(
+                                            color: field == i
+                                                ? const Color(0xffc59c39)
+                                                : const Color(0xffcbd4cf),
+                                            width: field == i ? 2 : 1,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              i == 0
+                                                  ? w('充值', 'Recharge')
+                                                  : w('赠送', 'Gift'),
+                                              style: const TextStyle(
+                                                fontSize: 19,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text(
+                                                '¥ ${values[i]}',
+                                                style: const TextStyle(
+                                                  fontSize: 38,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  if (error != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 16),
+                                      child: Text(
+                                        error!,
+                                        style: TextStyle(
+                                          color: Theme.of(ctx)
+                                              .colorScheme
+                                              .error,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            SizedBox(
+                              width: 330,
+                              child: Column(
+                                children: [
+                                  Expanded(
+                                    child: GridView.count(
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      crossAxisCount: 3,
+                                      mainAxisSpacing: 10,
+                                      crossAxisSpacing: 10,
+                                      childAspectRatio: 1.35,
+                                      children: [
+                                        for (final key in [
+                                          '1',
+                                          '2',
+                                          '3',
+                                          '4',
+                                          '5',
+                                          '6',
+                                          '7',
+                                          '8',
+                                          '9',
+                                          '.',
+                                          '0',
+                                          'back',
+                                        ])
+                                          OutlinedButton(
+                                            onPressed: saving
+                                                ? null
+                                                : () => digit(key),
+                                            style: OutlinedButton.styleFrom(
+                                              backgroundColor: Colors.white,
+                                              side: const BorderSide(
+                                                color: Color(0xffd4dbd6),
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                            child: key == 'back'
+                                                ? const Icon(
+                                                    Icons.backspace_outlined,
+                                                    size: 27,
+                                                  )
+                                                : Text(
+                                                    key,
+                                                    style: const TextStyle(
+                                                      fontSize: 30,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: saving ? null : () => digit('C'),
+                                    child: Text(
+                                      rechargeText(
+                                        widget.language,
+                                        '清空金额',
+                                        'Clear amount',
+                                        '清空金額',
+                                        'ล้างยอดเงิน',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        height: 60,
+                        child: FilledButton(
+                          onPressed: saving
+                              ? null
+                              : () async {
+                                  final p = double.tryParse(values[0]),
+                                      g = double.tryParse(values[1]);
+                                  if (p == null ||
+                                      p <= 0 ||
+                                      p > 1000000 ||
+                                      g == null ||
+                                      g < 0 ||
+                                      g > 1000000) {
+                                    set(
+                                      () => error = w(
+                                        '请输入有效金额',
+                                        'Enter a valid amount',
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  set(() => saving = true);
+                                  try {
+                                    await widget.auth.storeMembers({
+                                      'action': 'campaignSave',
+                                      'campaign': {
+                                        if (old != null)
+                                          'campaignRef': old['campaignRef'],
+                                        'revision': old?['revision'] ?? 0,
+                                        'principalCents': (p * 100).round(),
+                                        'giftCents': (g * 100).round(),
+                                        'enabled': true,
+                                      },
+                                    });
+                                    if (ctx.mounted) Navigator.pop(ctx);
+                                  } catch (_) {
+                                    if (ctx.mounted)
+                                      set(() {
+                                        error = w(
+                                          '保存失败，请重试',
+                                          'Could not save. Retry.',
+                                        );
+                                        saving = false;
+                                      });
+                                  }
+                                },
                           child: Text(
-                            '${i == 0 ? w('充值', 'Recharge') : w('赠送', 'Gift')} ¥${values[i]}',
+                            w('保存', 'Save'),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                GridView.count(
-                  crossAxisCount: 3,
-                  shrinkWrap: true,
-                  childAspectRatio: 2.4,
-                  children: [
-                    for (final k in [
-                      '1',
-                      '2',
-                      '3',
-                      '4',
-                      '5',
-                      '6',
-                      '7',
-                      '8',
-                      '9',
-                      '.',
-                      '0',
-                      '⌫',
-                    ])
-                      TextButton(
-                        onPressed: saving
-                            ? null
-                            : () => set(() {
-                                if (k == '⌫') {
-                                  if (values[field].isNotEmpty)
-                                    values[field] = values[field].substring(
-                                      0,
-                                      values[field].length - 1,
-                                    );
-                                } else if (values[field].length < 10 &&
-                                    (k != '.' ||
-                                        !values[field].contains('.'))) {
-                                  values[field] += k;
-                                }
-                              }),
-                        child: Text(k, style: const TextStyle(fontSize: 24)),
-                      ),
-                  ],
-                ),
-                if (error != null) Text(error!),
-              ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(ctx),
-              child: Text(w('取消', 'Cancel')),
-            ),
-            FilledButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      final p = double.tryParse(values[0]),
-                          g = double.tryParse(
-                            values[1].isEmpty ? '0' : values[1],
-                          );
-                      if (p == null || p <= 0 || g == null || g < 0) {
-                        set(() => error = w('请输入有效金额', 'Enter a valid amount'));
-                        return;
-                      }
-                      set(() => saving = true);
-                      try {
-                        await widget.auth.storeMembers({
-                          'action': 'campaignSave',
-                          'campaign': {
-                            if (old != null) 'campaignRef': old['campaignRef'],
-                            'revision': old?['revision'] ?? 0,
-                            'principalCents': (p * 100).round(),
-                            'giftCents': (g * 100).round(),
-                            'enabled': true,
-                          },
-                        });
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      } catch (_) {
-                        set(() {
-                          error = w('保存失败，请重试', 'Could not save. Retry.');
-                          saving = false;
-                        });
-                      }
-                    },
-              child: Text(w('保存', 'Save')),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
-    if (mounted && account != null) await select(account!);
+    if (mounted && account != null) await select(account!, background: true);
   }
 
   Future<void> recharge() async {
@@ -748,9 +979,17 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
         final yes = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text(r['channel']=='cash'
-              ? rechargeText(widget.language,'退还现金','Return cash','退還現金','คืนเงินสด')
-              : w('原路退款', 'Refund to original payment')),
+            title: Text(
+              r['channel'] == 'cash'
+                  ? rechargeText(
+                      widget.language,
+                      '退还现金',
+                      'Return cash',
+                      '退還現金',
+                      'คืนเงินสด',
+                    )
+                  : w('原路退款', 'Refund to original payment'),
+            ),
             content: Text(
               '${w('已消费', 'Consumed')} ¥${money(q['consumedCents'])}\n${w('取消赠送', 'Cancel gift')} ¥${money(q['cancelledGiftCents'])}\n${w('可退金额', 'Refund')} ¥${money(q['refundCents'])}',
             ),
@@ -761,9 +1000,17 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text(r['channel']=='cash'
-                  ? rechargeText(widget.language,'确认已退现金','Confirm cash returned','確認已退現金','ยืนยันคืนเงินสดแล้ว')
-                  : w('确认退款', 'Confirm refund')),
+                child: Text(
+                  r['channel'] == 'cash'
+                      ? rechargeText(
+                          widget.language,
+                          '确认已退现金',
+                          'Confirm cash returned',
+                          '確認已退現金',
+                          'ยืนยันคืนเงินสดแล้ว',
+                        )
+                      : w('确认退款', 'Confirm refund'),
+                ),
               ),
             ],
           ),
