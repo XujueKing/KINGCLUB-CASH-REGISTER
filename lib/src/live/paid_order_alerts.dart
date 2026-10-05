@@ -6,12 +6,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../auth/staff_auth_controller.dart';
+import '../auth/staff_session.dart';
 import '../network/cashier_realtime_client.dart';
 import 'table_snapshot.dart';
 
 /// Per-device acknowledgement; viewing one table never clears another table.
 class PaidOrderAlerts extends ChangeNotifier {
-  PaidOrderAlerts(this.auth);
+  PaidOrderAlerts(
+    this.auth, {
+    this.enableRealtime = const bool.fromEnvironment('CASHIER_REALTIME'),
+    this.realtimeFactory,
+  });
+  final bool enableRealtime;
+  final CashierRealtimeClient Function(StaffSession)? realtimeFactory;
   final StaffAuthController auth;
   final _storage = const FlutterSecureStorage();
   final Map<String, int> seen = {}, acknowledged = {};
@@ -39,13 +46,25 @@ class PaidOrderAlerts extends ChangeNotifier {
       /* Fresh baseline if no device checkpoint is available. */
     }
     if (closed || auth.session == null) return;
-    if (const bool.fromEnvironment('CASHIER_REALTIME')) {
-      socket = CashierRealtimeClient(auth.session!);
+    auth.addListener(syncRealtimeSession);
+    syncRealtimeSession();
+    timer = Timer.periodic(const Duration(seconds: 30), (_) => refresh());
+    await refresh();
+  }
+
+  void syncRealtimeSession() {
+    if (closed) return;
+    final session = auth.session;
+    if (session == null && auth.busy) return;
+    if (identical(socket?.session, session)) return;
+    socket?.removeListener(refresh);
+    socket?.dispose();
+    socket = null;
+    if (enableRealtime && session != null) {
+      socket = realtimeFactory?.call(session) ?? CashierRealtimeClient(session);
       socket!.addListener(refresh);
       socket!.start();
     }
-    timer = Timer.periodic(const Duration(seconds: 30), (_) => refresh());
-    await refresh();
   }
 
   Future<void> refresh() async {
@@ -122,6 +141,7 @@ class PaidOrderAlerts extends ChangeNotifier {
   @override
   void dispose() {
     closed = true;
+    auth.removeListener(syncRealtimeSession);
     timer?.cancel();
     socket?.dispose();
     super.dispose();

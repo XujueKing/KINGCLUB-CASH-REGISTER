@@ -311,19 +311,31 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
     foreground =
         WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-    final session = widget.auth.session;
-    if (widget.enableRealtime && session != null) {
-      realtime =
-          widget.realtimeFactory?.call(session) ??
-          CashierRealtimeClient(session);
-      realtime!.addListener(realtimeChanged);
-    }
+    widget.auth.addListener(syncRealtimeSession);
+    syncRealtimeSession(start: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && foreground) {
         unawaited(load());
         realtime?.start();
       }
     });
+  }
+
+  void syncRealtimeSession({bool start = true}) {
+    final session = widget.auth.session;
+    if (session == null && widget.auth.busy) return;
+    if (widget.enableRealtime && identical(realtime?.session, session)) return;
+    realtime?.removeListener(realtimeChanged);
+    realtime?.dispose();
+    realtime = null;
+    realtimeRevision = 0;
+    if (widget.enableRealtime && session != null) {
+      realtime =
+          widget.realtimeFactory?.call(session) ??
+          CashierRealtimeClient(session);
+      realtime!.addListener(realtimeChanged);
+      if (start && foreground) realtime!.start();
+    }
   }
 
   void realtimeChanged() {
@@ -433,6 +445,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   void dispose() {
+    widget.auth.removeListener(syncRealtimeSession);
     clockTimer?.cancel();
     ++epoch;
     refreshDebounce?.cancel();
