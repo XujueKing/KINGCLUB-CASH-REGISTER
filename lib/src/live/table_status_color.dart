@@ -15,7 +15,7 @@ Color tableStatusColor(LiveTable table) => table.status != 'active'
     : table.session!.temporaryHold || table.session!.pendingCents > 0
     ? const Color(0xFFDC2626)
     : table.session!.unservedQuantity > 0
-    ? const Color(0xFF6D5BD0)
+    ? const Color(0xFFAD2885)
     : const Color(0xFF1D4ED8);
 
 LinearGradient tableStatusGradient(Color color) {
