@@ -114,6 +114,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   bool loading = false, failed = false, foreground = true, checkout = false;
   bool reducing = false;
   bool verifiedSnapshot = false;
+  bool firstDisplayReported = false;
   final queuedReductions = <String>[];
   int epoch = 0;
   final inventory = <String, CatalogProduct>{};
@@ -1155,6 +1156,13 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (snapshot != null && !firstDisplayReported) {
+      firstDisplayReported = true;
+      final source = verifiedSnapshot ? 'server' : 'cache';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) debugPrint('cashier_bill_first_frame source=$source');
+      });
+    }
     final pending = widget.emptySeat
         ? const OrderSummaryBucket(0, 0)
         : widget.seatSessions.isEmpty

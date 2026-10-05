@@ -881,27 +881,25 @@ class _LiveCartPanelState extends State<LiveCartPanel>
       children: [
         Expanded(
           flex: 2,
-          child: IndexedStack(
-            index: widget.tablePanel != null && !menuOpen ? 0 : 1,
-            children: [
-              widget.tablePanel ?? const SizedBox(),
-              AbsorbPointer(
-                absorbing: !acceptingAdds,
-                child: LiveCatalogPanel(
-                  header: widget.menuHeader,
-                  paymentTiming: currentContext.paymentTiming,
-                  auth: widget.auth,
-                  language: widget.language,
-                  revision: widget.revision,
-                  onBack: widget.tablePanel == null
-                      ? widget.onBack
-                      : () => setMenu(false),
-                  onSelect: (product) => change(product, 1),
-                  canAdd: canAdd,
+          // An IndexedStack also mounts and lays out its hidden catalog. Every
+          // table selection used to rebuild it and fetch all product pages.
+          child: widget.tablePanel != null && !menuOpen
+              ? widget.tablePanel!
+              : AbsorbPointer(
+                  absorbing: !acceptingAdds,
+                  child: LiveCatalogPanel(
+                    header: widget.menuHeader,
+                    paymentTiming: currentContext.paymentTiming,
+                    auth: widget.auth,
+                    language: widget.language,
+                    revision: widget.revision,
+                    onBack: widget.tablePanel == null
+                        ? widget.onBack
+                        : () => setMenu(false),
+                    onSelect: (product) => change(product, 1),
+                    canAdd: canAdd,
+                  ),
                 ),
-              ),
-            ],
-          ),
         ),
         const VerticalDivider(width: 1),
         Expanded(

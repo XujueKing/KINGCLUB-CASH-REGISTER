@@ -20,6 +20,7 @@ class _CatalogDisplay {
   CatalogSnapshot? snapshot;
   List<List<CatalogProduct>> groups = [];
   Future<void>? pending;
+  String? category;
 }
 
 final _catalogDisplays = Expando<_CatalogDisplay>();
@@ -114,6 +115,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     data = cached.snapshot;
     categories = data?.categories ?? [];
     allGroups = cached.groups;
+    category = cached.category;
     unawaited(load());
   }
 
@@ -186,6 +188,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
 
   void select(String? ref) {
     if (category == ref) return;
+    _displayFor(widget.auth).category = ref;
     setState(() => category = ref);
   }
 

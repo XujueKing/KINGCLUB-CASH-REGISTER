@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/live/live_order_members_panel.dart';
 import 'package:kingclub_cash_register/src/live/table_detail_snapshot.dart';
 import 'package:kingclub_cash_register/src/live/table_bill_panel.dart';
+import 'package:kingclub_cash_register/src/live/live_catalog_panel.dart';
+import 'package:kingclub_cash_register/src/live/catalog_snapshot.dart';
 import 'package:kingclub_cash_register/src/live/cart_draft.dart';
 import 'package:kingclub_cash_register/src/live/order_command.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
@@ -17,7 +19,8 @@ class DetailAuth extends TableAuth {
   DetailAuth()
     : super(permissions: ['workbench.read', 'orders.read', 'orders.create']);
   int detailReads = 0;
-  final detailGate = Completer<TableDetailSnapshot>();
+  int catalogReads = 0;
+  var detailGate = Completer<TableDetailSnapshot>();
   @override
   Future<TableDetailSnapshot> readTableDetail({
     required String tableRef,
@@ -31,6 +34,15 @@ class DetailAuth extends TableAuth {
   Future<List<CartDraft>> cartDrafts() async => [];
   @override
   Future<List<PendingOrder>> pendingOrders() async => [];
+
+  @override
+  Future<CatalogSnapshot> readCatalog({
+    String? categoryRef,
+    String? afterProduct,
+  }) async {
+    catalogReads++;
+    throw StateError('Catalog must not be read until ordering is opened');
+  }
 }
 
 Map<String, dynamic> detailFixture() {
@@ -102,11 +114,49 @@ void main() {
       await tester.pumpAndSettle();
       expect(auth.detailReads, 1);
       expect(find.text('测试商品'), findsOneWidget);
+      expect(auth.catalogReads, 0);
+      expect(find.byType(LiveCatalogPanel, skipOffstage: false), findsNothing);
       expect(
         find.byKey(const ValueKey('stored-wine-bottle-one')),
         findsOneWidget,
       );
       expect(find.byType(TableBillPanel), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const ValueKey('workspace-toggle-menu')));
+      await tester.pumpAndSettle();
+      expect(auth.catalogReads, 1);
+      expect(find.byType(LiveCatalogPanel), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('workspace-toggle-menu')));
+      await tester.pumpAndSettle();
+      expect(find.byType(LiveCatalogPanel, skipOffstage: false), findsNothing);
+      expect(auth.detailReads, 1);
+      await tester.pumpWidget(const SizedBox());
+      // Returning to the same table paints its cached bill without waiting for
+      // either the fresh snapshot or an invisible product catalog.
+      auth.detailGate = Completer<TableDetailSnapshot>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveOrderMembersPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              tableRef: 'test-000',
+              sessionRef: 'H00000000001',
+              onBack: () {},
+              tablePanel: const SizedBox(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(auth.detailGate.isCompleted, isFalse);
+      expect(auth.detailReads, 2);
+      expect(auth.catalogReads, 1);
+      expect(
+        find.byKey(const ValueKey('stored-wine-bottle-one')),
+        findsOneWidget,
+      );
+      expect(find.byType(LiveCatalogPanel, skipOffstage: false), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();

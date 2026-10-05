@@ -1822,6 +1822,7 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
   }
 
   Future<void> selectTable(LiveTable table) async {
+    debugPrint('cashier_table_select');
     if (historyMode) {
       setState(() {
         focusedTableRef = table.reference;

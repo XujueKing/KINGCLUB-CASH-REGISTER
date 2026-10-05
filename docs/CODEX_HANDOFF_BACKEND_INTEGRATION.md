@@ -1,3 +1,11 @@
+## 2026-10-06 Remove hidden catalog work during table selection
+
+The aggregate detail endpoint alone did not eliminate all work on a table switch: LiveCartPanel used IndexedStack, which mounted, fetched and laid out the invisible full catalog every time a session-keyed workspace was created. The left pane now mounts only the visible table grid or catalog. Opening ordering uses the existing session-scoped catalog display cache and retains the selected category across remounts. No new endpoints or business rules were added.
+
+Verification: 44 focused page/cart/bill/history tests and 3 catalog/layout tests passed; the page regression additionally proves no hidden catalog widget/request and cached wine cards render while the replacement detail request remains blocked. Analysis has no errors/warnings. Existing signing certificate matched installed APK; ARM32 upgrade retained data.
+
+SUNMI instrumentation now records selection handler and first bill post-frame callback, rather than only HTTP elapsed time. Repeated V1/V2 switches measured 109/92/113 ms to that callback; first opens after restart measured 370/237 ms. These are framework frame-completion observations, not hardware display-scanout timing. Screen recording confirmed cached cards appear before the fresh member/stock response. Product images hit disk after restart. No financial, serving or storage commands were submitted. Private recordings and logs remain outside Git.
+
 ## 2026-10-06 One request for the selected table
 
 Current open-table detail uses K261006002014 and the scoped kingclub_cashier_table_detail stored procedure. Context, bill, stored wine, linked member avatars and stock for products on this bill share one page Future. This supersedes the earlier cache-only latency fix; it does not replace unrelated command endpoints or merge-seat scope checks. Money, refund and mutation checks remain server-authoritative.
