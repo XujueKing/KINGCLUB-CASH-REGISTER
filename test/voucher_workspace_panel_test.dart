@@ -55,6 +55,26 @@ Map<String, dynamic> preview() => {
   ],
 };
 void main() {
+  testWidgets('touch header keeps close control at the top right', (tester) async {
+    final auth = VoucherAuth(), scans = StreamController<String>.broadcast();
+    addTearDown(auth.dispose);
+    addTearDown(scans.close);
+    var closed = false;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: VoucherWorkspacePanel(
+      auth: auth, language: UiLanguage.zh, tableName: 'V1', scannerEvents: scans.stream,
+      onClose: () => closed = true,
+    ))));
+    await tester.pumpAndSettle();
+    final close = find.widgetWithIcon(IconButton, Icons.close);
+    final panel = tester.getRect(find.byType(VoucherWorkspacePanel));
+    expect(tester.getRect(close).right, closeTo(panel.right - 20, 1));
+    expect(tester.getSize(close).height, greaterThanOrEqualTo(48));
+    await tester.tap(close);
+    expect(closed, isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   Future<(VoucherAuth, StreamController<String>)> mount(
     WidgetTester tester,
   ) async {

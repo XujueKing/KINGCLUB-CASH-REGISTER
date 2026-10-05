@@ -21,6 +21,8 @@ class WinePickupPanel extends StatefulWidget {
     this.storage,
     this.initialCode,
     this.bottleItem,
+    this.onDone,
+    this.fillHeight = false,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -29,6 +31,8 @@ class WinePickupPanel extends StatefulWidget {
   final SecretStorage? storage;
   final String? initialCode;
   final Map<String, dynamic>? bottleItem;
+  final VoidCallback? onDone;
+  final bool fillHeight;
   @override
   State<WinePickupPanel> createState() => _WinePickupPanelState();
 }
@@ -155,12 +159,7 @@ class _WinePickupPanelState extends State<WinePickupPanel>
         setState(() {
           items.removeWhere((r) => r['itemRef'] == receipt['itemRef']);
           items.add(receipt);
-          message = t([
-            '已加入消费明细：存酒，已付款／未上。请点击右侧卡片上酒',
-            'Added to bill. Open the wine card to serve.',
-            '已加入消費明細：存酒，已付款／未上。請掃瓶身碼',
-            'Added: paid / not served. Scan bottle',
-          ]);
+          message = null;
         });
       return;
     }
@@ -252,63 +251,188 @@ class _WinePickupPanelState extends State<WinePickupPanel>
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (widget.bottleItem != null) ...[
-        Text(
-          '${widget.bottleItem!['name']}',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 18),
-        Text(
-          '${widget.bottleItem!['locationCode'] ?? "--"}',
-          style: const TextStyle(fontSize: 52, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 18),
-        if (widget.bottleItem!['served'] == true)
-          Text(t(['已上', 'Served', '已上', 'Served']))
-        else if (!armed)
-          FilledButton(
-            onPressed: busy || initializing
-                ? null
-                : () => setState(() => armed = true),
-            child: Text(t(['上酒', 'Serve', '上酒', 'Serve'])),
-          )
-        else
+  Widget build(BuildContext context) {
+    if (widget.bottleItem == null && items.isNotEmpty && pending == null) {
+      final receipt = items.last;
+      final details = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration: const BoxDecoration(
+              color: Color(0xffe3f2e8),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              size: 48,
+              color: Color(0xff27834c),
+            ),
+          ),
+          const SizedBox(height: 20),
           Text(
-            t([
-              '请扫这瓶酒的瓶身二维码',
-              'Scan this bottle label',
-              '請掃這瓶酒的瓶身碼',
-              'Scan this bottle label',
-            ]),
-            style: const TextStyle(fontSize: 22),
+            t(['已加入消费明细', 'Added to bill', '已加入消費明細', 'เพิ่มในบิลแล้ว']),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xffe1e8e2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  receipt['name']?.toString() ?? '',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${receipt['quantity'] ?? 1} ${t(['瓶', 'bottle(s)', '瓶', 'ขวด'])}'
+                  '${receipt['remainingPercent'] == null ? '' : ' · ${t(['剩余', 'Remaining', '剩餘', 'คงเหลือ'])} ${receipt['remainingPercent']}%'}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xff6b7871),
+                  ),
+                ),
+                if (receipt['locationCode'] != null) ...[
+                  const Divider(height: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        t(['存放位置', 'Location', '存放位置', 'ตำแหน่ง']),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Color(0xff6b7871),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Text(
+                        '${receipt['locationCode']}',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            t(['待上酒', 'Ready to serve', '待上酒', 'รอเสิร์ฟ']),
+            style: const TextStyle(fontSize: 16, color: Color(0xff9b6915)),
+          ),
+          if (message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(message!, textAlign: TextAlign.center),
+            ),
+        ],
+      );
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(32, 16, 32, 24),
+        child: Column(
+          mainAxisSize: widget.fillHeight ? MainAxisSize.max : MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.fillHeight)
+              Expanded(
+                child: Center(child: SingleChildScrollView(child: details)),
+              )
+            else
+              details,
+            const SizedBox(height: 20),
+            FilledButton(
+              key: const ValueKey('wine-pickup-done'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(54),
+                backgroundColor: const Color(0xff234c3f),
+                foregroundColor: Colors.white,
+                textStyle: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onPressed: widget.onDone ?? () => Navigator.maybePop(context),
+              child: Text(t(['完成', 'Done', '完成', 'เสร็จสิ้น'])),
+            ),
+          ],
+        ),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.bottleItem != null) ...[
+          Text(
+            '${widget.bottleItem!['name']}',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            '${widget.bottleItem!['locationCode'] ?? "--"}',
+            style: const TextStyle(fontSize: 52, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          if (widget.bottleItem!['served'] == true)
+            Text(t(['已上', 'Served', '已上', 'Served']))
+          else if (!armed)
+            FilledButton(
+              onPressed: busy || initializing
+                  ? null
+                  : () => setState(() => armed = true),
+              child: Text(t(['上酒', 'Serve', '上酒', 'Serve'])),
+            )
+          else
+            Text(
+              t([
+                '请扫这瓶酒的瓶身二维码',
+                'Scan this bottle label',
+                '請掃這瓶酒的瓶身碼',
+                'Scan this bottle label',
+              ]),
+              style: const TextStyle(fontSize: 22),
+            ),
+        ],
+        if (busy || initializing) const LinearProgressIndicator(),
+        if (message != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(message!),
+          ),
+        if (pending != null)
+          TextButton(
+            onPressed: busy
+                ? null
+                : () async {
+                    setState(() => busy = true);
+                    try {
+                      await recover();
+                    } catch (_) {
+                    } finally {
+                      if (mounted) setState(() => busy = false);
+                    }
+                  },
+            child: Text(t(['重试查询', 'Retry lookup', '重試查詢', 'ตรวจสอบอีกครั้ง'])),
           ),
       ],
-      if (busy || initializing) const LinearProgressIndicator(),
-      if (message != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(message!),
-        ),
-      if (pending != null)
-        TextButton(
-          onPressed: busy
-              ? null
-              : () async {
-                  setState(() => busy = true);
-                  try {
-                    await recover();
-                  } catch (_) {
-                  } finally {
-                    if (mounted) setState(() => busy = false);
-                  }
-                },
-          child: Text(t(['重试查询', 'Retry lookup', '重試查詢', 'ตรวจสอบอีกครั้ง'])),
-        ),
-    ],
-  );
+    );
+  }
 }

@@ -35,29 +35,17 @@ class VoucherScanButton extends StatelessWidget {
     onPressed: () => showDialog<void>(
       context: context,
       builder: (context) => Dialog(
+        backgroundColor: const Color(0xfffafbf8),
         child: SizedBox(
-          width: 560,
+          width: 640,
           height: MediaQuery.sizeOf(context).height * 0.8,
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-              Expanded(
-                child: VoucherWorkspacePanel(
-                  auth: auth,
-                  language: language,
-                  tableName: tableName,
-                  tableRef: tableRef,
-                  sessionRef: sessionRef,
-                ),
-              ),
-            ],
+          child: VoucherWorkspacePanel(
+            auth: auth,
+            language: language,
+            tableName: tableName,
+            tableRef: tableRef,
+            sessionRef: sessionRef,
+            onClose: () => Navigator.pop(context),
           ),
         ),
       ),
@@ -76,11 +64,13 @@ class VoucherWorkspacePanel extends StatefulWidget {
     this.tableRef,
     this.sessionRef,
     this.scannerEvents,
+    this.onClose,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String? tableName, tableRef, sessionRef;
   final Stream<String>? scannerEvents;
+  final VoidCallback? onClose;
   @override
   State<VoucherWorkspacePanel> createState() => _VoucherWorkspacePanelState();
 }
@@ -334,66 +324,234 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Row(
-        children: [
-          Text(
-            ['核券', 'Redeem', '核券', 'Redeem'][widget.language.index],
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-          ),
-          if (widget.tableName != null) ...[
-            const SizedBox(width: 16),
-            Text(widget.tableName!),
-          ],
-        ],
-      ),
-      const SizedBox(height: 20),
-      if (message == 'voucherChooseChannel')
-        Wrap(
-          spacing: 12,
+      Padding(
+        padding: const EdgeInsets.fromLTRB(32, 20, 20, 18),
+        child: Row(
           children: [
-            for (final item in ['douyin', 'meituan', 'king'])
-              OutlinedButton(
-                onPressed: () => setState(() => channel = item),
-                child: Text(t('voucherChannel_$item')),
+            Text(
+              localized('核券', 'Redeem', '核券', 'ใช้คูปอง'),
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+            ),
+            if (widget.tableName != null) ...[
+              const SizedBox(width: 16),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xffe8efea),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    widget.tableName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const Spacer(),
+            if (widget.onClose != null)
+              IconButton(
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close, size: 26),
               ),
           ],
         ),
-      const SizedBox(height: 16),
-      if (channel == 'wine')
-        WinePickupPanel(
-          key: ValueKey(
-            'wine/${widget.tableRef}/${widget.sessionRef}/${widget.auth.session?.employeeRef}',
-          ),
-          auth: widget.auth,
-          language: widget.language,
-          tableRef: widget.tableRef,
-          sessionRef: widget.sessionRef,
-          scannerEvents: wineCodes.stream,
-          initialCode: wineInitialCode,
-        )
-      else ...[
-        const ScanIcon(size: 48),
-        const SizedBox(height: 12),
-        Text(
-          busy
-              ? t('voucherReading')
-              : [
-                  '请扫团购券、KING券或取酒码',
-                  'Scan voucher or wine pickup code',
-                  '請掃團購券、KING券或取酒碼',
-                  'Scan voucher or pickup code',
-                ][widget.language.index],
-          textAlign: TextAlign.center,
+      ),
+      const Divider(height: 1, thickness: 1, indent: 32, endIndent: 32),
+      Expanded(
+        child: channel != 'wine' && result == null
+            ? Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 24,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const ScanIcon(size: 88, color: Color(0xff234c3f)),
+                            const SizedBox(height: 28),
+                            Text(
+                              busy
+                                  ? t('voucherReading')
+                                  : localized(
+                                      '请出示券码或取酒码',
+                                      'Present a voucher or pickup code',
+                                      '請出示券碼或取酒碼',
+                                      'แสดงรหัสคูปองหรือรับเครื่องดื่ม',
+                                    ),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 23,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              localized(
+                                '将顾客的团购券、KING 券或取酒码对准扫码器\n系统自动识别类型，请核对后完成操作',
+                                'Scan the guest’s voucher or wine pickup code.\nThe code type is identified automatically; review to continue.',
+                                '將顧客的團購券、KING 券或取酒碼對準掃碼器\n系統自動識別類型，請核對後完成操作',
+                                'สแกนคูปองหรือรหัสรับเครื่องดื่มของลูกค้า\nระบบจะแยกประเภทรหัสอัตโนมัติ โปรดตรวจสอบก่อนดำเนินการ',
+                              ),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                height: 1.9,
+                                color: Color(0xff6b7871),
+                              ),
+                            ),
+                            if (message != null) ...[
+                              const SizedBox(height: 16),
+                              Text(t(message!), textAlign: TextAlign.center),
+                            ],
+                            if (message == 'voucherChooseChannel') ...[
+                              const SizedBox(height: 16),
+                              channelChoices(),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  channelMarks(),
+                ],
+              )
+            : channel == 'wine'
+            ? WinePickupPanel(
+                key: ValueKey(
+                  'wine/${widget.tableRef}/${widget.sessionRef}/${widget.auth.session?.employeeRef}',
+                ),
+                auth: widget.auth,
+                language: widget.language,
+                tableRef: widget.tableRef,
+                sessionRef: widget.sessionRef,
+                scannerEvents: wineCodes.stream,
+                initialCode: wineInitialCode,
+                fillHeight: true,
+                onDone: widget.onClose,
+              )
+            : details(),
+      ),
+    ],
+  );
+
+  Widget channelChoices() => Wrap(
+    spacing: 12,
+    runSpacing: 12,
+    alignment: WrapAlignment.center,
+    children: [
+      for (final item in ['douyin', 'meituan', 'king'])
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(100, 48)),
+          onPressed: () => setState(() => channel = item),
+          child: Text(t('voucherChannel_$item')),
         ),
-        if (message != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Text(t(message!), textAlign: TextAlign.center),
+    ],
+  );
+
+  Widget channelMarks() {
+    const ink = Color(0xff7a8680);
+    Widget mark(Widget icon, String label) => Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(height: 32, child: Center(child: icon)),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, color: ink),
           ),
-      ],
+        ],
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 0, 28, 26),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Divider(height: 1, thickness: 1, color: Color(0xffe3e8e3)),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              mark(
+                const Icon(Icons.tiktok, size: 29, color: ink),
+                localized('抖音', 'Douyin', '抖音', 'Douyin'),
+              ),
+              mark(
+                const Text(
+                  '美团',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    color: ink,
+                  ),
+                ),
+                localized('美团', 'Meituan', '美團', 'Meituan'),
+              ),
+              mark(
+                const Text(
+                  'KING',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                    color: ink,
+                  ),
+                ),
+                localized('KING 券', 'KING vouchers', 'KING 券', 'คูปอง KING'),
+              ),
+              mark(
+                Image.asset(
+                  'assets/brand/kingclub-gold.png',
+                  width: 54,
+                  height: 30,
+                  color: ink,
+                  colorBlendMode: BlendMode.srcIn,
+                  fit: BoxFit.contain,
+                ),
+                localized('本店', 'This store', '本店', 'ร้านนี้'),
+              ),
+              mark(
+                const Icon(Icons.wine_bar_outlined, size: 30, color: ink),
+                localized('取酒', 'Wine pickup', '取酒', 'รับเครื่องดื่ม'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget details() => ListView(
+    padding: const EdgeInsets.all(24),
+    children: [
+      if (message == 'voucherChooseChannel') channelChoices(),
+      if (busy) Text(t('voucherReading'), textAlign: TextAlign.center),
+      if (message != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Text(t(message!), textAlign: TextAlign.center),
+        ),
       if (result != null) ...[
         const SizedBox(height: 16),
         if (confirmationMessage != null)

@@ -51,6 +51,11 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: WinePickupPanel(auth:auth, language:UiLanguage.en,tableRef:'test-table',sessionRef:'H00000000001',scannerEvents:scans.stream,storage:MemoryStorage()))));
     await tester.pumpAndSettle();scans.add('X'*43);await tester.pumpAndSettle();
     expect(find.text('Print label'),findsNothing);
+    expect(find.text('Added to bill'), findsOneWidget);
+    expect(find.text('Test wine'), findsOneWidget);
+    expect(find.text('A1-1'), findsOneWidget);
+    expect(find.text('Ready to serve'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Done'), findsOneWidget);
     scans.add('KC:W:'+'B'*32);await tester.pumpAndSettle();
     expect(auth.calls.where((c)=>c['action']=='collect'),isEmpty);
     await tester.pumpWidget(const SizedBox());await scans.close();auth.dispose();
