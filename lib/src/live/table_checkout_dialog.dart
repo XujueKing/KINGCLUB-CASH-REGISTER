@@ -1061,12 +1061,34 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
 
   Widget cashPad() => Column(
     children: [
-      TextField(
-        key: const ValueKey('cash-amount-input'),
-        controller: input,
-        readOnly: true,
-        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        decoration: InputDecoration(labelText: t('cashReceived')),
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              key: const ValueKey('cash-amount-input'),
+              controller: input,
+              readOnly: true,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(labelText: t('cashReceived')),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 170,
+            height: 56,
+            child: OutlinedButton(
+              onPressed: busy
+                  ? null
+                  : () => setState(() {
+                      input.text = formatCents(
+                        command?.totalCents ?? quote!.totalCents,
+                      );
+                      replaceCash = true;
+                    }),
+              child: Text(t('checkoutExactCash')),
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 12),
       for (final row in const [
@@ -1452,64 +1474,27 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                     ),
                                   ] else if (canReceive &&
                                       channel == 'cash') ...[
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(child: cashPad()),
-                                        const SizedBox(width: 16),
-                                        SizedBox(
-                                          width: 205,
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              TextButton(
-                                                onPressed: busy
-                                                    ? null
-                                                    : () => setState(() {
-                                                        input
-                                                            .text = formatCents(
-                                                          command?.totalCents ??
-                                                              quote!.totalCents,
-                                                        );
-                                                        replaceCash = true;
-                                                      }),
-                                                child: Text(
-                                                  t('checkoutExactCash'),
-                                                ),
-                                              ),
-                                              const SizedBox(height: 18),
-                                              SizedBox(
-                                                height: 88,
-                                                child: FilledButton(
-                                                  onPressed: busy
-                                                      ? null
-                                                      : offlineReceipt,
-                                                  child: Text(
-                                                    text(
-                                                      '已收现金 · 扫员工码确认',
-                                                      'Cash received · scan staff code',
-                                                      '已收現金 · 掃員工碼確認',
-                                                      'รับเงินสดแล้ว · สแกนรหัสพนักงาน',
-                                                    ),
-                                                    style: const TextStyle(
-                                                      fontSize: 18,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                    cashPad(),
                                   ] else if (canReceive &&
                                       channel == 'bank_code') ...[
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 36),
                                     const Icon(
                                       Icons.account_balance_outlined,
                                       size: 58,
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      text(
+                                        '银行码收款',
+                                        'Bank QR receipt',
+                                        '銀行碼收款',
+                                        'รับเงินผ่าน QR ธนาคาร',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
@@ -1521,48 +1506,51 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                                       ),
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
-                                        fontSize: 19,
+                                        fontSize: 18,
                                         height: 1.6,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    SizedBox(
-                                      height: 56,
-                                      child: FilledButton(
-                                        onPressed: busy ? null : offlineReceipt,
-                                        child: Text(
-                                          text(
-                                            '已到账，确认收款',
-                                            'Confirm money received',
-                                            '已到帳，確認收款',
-                                            'ยืนยันว่าได้รับเงินแล้ว',
-                                          ),
-                                          style: const TextStyle(fontSize: 20),
-                                        ),
+                                        color: Colors.black54,
                                       ),
                                     ),
                                   ] else if (canReceive &&
                                       channel == 'pos') ...[
+                                    const SizedBox(height: 24),
+                                    const Icon(
+                                      Icons.credit_card_outlined,
+                                      size: 58,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      text(
+                                        '独立 POS 刷卡',
+                                        'Independent POS terminal',
+                                        '獨立 POS 刷卡',
+                                        'เครื่อง POS แยก',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      text(
+                                        '刷卡成功后，填写凭证号并确认收款',
+                                        'After a successful card payment, enter its reference and confirm.',
+                                        '刷卡成功後，填寫憑證號並確認收款',
+                                        'เมื่อชำระสำเร็จ กรอกเลขอ้างอิงและยืนยันรับเงิน',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
                                     TextField(
                                       controller: input,
                                       decoration: InputDecoration(
                                         labelText: t('checkoutPosReference'),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    SizedBox(
-                                      height: 56,
-                                      child: FilledButton(
-                                        onPressed: busy
-                                            ? null
-                                            : () async {
-                                                final reference = input.text;
-                                                if (command == null)
-                                                  await startCollection();
-                                                input.text = reference;
-                                                await collect();
-                                              },
-                                        child: Text(t('tableCheckoutCollect')),
                                       ),
                                     ),
                                   ] else if (canReceive) ...[
@@ -1644,6 +1632,51 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                               ),
                             ),
                           ),
+                          if (canReceive &&
+                              [
+                                'cash',
+                                'bank_code',
+                                'pos',
+                              ].contains(channel)) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 60,
+                              width: double.infinity,
+                              child: FilledButton(
+                                key: const ValueKey('checkout-confirm-receipt'),
+                                style: FilledButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  textStyle: const TextStyle(
+                                    fontSize: 21,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                onPressed: busy
+                                    ? null
+                                    : () async {
+                                        if (channel != 'pos') {
+                                          await offlineReceipt();
+                                          return;
+                                        }
+                                        final reference = input.text;
+                                        if (command == null)
+                                          await startCollection();
+                                        input.text = reference;
+                                        await collect();
+                                      },
+                                child: Text(
+                                  text(
+                                    '确认收款',
+                                    'Confirm receipt',
+                                    '確認收款',
+                                    'ยืนยันรับเงิน',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
