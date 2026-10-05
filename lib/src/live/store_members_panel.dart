@@ -12,7 +12,7 @@ import '../hardware/scanner_input.dart';
 import '../strings.dart';
 import 'member_identity.dart';
 import 'store_member_copy.dart';
-import 'payment_code_field.dart';
+import 'recharge_touch_dialog.dart';
 
 class StoreMembersPanel extends StatefulWidget {
   const StoreMembersPanel({
@@ -674,57 +674,25 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   }
 
   Future<void> recharge() async {
-    final offers = (detail!['campaigns'] as List)
-        .where((c) => c['enabled'] == true)
-        .toList();
-    if (offers.isEmpty) {
-      setState(
-        () => notice = w(
-          '请先在充值设置中添加档位',
-          'Add an offer in Recharge settings first',
-        ),
-      );
-      return;
-    }
-    final offer = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: Text(w('选择充值金额', 'Choose recharge amount')),
-        children: [
-          for (final c in offers)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, Map<String, dynamic>.from(c)),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  '${w('充', 'Pay')} ¥${money(c['principalCents'])}   ${w('送', 'Gift')} ¥${money(c['giftCents'])}',
-                  style: const TextStyle(fontSize: 22),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-    if (offer == null || !mounted) return;
+    if (busy || account == null) return;
+    final owner = account!;
     setState(() => busy = true);
     try {
-      final r = await widget.auth.storeMembers({
-        'action': 'prepare',
-        'targetAccount': account,
-        'requestId': newRequestId(),
-        'campaignRef': offer['campaignRef'],
-        'campaignRevision': offer['revision'],
-        'channel': 'wechat',
-      });
-      if (mounted) await payment(r);
-    } catch (_) {
-      if (mounted)
-        setState(
-          () => notice = w(
-            '充值单未创建，请检查本店充值支付配置',
-            'Recharge not prepared; check store payment settings',
-          ),
-        );
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => RechargeTouchDialog(
+          auth: widget.auth,
+          language: widget.language,
+          member: Map<String, dynamic>.from(detail!['member']),
+          campaigns: (detail!['campaigns'] as List)
+              .where((c) => c['enabled'] == true)
+              .map((c) => Map<String, dynamic>.from(c))
+              .toList(),
+          newRequestId: newRequestId,
+        ),
+      );
+      if (mounted) await select(owner, background: true);
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -735,7 +703,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _MemberRechargeDialog(
+      builder: (_) => RechargeScanDialog(
         auth: widget.auth,
         row: row,
         language: widget.language,
@@ -780,7 +748,9 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
         final yes = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text(w('原路退款', 'Refund to original payment')),
+            title: Text(r['channel']=='cash'
+              ? rechargeText(widget.language,'退还现金','Return cash','退還現金','คืนเงินสด')
+              : w('原路退款', 'Refund to original payment')),
             content: Text(
               '${w('已消费', 'Consumed')} ¥${money(q['consumedCents'])}\n${w('取消赠送', 'Cancel gift')} ¥${money(q['cancelledGiftCents'])}\n${w('可退金额', 'Refund')} ¥${money(q['refundCents'])}',
             ),
@@ -791,7 +761,9 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text(w('确认退款', 'Confirm refund')),
+                child: Text(r['channel']=='cash'
+                  ? rechargeText(widget.language,'确认已退现金','Confirm cash returned','確認已退現金','ยืนยันคืนเงินสดแล้ว')
+                  : w('确认退款', 'Confirm refund')),
               ),
             ],
           ),
@@ -826,145 +798,4 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
       if (mounted) setState(() => busy = false);
     }
   }
-}
-
-class _MemberRechargeDialog extends StatefulWidget {
-  const _MemberRechargeDialog({
-    required this.auth,
-    required this.row,
-    required this.language,
-  });
-  final UiLanguage language;
-  final StaffAuthController auth;
-  final Map<String, dynamic> row;
-  @override
-  State<_MemberRechargeDialog> createState() => _MemberRechargeDialogState();
-}
-
-class _MemberRechargeDialogState extends State<_MemberRechargeDialog>
-    with WidgetsBindingObserver {
-  bool foreground = true;
-  String w(String zh, String en) => memberCopy(widget.language, zh, en);
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    foreground = state == AppLifecycleState.resumed;
-    if (!foreground)
-      timer?.cancel();
-    else
-      unawaited(check());
-  }
-
-  final code = TextEditingController();
-  bool busy = true, canSend = false, checking = false;
-  late String status = w('正在查询充值单', 'Checking recharge');
-  Timer? timer;
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    unawaited(check());
-  }
-
-  @override
-  void dispose() {
-    timer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    code.dispose();
-    super.dispose();
-  }
-
-  Future<void> check() async {
-    if (checking || !mounted || !foreground) return;
-    checking = true;
-    timer?.cancel();
-    try {
-      final r = await widget.auth.queryRecharge(
-        widget.row['rechargeRef'],
-        channel: widget.row['channel'],
-      );
-      if (!mounted) return;
-      if (r.credited) {
-        Navigator.pop(context);
-        return;
-      }
-      setState(() {
-        canSend = r.state == 'not_sent';
-        status = canSend
-            ? w('请出示微信付款码', 'Show WeChat payment code')
-            : w('正在核对付款结果', 'Checking payment');
-        busy = false;
-      });
-      if (!canSend) timer = Timer(const Duration(seconds: 3), check);
-    } catch (_) {
-      if (mounted)
-        setState(() {
-          busy = false;
-          status = w(
-            '暂未确认付款，请查询原单',
-            'Payment unconfirmed; check original order',
-          );
-        });
-    } finally {
-      checking = false;
-    }
-  }
-
-  Future<void> pay() async {
-    if (!foreground ||
-        busy ||
-        !canSend ||
-        !RegExp(r'^1[0-5][0-9]{16}$').hasMatch(code.text))
-      return;
-    final value = code.text;
-    code.clear();
-    setState(() {
-      busy = true;
-      canSend = false;
-    });
-    try {
-      await widget.auth.collectRecharge(
-        rechargeRef: widget.row['rechargeRef'],
-        channel: widget.row['channel'],
-        principalCents: int.parse('${widget.row['principalCents']}'),
-        authCode: value,
-        stillCurrent: () => mounted && foreground,
-      );
-    } catch (_) {}
-    if (mounted) await check();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      '${w('充值', 'Recharge')} ¥${(int.parse('${widget.row['principalCents']}') / 100).toStringAsFixed(2)}',
-    ),
-    content: SizedBox(
-      width: 420,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(status),
-          if (canSend)
-            PaymentCodeField(
-              controller: code,
-              enabled: !busy,
-              label: w('顾客微信付款码', 'Customer WeChat payment code'),
-              onChanged: (_) {
-                if (code.text.length == 18) unawaited(pay());
-              },
-            ),
-        ],
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: busy ? null : () => Navigator.pop(context),
-        child: Text(w('关闭', 'Close')),
-      ),
-      TextButton(
-        onPressed: busy ? null : check,
-        child: Text(w('查询付款', 'Check payment')),
-      ),
-    ],
-  );
 }
