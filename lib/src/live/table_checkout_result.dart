@@ -64,7 +64,12 @@ class TableCheckoutResult {
             'settled',
             'closed_unpaid',
           ].contains(state) ||
-          (['cash', 'pos', 'member_balance'].contains(command.channel) &&
+          ([
+                'cash',
+                'bank_code',
+                'pos',
+                'member_balance',
+              ].contains(command.channel) &&
               ['pending', 'unknown', 'review_required'].contains(state))) {
         throw const FormatException();
       }
@@ -180,7 +185,12 @@ class TableCheckoutResult {
         throw const FormatException();
       }
       final payment = r['parentPaymentRef'];
-      if (['cash', 'pos', 'member_balance'].contains(command.channel)) {
+      if ([
+        'cash',
+        'bank_code',
+        'pos',
+        'member_balance',
+      ].contains(command.channel)) {
         if (payment !=
             '${command.channel == 'member_balance' ? 'balance' : command.channel}:$checkoutRef') {
           throw const FormatException();

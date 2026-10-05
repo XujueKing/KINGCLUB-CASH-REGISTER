@@ -45,6 +45,9 @@ class CheckoutDialogAuth extends StaffAuthController {
   late StaffSession identity;
   TableCheckoutCommand? saved;
   int preparations = 0, collections = 0, recoveries = 0;
+  bool successfulScan = false;
+  String grantedAccount = 'store_balance';
+  String? collectedChannel, collectedAccount;
   bool losePreparationResponse = false;
   int cancellations = 0;
   int cancellationQueries = 0;
@@ -118,7 +121,9 @@ class CheckoutDialogAuth extends StaffAuthController {
     required String sessionRef,
     required String channel,
     required String? accountType,
+    String? paymentCode,
   }) async {
+    if (paymentCode != null) accountType = grantedAccount;
     quoteReads++;
     if (quoteError != null) throw CcsopFailure(quoteError!);
     if (quoteUnavailable) {
@@ -187,8 +192,18 @@ class CheckoutDialogAuth extends StaffAuthController {
     required bool Function() stillCurrent,
     String? payerCode,
     int? cashReceivedCents,
+    String? employeeIdentityCode,
+    String? receivingAccount,
   }) async {
     collections++;
+    collectedChannel = command.channel;
+    collectedAccount = command.accountType;
+    if (successfulScan)
+      return TableCheckoutResult.parse(
+        settlement.settlementFixture(command),
+        command,
+        checkoutRef: settlement.checkout,
+      );
     throw StateError('Unexpected automatic collection');
   }
 }
@@ -237,8 +252,12 @@ class ExplicitCloseAuth extends CheckoutDialogAuth {
 }
 
 void main() {
-  Future<void> mount(WidgetTester tester, CheckoutDialogAuth auth) async {
-    tester.view.physicalSize = const Size(1366, 900);
+  Future<void> mount(
+    WidgetTester tester,
+    CheckoutDialogAuth auth, {
+    Stream<String>? scans,
+  }) async {
+    tester.view.physicalSize = const Size(1366, 768);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -255,6 +274,7 @@ void main() {
                   tableRef: 'TEST_TABLE',
                   sessionRef: 'TEST_SESSION',
                   language: UiLanguage.zh,
+                  scannerEvents: scans,
                 ),
               ),
               child: const Text('OPEN_CHECKOUT'),
@@ -267,6 +287,28 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('one scan entry uses server-resolved platform account and keeps bill beside summary', (tester) async {
+    final events = StreamController<String>();
+    addTearDown(events.close);
+    final auth = CheckoutDialogAuth(permissions: ['workbench.read', 'payment.wechat', 'payment.alipay', 'payment.balance', 'payment.cash'])
+      ..successfulScan = true
+      ..grantedAccount = 'platform_cash';
+    await mount(tester, auth, scans: events.stream);
+    expect(find.byKey(const ValueKey('checkout-method-scan')), findsOneWidget);
+    for(final method in ['wechat','alipay','store_balance','platform_cash']) {
+      expect(find.byKey(ValueKey('checkout-method-$method')), findsNothing);
+    }
+    final bill = tester.getRect(find.byKey(const ValueKey('table-checkout-bill-lines')));
+    final summary = tester.getRect(find.byKey(const ValueKey('checkout-amount-summary')));
+    expect(bill.top, lessThan(summary.bottom));
+    expect(bill.right, lessThan(summary.left));
+    events.add('KCPAY1:${'A' * 43}');
+    await tester.pumpAndSettle();
+    expect(auth.collectedAccount, 'platform_cash');
+    expect(auth.collections, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('unpaid ticket skips preview and never collects money', (
     tester,
   ) async {
@@ -282,15 +324,13 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
   testWidgets(
-    'lost preparation response queries the same request and restores scanning without collection',
+    'restored preparation waits for a scan without collecting money',
     (tester) async {
-      final auth = CheckoutDialogAuth()..losePreparationResponse = true;
+      final auth = CheckoutDialogAuth()..saved = fixture.command();
       await mount(tester, auth);
-      await tester.tap(find.text(tr(UiLanguage.zh, 'checkoutStart')));
-      await tester.pumpAndSettle();
-      expect(auth.preparations, 1);
+      expect(auth.preparations, 0);
       expect(auth.saved, isNotNull);
-      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
       expect(auth.collections, 0);
       expect(find.text(tr(UiLanguage.zh, 'tableCheckoutReview')), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -306,7 +346,7 @@ void main() {
       auth.sessionRefreshed();
       await tester.pumpAndSettle();
       expect(auth.quoteReads, 2);
-      expect(find.text(tr(UiLanguage.zh, 'checkoutStart')), findsOneWidget);
+      expect(find.text('出示付款码，扫码即付'), findsOneWidget);
       expect(auth.preparations, 0);
       expect(auth.collections, 0);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -322,7 +362,7 @@ void main() {
     await tester.tap(find.text(tr(UiLanguage.zh, 'ordersRefresh')));
     await tester.pumpAndSettle();
     expect(auth.quoteReads, 2);
-    expect(find.text(tr(UiLanguage.zh, 'checkoutStart')), findsOneWidget);
+    expect(find.text('出示付款码，扫码即付'), findsOneWidget);
     expect(auth.preparations, 0);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -331,7 +371,7 @@ void main() {
   ) async {
     final auth = CheckoutDialogAuth()
       ..quoteError = 'CASHIER_TABLE_CHECKOUT_SCOPE_CHANGED';
-    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.physicalSize = const Size(1366, 768);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -369,9 +409,7 @@ void main() {
         permissions: ['workbench.read', 'payment.cash'],
       );
       await mount(tester, auth);
-      await tester.tap(find.text(tr(UiLanguage.zh, 'checkoutStart')));
-      await tester.pumpAndSettle();
-      expect(auth.preparations, 1);
+      expect(auth.preparations, 0);
       expect(find.byKey(const ValueKey('cash-amount-input')), findsOneWidget);
       String amount() => tester
           .widget<TextField>(find.byKey(const ValueKey('cash-amount-input')))
@@ -413,7 +451,7 @@ void main() {
     (tester) async {
       final auth = CheckoutDialogAuth()..saved = fixture.command();
       await mount(tester, auth);
-      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
       expect(auth.collections, 0);
       expect(auth.preparations, 0);
       expect(find.text(tr(UiLanguage.zh, 'tableCheckoutQuery')), findsNothing);
@@ -441,8 +479,7 @@ void main() {
     (tester) async {
       final auth = CheckoutDialogAuth()..saved = fixture.command();
       await mount(tester, auth);
-      await tester.enterText(find.byType(TextField), 'TEST_ONLY_CODE');
-      await tester.tap(find.text(tr(UiLanguage.zh, 'cancel')));
+      await tester.tap(find.byKey(const ValueKey('checkout-close')));
       await tester.pumpAndSettle();
       expect(auth.cancellations, 1);
       expect(auth.saved, isNull);
@@ -457,16 +494,12 @@ void main() {
     (tester) async {
       final auth = CheckoutDialogAuth()..saved = fixture.command();
       await mount(tester, auth);
-      await tester.enterText(find.byType(TextField), 'TEST_ONLY_CODE');
       await transitionLifecycle(tester, AppLifecycleState.paused);
       await tester.pump();
       expect(find.byType(TextField), findsNothing);
       await transitionLifecycle(tester, AppLifecycleState.resumed);
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        isEmpty,
-      );
+      expect(find.byType(TextField), findsNothing);
       expect(auth.collections, 0);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -478,7 +511,7 @@ void main() {
         permissions: ['workbench.read', 'payment.wechat'],
       );
       await mount(tester, auth);
-      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
       expect(find.text(tr(UiLanguage.zh, 'checkoutStart')), findsNothing);
       expect(
         find.text(tr(UiLanguage.zh, 'tableCheckoutCollect')),
@@ -501,13 +534,73 @@ void main() {
         'accountType': null,
       });
       await mount(tester, auth);
-      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
       expect(
         find.text(tr(UiLanguage.zh, 'tableCheckoutCollect')),
         findsNothing,
       );
       expect(auth.preparations, 0);
       expect(auth.collections, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  for (final entry in <String, String>{
+    '130000000000000000': 'wechat',
+    '280000000000000000': 'alipay',
+    'KCPAY1:${'a' * 43}': 'member_balance',
+  }.entries) {
+    testWidgets(
+      '${entry.value} scanner chooses the channel and settles without a text field',
+      (tester) async {
+        final events = StreamController<String>();
+        addTearDown(events.close);
+        final auth = CheckoutDialogAuth(
+          permissions: [
+            'workbench.read',
+            'payment.wechat',
+            'payment.alipay',
+            'payment.balance',
+          ],
+        )..successfulScan = true;
+        await mount(tester, auth, scans: events.stream);
+        expect(find.byType(TextField), findsNothing);
+        events.add(entry.key);
+        await tester.pumpAndSettle();
+        expect(auth.preparations, 1);
+        expect(auth.collections, 1);
+        expect(auth.collectedChannel, entry.value);
+        if (entry.value == 'member_balance')
+          expect(auth.collectedAccount, 'store_balance');
+        expect(find.byType(TableCheckoutDialog), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+  testWidgets(
+    'identity QR cannot debit and a bank switch does not claim receipt',
+    (tester) async {
+      final events = StreamController<String>();
+      addTearDown(events.close);
+      final auth = CheckoutDialogAuth(
+        permissions: [
+          'workbench.read',
+          'payment.wechat',
+          'payment.balance',
+          'payment.cash',
+        ],
+      );
+      await mount(tester, auth, scans: events.stream);
+      events.add('KC:M:${'A' * 32}');
+      await tester.pumpAndSettle();
+      expect(auth.preparations, 0);
+      expect(auth.collections, 0);
+      await tester.tap(find.byKey(const ValueKey('checkout-method-bank_code')));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(auth.preparations, 0);
+      expect(auth.collections, 0);
+      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

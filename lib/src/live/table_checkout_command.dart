@@ -109,6 +109,7 @@ void _account(Object? channel, Object? account) {
         'wechat',
         'alipay',
         'cash',
+        'bank_code',
         'pos',
         'member_balance',
       ].contains(channel) ||
@@ -425,7 +426,7 @@ class TableCheckoutCommand {
       storeRef == session.storeRef;
   String get permission => channel == 'member_balance'
       ? 'payment.balance'
-      : channel == 'pos'
+      : ['pos', 'bank_code'].contains(channel)
       ? 'payment.cash'
       : 'payment.$channel';
   factory TableCheckoutCommand.decode(Object? raw) {

@@ -14,7 +14,9 @@ import '../network/ccsop_client.dart';
 import 'table_checkout_command.dart';
 import 'table_checkout_result.dart';
 import 'table_snapshot.dart';
-import 'payment_code_field.dart';
+import 'checkout_scan.dart';
+import 'recharge_touch_dialog.dart';
+import '../scan_icon.dart';
 import '../hardware/scanner_input.dart';
 
 class TableCheckoutDialog extends StatefulWidget {
@@ -27,12 +29,14 @@ class TableCheckoutDialog extends StatefulWidget {
     this.originalRequestId,
     this.paidCents = 0,
     this.seatSessions = const [],
+    this.scannerEvents,
   });
   final StaffAuthController auth;
   final String tableRef, sessionRef;
   final UiLanguage language;
   final int paidCents;
   final List<Map<String, String>> seatSessions;
+  final Stream<String>? scannerEvents;
 
   /// Recovery entry must remain bound to the selected durable original request.
   final String? originalRequestId;
@@ -78,7 +82,11 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   String get channel => ['platform_cash', 'store_balance'].contains(choice)
       ? 'member_balance'
       : choice;
-  bool get barcodePayment => ['wechat', 'alipay'].contains(channel);
+  bool get barcodePayment =>
+      ['wechat', 'alipay', 'member_balance'].contains(channel);
+  bool scanBusy = false;
+  String text(String zh, String en, String tw, String th) =>
+      [zh, en, tw, th][widget.language.index];
   String get scanPrompt => [
     '请出示付款码，扫码即可付款',
     'Scan the customer payment code to pay',
@@ -87,26 +95,36 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
   ][widget.language.index];
   String? get account => channel == 'member_balance' ? choice : null;
   List<String> get choices =>
-      ['wechat', 'alipay', 'cash', 'pos', 'platform_cash', 'store_balance']
+      [
+            'wechat',
+            'alipay',
+            'store_balance',
+            'cash',
+            'bank_code',
+            'pos',
+            'platform_cash',
+          ]
           .where(
             (value) =>
                 widget.auth.session?.permissions.contains(
                   'payment.${['platform_cash', 'store_balance'].contains(value)
                       ? 'balance'
-                      : value == 'pos'
+                      : ['pos', 'bank_code'].contains(value)
                       ? 'cash'
                       : value}',
                 ) ==
                 true,
           )
           .toList();
-  String label(String value) => t(
-    value == 'cash'
-        ? 'receiptCash'
-        : ['platform_cash', 'store_balance'].contains(value)
-        ? 'balance_$value'
-        : 'provider_$value',
-  );
+  String label(String value) => value == 'bank_code'
+      ? text('银行码收款', 'Bank QR receipt', '銀行碼收款', 'รับเงินผ่าน QR ธนาคาร')
+      : t(
+          value == 'cash'
+              ? 'receiptCash'
+              : ['platform_cash', 'store_balance'].contains(value)
+              ? 'balance_$value'
+              : 'provider_$value',
+        );
   Future<void> printSettledReceipt(TableCheckoutResult settled) async {
     if (!settled.settled || !printedCheckouts.add(settled.checkoutRef)) return;
     setState(() {
@@ -177,22 +195,179 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     widget.auth.addListener(authChanged);
     WidgetsBinding.instance.addObserver(this);
-    scanner = ScannerInput.codes.listen((code) async {
-      if (!mounted ||
-          !foreground ||
-          busy ||
-          confirmationOpen ||
-          ModalRoute.of(context)?.isCurrent != true ||
-          ['cash', 'pos'].contains(channel) ||
-          !ready ||
-          result?.settled == true)
-        return;
+    scanner = (widget.scannerEvents ?? ScannerInput.codes).listen(
+      (code) => unawaited(scan(code)),
+    );
+    if (foreground) unawaited(load());
+  }
+
+  Future<void> scan(String raw) async {
+    if (!mounted ||
+        !foreground ||
+        busy ||
+        scanBusy ||
+        confirmationOpen ||
+        ModalRoute.of(context)?.isCurrent != true ||
+        !ready ||
+        result?.settled == true)
+      return;
+    final code = raw.trim();
+    final detected = checkoutScanChannel(
+      code,
+      platformBalance: choice == 'platform_cash',
+    );
+    if (detected == null) {
+      setState(
+        () => message = text(
+          '请出示微信、支付宝或本店会员卡付款码；会员身份码不能扣款',
+          'Show a WeChat, Alipay or store card payment code. Identity codes cannot debit funds.',
+          '請出示微信、支付寶或本店會員卡付款碼；會員身分碼不能扣款',
+          'กรุณาแสดงรหัสชำระเงิน รหัสประจำตัวสมาชิกใช้หักเงินไม่ได้',
+        ),
+      );
+      return;
+    }
+    if (!choices.contains(detected)) {
+      setState(
+        () => message = text(
+          '当前员工没有此收款权限',
+          'Payment permission required',
+          '目前員工沒有此收款權限',
+          'ไม่มีสิทธิ์รับเงินวิธีนี้',
+        ),
+      );
+      return;
+    }
+    if (command != null && detected != choice) {
+      setState(
+        () => message = text(
+          '请先取消本次收款，再更换付款方式',
+          'Cancel this collection before changing payment method',
+          '請先取消本次收款，再更換付款方式',
+          'ยกเลิกการรับเงินครั้งนี้ก่อนเปลี่ยนวิธี',
+        ),
+      );
+      return;
+    }
+    scanBusy = true;
+    try {
+      if (command == null &&
+          (choice != detected ||
+              detected == 'store_balance' ||
+              detected == 'platform_cash')) {
+        setState(() {
+          choice = detected;
+          freshness = null;
+        });
+        await readQuote(paymentCode: channel == 'member_balance' ? code : null);
+        if (!mounted || !fresh) return;
+      }
       if (command == null) await startCollection();
       if (!mounted || admission?.paymentStatus != 'prepared') return;
       input.text = code;
       await collect();
+    } finally {
+      scanBusy = false;
+    }
+  }
+
+  Future<void> selectMethod(String value) async {
+    if (busy || scanBusy || command != null || choice == value) return;
+    setState(() {
+      choice = value;
+      freshness = null;
+      input.clear();
     });
-    if (foreground) unawaited(load());
+    await readQuote();
+  }
+
+  Future<void> offlineReceipt() async {
+    if (busy || !ready || !['cash', 'bank_code'].contains(channel)) return;
+    final bank = channel == 'bank_code';
+    final expectedDue = command?.totalCents ?? quote?.totalCents;
+    final received = bank ? expectedDue : cashCents(input.text);
+    if (received == null ||
+        received < (command?.totalCents ?? quote?.totalCents ?? 1)) {
+      setState(
+        () => message = text(
+          '实收金额不能小于应收',
+          'Received amount is below amount due',
+          '實收金額不能小於應收',
+          'ยอดรับน้อยกว่ายอดที่ต้องชำระ',
+        ),
+      );
+      return;
+    }
+    Map<String, dynamic>? settings;
+    setState(() {
+      busy = true;
+      message = '';
+    });
+    try {
+      if (bank)
+        settings = await widget.auth.storeMembers({
+          'action': 'receiptAccounts',
+        });
+    } catch (_) {
+      if (mounted)
+        setState(
+          () => message = text(
+            '收款码设置读取失败，请重试',
+            'Could not load payment QR settings',
+            '收款碼設定讀取失敗，請重試',
+            'อ่านการตั้งค่า QR ไม่สำเร็จ',
+          ),
+        );
+      return;
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+    if (!mounted) return;
+    final accounts =
+        ((settings?['receiptSettings'] as Map?)?['accounts'] as List? ??
+                const [])
+            .whereType<String>()
+            .toList();
+    if (bank && accounts.isEmpty) {
+      setState(
+        () => message = text(
+          '请先在设置中配置银行收款码',
+          'Configure receiving QR accounts in Settings first',
+          '請先在設定中配置銀行收款碼',
+          'กรุณาตั้งค่าบัญชี QR ก่อน',
+        ),
+      );
+      return;
+    }
+    confirmationOpen = true;
+    try {
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => RechargeOfflineReceiptDialog(
+          language: widget.language,
+          bank: bank,
+          amountCents: command?.totalCents ?? quote!.totalCents,
+          accounts: accounts,
+          account: '',
+          confirm: (code, selected) async {
+            if (command == null) await startCollection();
+            if (!mounted ||
+                admission?.paymentStatus != 'prepared' ||
+                command?.totalCents != expectedDue)
+              throw const CcsopFailure('RECEIPT_UNCONFIRMED');
+            input.text = formatCents(received);
+            await collect(
+              employeeCode: code,
+              receivingAccount: bank ? selected : null,
+            );
+          },
+        ),
+      );
+    } finally {
+      confirmationOpen = false;
+    }
+    if (mounted && result?.settled == true) Navigator.of(context).pop(true);
   }
 
   void authChanged() {
@@ -300,11 +475,18 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       authorityExpiry?.cancel();
       authorityExpiry = Timer(remaining, invalidate);
       final pending = <TableCheckoutCommand>[];
-      for (final c in ['wechat', 'alipay', 'cash', 'pos', 'member_balance']) {
+      for (final c in [
+        'wechat',
+        'alipay',
+        'cash',
+        'bank_code',
+        'pos',
+        'member_balance',
+      ]) {
         if (widget.auth.session?.permissions.contains(
               'payment.${c == 'member_balance'
                   ? 'balance'
-                  : c == 'pos'
+                  : ['pos', 'bank_code'].contains(c)
                   ? 'cash'
                   : c}',
             ) ==
@@ -391,7 +573,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     if (mounted) Navigator.of(context).pop(result?.settled == true);
   }
 
-  Future<void> readQuote() async {
+  Future<void> readQuote({String? paymentCode}) async {
     if (!ready || busy || !foreground || command != null) return;
     final e = epoch;
     expiry?.cancel();
@@ -407,6 +589,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         sessionRef: widget.sessionRef,
         channel: channel,
         accountType: account,
+        paymentCode: paymentCode,
         seatSessions: widget.seatSessions,
       );
       if (!current(e)) return;
@@ -414,6 +597,7 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       if (remaining <= Duration.zero) throw const FormatException();
       setState(() {
         quote = next;
+        if (paymentCode != null) choice = next.accountType!;
         freshness = watch;
       });
       expiry = Timer(remaining, () {
@@ -645,7 +829,12 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     }
   }
 
-  Future<void> collect({bool recover = false, bool close = false}) async {
+  Future<void> collect({
+    String? employeeCode,
+    String? receivingAccount,
+    bool recover = false,
+    bool close = false,
+  }) async {
     final original = command;
     if (!foreground ||
         busy ||
@@ -658,9 +847,10 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       return;
     }
     final e = epoch, text = input.text;
+    Object? collectionError;
     if (!recover &&
         !close &&
-        !['wechat', 'alipay'].contains(original.channel) &&
+        original.channel == 'pos' &&
         !await confirmAction(
           'tableCheckoutCollect',
           original.channel == 'pos'
@@ -692,8 +882,13 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
               original,
               confirmed: true,
               stillCurrent: () => current(e),
-              payerCode: original.channel == 'cash' ? null : text,
-              cashReceivedCents: original.channel == 'cash'
+              payerCode: ['cash', 'bank_code'].contains(original.channel)
+                  ? null
+                  : text,
+              employeeIdentityCode: employeeCode,
+              receivingAccount: receivingAccount,
+              cashReceivedCents:
+                  ['cash', 'bank_code'].contains(original.channel)
                   ? cashCents(text)
                   : null,
             );
@@ -706,10 +901,11 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
         });
         if (next.settled) {
           unawaited(printSettledReceipt(next));
-          Navigator.of(context).pop(true);
+          if (employeeCode == null) Navigator.of(context).pop(true);
         }
       }
     } catch (error) {
+      collectionError = error;
       // A failed send must be classified by the server's original request.
       // Restore scanning only when it is still prepared; never retry this code.
       if (current(e)) {
@@ -755,6 +951,10 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
       }
     } finally {
       if (current(e)) setState(() => busy = false);
+    }
+    if (employeeCode != null && result?.settled != true) {
+      if (collectionError is CcsopFailure) throw collectionError;
+      throw const CcsopFailure('RECEIPT_UNCONFIRMED');
     }
     if (current(e) &&
         !cancelled &&
@@ -919,31 +1119,80 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
               ),
           ],
         ),
-      TextButton(
-        onPressed: busy
-            ? null
-            : () => setState(() {
-                input.text = formatCents(command!.totalCents);
-                replaceCash = true;
-              }),
-        child: Text(t('checkoutExactCash')),
-      ),
     ],
   );
 
+  Widget methodButton(String value, IconData icon) {
+    final selected = value == 'scan' ? barcodePayment : choice == value;
+    return SizedBox(
+      height: 58,
+      child: OutlinedButton.icon(
+        key: ValueKey('checkout-method-$value'),
+        onPressed: busy || command != null
+            ? null
+            : () => selectMethod(
+                value == 'scan'
+                    ? choices.firstWhere(
+                        (v) => [
+                          'wechat',
+                          'alipay',
+                          'store_balance',
+                          'platform_cash',
+                        ].contains(v),
+                      )
+                    : value,
+              ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: selected ? const Color(0xff202020) : Colors.black54,
+          backgroundColor: selected ? const Color(0xffffe6a3) : Colors.white,
+          side: BorderSide(
+            color: selected ? const Color(0xffdbad38) : const Color(0xffdedede),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        icon: value == 'scan' ? const ScanIcon(size: 24) : Icon(icon, size: 24),
+        label: Text(
+          value == 'scan'
+              ? text('扫码付款', 'Scan to pay', '掃碼付款', 'สแกนชำระเงิน')
+              : label(value),
+          style: const TextStyle(fontSize: 17),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final original = command, q = quote;
+    final q = quote, original = command;
     final originalDue = original?.totalCents ?? q?.totalCents;
     final due = result?.settled == true ? 0 : originalDue;
     final paid =
         widget.paidCents + (result?.settled == true ? originalDue ?? 0 : 0);
+    final canReceive =
+        ready &&
+        originalDue != null &&
+        !cancelled &&
+        (original == null || admission?.paymentStatus == 'prepared') &&
+        !cancellationNeedsQuery;
+    final icons = <String, IconData>{
+      'wechat': Icons.chat_bubble_outline,
+      'alipay': Icons.qr_code,
+      'store_balance': Icons.credit_card,
+      'platform_cash': Icons.account_balance_wallet_outlined,
+      'cash': Icons.payments_outlined,
+      'bank_code': Icons.account_balance_outlined,
+      'pos': Icons.credit_card_outlined,
+    };
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: SizedBox(
-        width: 880,
-        height: 630,
+        width: 1080,
+        height: 660,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -953,340 +1202,443 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                     child: Text(
                       t('tableCheckoutTitle'),
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: 25,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                   IconButton(
-                    onPressed: busy || printing ? null : dismissCheckout,
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: amount(
-                      t('checkoutTotal'),
-                      due == null ? null : due + paid,
+                    key: const ValueKey('checkout-close'),
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
                     ),
-                  ),
-                  Expanded(child: amount(t('checkoutPaid'), paid)),
-                  Expanded(
-                    child: amount(t('checkoutDue'), due, prominent: true),
+                    onPressed: busy || printing ? null : dismissCheckout,
+                    icon: const Icon(Icons.close, size: 28),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              const Divider(height: 1),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               Expanded(
-                child: !foreground
-                    ? const SizedBox.shrink()
-                    : result?.settled == true
-                    ? Center(
-                        child: Column(
-                          key: const ValueKey('checkout-success'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.check_circle,
-                              color: Color(0xff168657),
-                              size: 68,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 285,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            text(
+                              '本次结账明细',
+                              'Items to settle',
+                              '本次結帳明細',
+                              'รายการที่ชำระ',
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              t('checkoutSuccess'),
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              '￥ ${formatCents(originalDue ?? 0)}',
-                              style: const TextStyle(
-                                fontSize: 38,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            if (printStatus.isNotEmpty) Text(t(printStatus)),
-                            const SizedBox(height: 20),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                OutlinedButton(
-                                  key: const ValueKey(
-                                    'checkout-settled-receipt',
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: q == null
+                                ? const SizedBox.shrink()
+                                : ListView.separated(
+                                    key: const ValueKey(
+                                      'table-checkout-bill-lines',
+                                    ),
+                                    itemCount: q.lines.length,
+                                    separatorBuilder: (_, __) =>
+                                        const Divider(height: 16),
+                                    itemBuilder: (_, i) {
+                                      final line = q.lines[i];
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            line.name(widget.language),
+                                            style: const TextStyle(
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '${line.specification(widget.language)} × ${line.quantity}',
+                                                  style: const TextStyle(
+                                                    color: Colors.black54,
+                                                  ),
+                                                ),
+                                              ),
+                                              Text(
+                                                '¥ ${formatCents(line.quantity * line.priceCents)}',
+                                                style: const TextStyle(
+                                                  fontSize: 17,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      );
+                                    },
                                   ),
-                                  onPressed: printing ? null : openReceipt,
-                                  child: Text(t('receiptReprint')),
+                          ),
+                          SizedBox(
+                            height: 48,
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  busy ||
+                                      printing ||
+                                      original != null ||
+                                      q == null
+                                  ? null
+                                  : printUnpaid,
+                              icon: const Icon(Icons.print_outlined),
+                              label: Text(t('checkoutUnpaidTicket')),
+                            ),
+                          ),
+                          if (widget.seatSessions.isEmpty &&
+                              widget.auth.session?.permissions.contains(
+                                    'orders.create',
+                                  ) ==
+                                  true) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: OutlinedButton(
+                                      onPressed:
+                                          busy || original != null || q == null
+                                          ? null
+                                          : () => discount(),
+                                      child: Text(t('checkoutDiscount')),
+                                    ),
+                                  ),
                                 ),
-                                const SizedBox(width: 16),
-                                FilledButton(
-                                  onPressed: printing ? null : dismissCheckout,
-                                  child: Text(t('checkoutDone')),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: OutlinedButton(
+                                      onPressed:
+                                          busy || original != null || q == null
+                                          ? null
+                                          : () => discount(waive: true),
+                                      child: Text(t('checkoutWaive')),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
                           ],
-                        ),
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (command == null)
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: TextButton.icon(
-                                      onPressed:
-                                          busy || printing || quote == null
-                                          ? null
-                                          : printUnpaid,
-                                      icon: const Icon(Icons.print_outlined),
-                                      label: Text(t('checkoutUnpaidTicket')),
-                                    ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 48,
+                            child: Tooltip(
+                              message: text(
+                                '平台券与本店券的核销及结算规则尚未开放',
+                                'Platform and store coupon redemption is not enabled yet',
+                                '平台券與本店券的核銷及結算規則尚未開放',
+                                'ยังไม่เปิดใช้กฎการแลกและชำระคูปอง',
+                              ),
+                              child: OutlinedButton.icon(
+                                onPressed: null,
+                                icon: const Icon(Icons.local_offer_outlined),
+                                label: Text(
+                                  text(
+                                    '优惠券 · 待开通',
+                                    'Coupons · Not enabled',
+                                    '優惠券 · 待開通',
+                                    'คูปอง · ยังไม่เปิดใช้',
                                   ),
-                                if (command == null &&
-                                    widget.seatSessions.isEmpty &&
-                                    widget.auth.session?.permissions.contains(
-                                          'orders.create',
-                                        ) ==
-                                        true)
-                                  Wrap(
-                                    spacing: 8,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const VerticalDivider(width: 32),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            key: const ValueKey('checkout-amount-summary'),
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xfff6f5f2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      OutlinedButton(
-                                        onPressed:
-                                            busy || printing || quote == null
-                                            ? null
-                                            : () => discount(),
-                                        child: Text(t('checkoutDiscount')),
+                                      Text(
+                                        '${t('checkoutTotal')}  ${due == null ? '—' : '¥ ${formatCents(due + paid)}'}',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          color: Colors.black54,
+                                        ),
                                       ),
-                                      OutlinedButton(
-                                        onPressed:
-                                            busy || printing || quote == null
-                                            ? null
-                                            : () => discount(waive: true),
-                                        child: Text(t('checkoutWaive')),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '${t('checkoutPaid')}  ¥ ${formatCents(paid)}',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          color: Colors.black54,
+                                        ),
                                       ),
                                     ],
                                   ),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    for (final value in choices)
-                                      ChoiceChip(
-                                        label: Text(label(value)),
-                                        selected: choice == value,
-                                        onSelected: busy || original != null
-                                            ? null
-                                            : (_) {
-                                                setState(() {
-                                                  choice = value;
-                                                  freshness = null;
-                                                  input.clear();
-                                                });
-                                                unawaited(readQuote());
-                                              },
-                                      ),
-                                  ],
                                 ),
-                                const SizedBox(height: 12),
-                                Expanded(
-                                  child: q == null
-                                      ? const SizedBox.shrink()
-                                      : ListView(
-                                          key: const ValueKey(
-                                            'table-checkout-bill-lines',
-                                          ),
-                                          children: [
-                                            for (final line in q.lines)
-                                              ListTile(
-                                                dense: true,
-                                                contentPadding: EdgeInsets.zero,
-                                                title: Text(
-                                                  line.name(widget.language),
-                                                ),
-                                                subtitle: Text(
-                                                  '${line.specification(widget.language)} × ${line.quantity}',
-                                                ),
-                                                trailing: Text(
-                                                  '￥ ${formatCents(line.quantity * line.priceCents)}',
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                ),
-                                Text(
-                                  t('checkoutCouponUnavailable'),
-                                  style: const TextStyle(
-                                    color: Colors.black45,
-                                    fontSize: 12,
-                                  ),
-                                ),
+                                amount(t('checkoutDue'), due, prominent: true),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 24),
-                          SizedBox(
-                            width: 310,
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              if (choices.any(
+                                (v) => [
+                                  'wechat',
+                                  'alipay',
+                                  'store_balance',
+                                  'platform_cash',
+                                ].contains(v),
+                              ))
+                                methodButton('scan', Icons.qr_code_scanner),
+                              for (final value in choices.where(
+                                (v) => ['cash', 'bank_code', 'pos'].contains(v),
+                              ))
+                                methodButton(value, icons[value]!),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Expanded(
                             child: SingleChildScrollView(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  if (!ready)
-                                    OutlinedButton(
-                                      onPressed: busy ? null : load,
-                                      child: Text(t('ordersRefresh')),
+                                  if (result?.settled == true) ...[
+                                    const Icon(
+                                      Icons.check_circle,
+                                      color: Color(0xff168657),
+                                      size: 64,
                                     ),
-                                  if (ready &&
-                                      original == null &&
-                                      !['cash', 'pos'].contains(channel))
-                                    PaymentCodeField(
-                                      controller: input,
-                                      enabled: !busy && q != null,
-                                      label: t('tableCheckoutCode'),
+                                    Text(
+                                      t('checkoutSuccess'),
+                                      textAlign: TextAlign.center,
                                     ),
-                                  if (ready &&
-                                      barcodePayment &&
-                                      q != null &&
-                                      original == null)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 20,
-                                      ),
-                                      child: Text(
-                                        scanPrompt,
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  if (ready &&
-                                      original == null &&
-                                      (!barcodePayment || q == null))
-                                    FilledButton(
-                                      onPressed: busy
-                                          ? null
-                                          : q == null
-                                          ? readQuote
-                                          : startCollection,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 14,
-                                        ),
-                                        child: Text(
-                                          t(
-                                            q == null
-                                                ? 'ordersRefresh'
-                                                : 'checkoutStart',
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  if (original != null &&
-                                      result?.settled == true)
-                                    OutlinedButton(
+                                    TextButton(
                                       key: const ValueKey(
                                         'checkout-settled-receipt',
                                       ),
-                                      onPressed: busy ? null : openReceipt,
+                                      onPressed: printing ? null : openReceipt,
                                       child: Text(t('receiptReprint')),
                                     ),
-                                  if (original != null &&
-                                      result?.settled != true &&
-                                      !cancelled) ...[
-                                    if (admission?.paymentStatus ==
-                                            'prepared' &&
-                                        !cancellationNeedsQuery) ...[
-                                      if (original.channel == 'cash')
-                                        cashPad()
-                                      else if (original.channel == 'pos')
-                                        TextField(
-                                          controller: input,
-                                          enabled: !busy,
-                                          decoration: InputDecoration(
-                                            labelText: t(
-                                              'checkoutPosReference',
-                                            ),
+                                  ] else if (canReceive &&
+                                      channel == 'cash') ...[
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(child: cashPad()),
+                                        const SizedBox(width: 16),
+                                        SizedBox(
+                                          width: 205,
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              TextButton(
+                                                onPressed: busy
+                                                    ? null
+                                                    : () => setState(() {
+                                                        input
+                                                            .text = formatCents(
+                                                          command?.totalCents ??
+                                                              quote!.totalCents,
+                                                        );
+                                                        replaceCash = true;
+                                                      }),
+                                                child: Text(
+                                                  t('checkoutExactCash'),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 18),
+                                              SizedBox(
+                                                height: 88,
+                                                child: FilledButton(
+                                                  onPressed: busy
+                                                      ? null
+                                                      : offlineReceipt,
+                                                  child: Text(
+                                                    text(
+                                                      '已收现金 · 扫员工码确认',
+                                                      'Cash received · scan staff code',
+                                                      '已收現金 · 掃員工碼確認',
+                                                      'รับเงินสดแล้ว · สแกนรหัสพนักงาน',
+                                                    ),
+                                                    style: const TextStyle(
+                                                      fontSize: 18,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        )
-                                      else
-                                        PaymentCodeField(
-                                          controller: input,
-                                          enabled: !busy,
-                                          label: t('tableCheckoutCode'),
                                         ),
-                                      const SizedBox(height: 12),
-                                      if (barcodePayment)
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 12,
+                                      ],
+                                    ),
+                                  ] else if (canReceive &&
+                                      channel == 'bank_code') ...[
+                                    const SizedBox(height: 24),
+                                    const Icon(
+                                      Icons.account_balance_outlined,
+                                      size: 58,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      text(
+                                        '顾客扫门店收款码付款后，\n选择收款账户，员工扫码确认到账',
+                                        'After the customer pays your store QR,\nselect the account and scan the cashier code.',
+                                        '顧客掃門店收款碼付款後，\n選擇收款帳戶，員工掃碼確認到帳',
+                                        'เมื่อลูกค้าชำระ QR ของร้านแล้ว\nเลือกบัญชีและสแกนรหัสพนักงาน',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 19,
+                                        height: 1.6,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    SizedBox(
+                                      height: 56,
+                                      child: FilledButton(
+                                        onPressed: busy ? null : offlineReceipt,
+                                        child: Text(
+                                          text(
+                                            '已到账，确认收款',
+                                            'Confirm money received',
+                                            '已到帳，確認收款',
+                                            'ยืนยันว่าได้รับเงินแล้ว',
                                           ),
-                                          child: Text(
-                                            scanPrompt,
-                                            textAlign: TextAlign.center,
-                                          ),
+                                          style: const TextStyle(fontSize: 20),
                                         ),
-                                      if (!barcodePayment)
-                                        FilledButton(
-                                          onPressed: busy
-                                              ? null
-                                              : () => unawaited(collect()),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 12,
-                                            ),
-                                            child: Text(
-                                              t('tableCheckoutCollect'),
-                                            ),
-                                          ),
-                                        ),
-                                      OutlinedButton(
+                                      ),
+                                    ),
+                                  ] else if (canReceive &&
+                                      channel == 'pos') ...[
+                                    TextField(
+                                      controller: input,
+                                      decoration: InputDecoration(
+                                        labelText: t('checkoutPosReference'),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      height: 56,
+                                      child: FilledButton(
                                         onPressed: busy
                                             ? null
-                                            : dismissCheckout,
-                                        child: Text(t('cancel')),
+                                            : () async {
+                                                final reference = input.text;
+                                                if (command == null)
+                                                  await startCollection();
+                                                input.text = reference;
+                                                await collect();
+                                              },
+                                        child: Text(t('tableCheckoutCollect')),
                                       ),
-                                    ] else ...[
-                                      Text(
-                                        [
-                                          '正在确认付款结果，请稍候',
-                                          'Checking payment status…',
-                                          '正在確認付款結果，請稍候',
-                                          'กำลังตรวจสอบการชำระเงิน',
-                                        ][widget.language.index],
+                                    ),
+                                  ] else if (canReceive) ...[
+                                    const SizedBox(height: 24),
+                                    const Center(child: ScanIcon(size: 88)),
+                                    const SizedBox(height: 18),
+                                    Text(
+                                      text(
+                                        '出示付款码，扫码即付',
+                                        'Show a payment code to pay',
+                                        '出示付款碼，掃碼即付',
+                                        'แสดงรหัสชำระเงินแล้วสแกน',
                                       ),
-                                      TextButton(
-                                        onPressed: busy ? null : resumePayment,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 25,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      text(
+                                        '微信 · 支付宝 · KING 付款码\n余额按顾客授权账户扣款',
+                                        'WeChat · Alipay · KING payment code\nUses the account authorized by the customer',
+                                        '微信 · 支付寶 · KING 付款碼\n餘額按顧客授權帳戶扣款',
+                                        'WeChat · Alipay · รหัสชำระเงิน KING\nหักจากบัญชีที่ลูกค้าอนุญาต',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        height: 1.6,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                  ] else if (!busy) ...[
+                                    Text(
+                                      message.isEmpty
+                                          ? t('tableCheckoutReview')
+                                          : message,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    SizedBox(
+                                      height: 52,
+                                      child: OutlinedButton(
+                                        onPressed: ready && original != null
+                                            ? resumePayment
+                                            : load,
                                         child: Text(t('ordersRefresh')),
                                       ),
-                                    ],
+                                    ),
                                   ],
                                   if (busy && !confirmationOpen)
                                     const Padding(
                                       padding: EdgeInsets.all(12),
                                       child: Center(
                                         child: SizedBox(
-                                          width: 20,
-                                          height: 20,
+                                          width: 22,
+                                          height: 22,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                           ),
                                         ),
                                       ),
                                     ),
-                                  if (message.isNotEmpty)
+                                  if (message.isNotEmpty && canReceive)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 12),
-                                      child: Text(message),
+                                      child: Text(
+                                        message,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .error,
+                                        ),
+                                      ),
                                     ),
                                 ],
                               ),
@@ -1294,6 +1646,9 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

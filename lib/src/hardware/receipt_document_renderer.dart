@@ -170,7 +170,7 @@ class ReceiptRasterPlan {
         large: true,
       ),
       _money(
-        t(
+        tender.channel == 'bank_code' ? _label(language, '银行码收款', 'Bank QR receipt', '銀行碼收款', 'รับเงินผ่าน QR ธนาคาร') : t(
           tender.channel == 'cash'
               ? 'receiptCash'
               : 'provider_${tender.channel}',

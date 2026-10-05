@@ -109,6 +109,7 @@ class StaffAuthController extends ChangeNotifier {
       'wechat',
       'alipay',
       'cash',
+      'bank_code',
       'pos',
       'member_balance',
     ].contains(channel)) {
@@ -124,7 +125,7 @@ class StaffAuthController extends ChangeNotifier {
     }
     final permission = channel == 'member_balance'
         ? 'payment.balance'
-        : channel == 'pos'
+        : ['pos', 'bank_code'].contains(channel)
         ? 'payment.cash'
         : 'payment.$channel';
     if (!identity.permissions.contains(permission))
@@ -137,6 +138,7 @@ class StaffAuthController extends ChangeNotifier {
     required String sessionRef,
     required String channel,
     required String? accountType,
+    String? paymentCode,
     List<Map<String, String>> seatSessions = const [],
   }) async {
     final identity = _tableCheckoutIdentity(channel), epoch = _epoch;
@@ -154,6 +156,7 @@ class StaffAuthController extends ChangeNotifier {
       'channel': channel,
       'accountType': accountType,
       'currency': 'CNY',
+      if (paymentCode != null) 'paymentCode': paymentCode,
       if (seatSessions.isNotEmpty) 'seatSessions': seatSessions,
     });
     _check(epoch);
@@ -164,7 +167,8 @@ class StaffAuthController extends ChangeNotifier {
       tableRef: tableRef,
       sessionRef: sessionRef,
       channel: channel,
-      accountType: accountType,
+      accountType: paymentCode == null ? accountType :
+          (raw is Map && raw['result'] is Map ? raw['result']['accountType'] as String? : null),
       seatSessions: seatSessions,
     );
   }
@@ -243,13 +247,19 @@ class StaffAuthController extends ChangeNotifier {
     required bool Function() stillCurrent,
     String? payerCode,
     int? cashReceivedCents,
+    String? employeeIdentityCode,
+    String? receivingAccount,
   }) {
     if (!confirmed)
       throw const CcsopFailure('TABLE_CHECKOUT_CONFIRMATION_REQUIRED');
-    if (command.channel == 'cash') {
-      if (payerCode != null ||
+    if (['cash', 'bank_code'].contains(command.channel)) {
+      if (employeeIdentityCode == null ||
+          !RegExp(r'^KC:M:[0-9A-F]{32}$').hasMatch(employeeIdentityCode) ||
+          (command.channel == 'bank_code') != (receivingAccount != null) ||
+          payerCode != null ||
           cashReceivedCents == null ||
           cashReceivedCents < command.totalCents ||
+          (command.channel == 'bank_code' && cashReceivedCents != command.totalCents) ||
           cashReceivedCents > 100000000) {
         throw const CcsopFailure('TABLE_CHECKOUT_CASH_INVALID');
       }
@@ -266,6 +276,8 @@ class StaffAuthController extends ChangeNotifier {
       stillCurrent: stillCurrent,
       payerCode: payerCode,
       cashReceivedCents: cashReceivedCents,
+      employeeIdentityCode: employeeIdentityCode,
+      receivingAccount: receivingAccount,
     );
   }
 
@@ -296,6 +308,8 @@ class StaffAuthController extends ChangeNotifier {
     required bool Function() stillCurrent,
     String? payerCode,
     int? cashReceivedCents,
+    String? employeeIdentityCode,
+    String? receivingAccount,
   }) async {
     if (_tablePreparationBusy || _tableCollectionBusy)
       throw const CcsopFailure('TABLE_CHECKOUT_BUSY');
@@ -327,12 +341,14 @@ class StaffAuthController extends ChangeNotifier {
         'expectedTotalCents': command.totalCents,
       };
       String interfaceId;
-      if (command.channel == 'cash') {
+      if (['cash', 'bank_code'].contains(command.channel)) {
         interfaceId = firstSend ? 'K260930001942' : 'K260930001943';
         if (firstSend)
           params.addAll({
             'receivedCents': cashReceivedCents,
             'cashReceivedConfirmed': true,
+            'identityCode': employeeIdentityCode,
+            if (receivingAccount != null) 'receivingAccount': receivingAccount,
           });
       } else if (command.channel == 'pos') {
         interfaceId = firstSend ? 'K261004002004' : 'K261004002005';
@@ -361,6 +377,8 @@ class StaffAuthController extends ChangeNotifier {
       } finally {
         params.remove('authCode');
         params.remove('paymentCode');
+        params.remove('identityCode');
+        employeeIdentityCode = null;
         payerCode = null;
       }
       validate();

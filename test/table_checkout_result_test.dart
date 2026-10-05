@@ -26,8 +26,8 @@ Map<String, dynamic> settlementFixture(TableCheckoutCommand c) => {
       'sessionRef': c.sessionRef,
       'currency': 'CNY',
       'totalCents': c.totalCents,
-      'parentPaymentRef': c.channel == 'cash'
-          ? 'cash:$checkout'
+      'parentPaymentRef': ['cash','bank_code','pos'].contains(c.channel)
+          ? '${c.channel}:$checkout'
           : c.channel == 'member_balance'
           ? 'balance:$checkout'
           : '${c.channel}:TEST_TRANSACTION',

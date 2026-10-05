@@ -6,6 +6,7 @@ String tr(UiLanguage language, String key) {
 }
 
 const copy = <String, String>{
+  'provider_bank_code': '银行码收款|Bank QR receipt|銀行碼收款|รับเงินผ่าน QR ธนาคาร',
   'voucherWorkspace':'核券／取酒|Vouchers / pickup|核券／取酒|คูปอง / รับเครื่องดื่ม',
   'voucherChannel_douyin':'抖音团购|Douyin|抖音團購|Douyin',
   'voucherChannel_meituan':'美团团购|Meituan|美團團購|Meituan',

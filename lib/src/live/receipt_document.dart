@@ -105,7 +105,7 @@ class ReceiptTender {
           (account == 'platform_cash' && gift != 0)) {
         throw const FormatException();
       }
-    } else if (channel == 'wechat' || channel == 'alipay' || channel == 'pos') {
+    } else if (channel == 'wechat' || channel == 'alipay' || channel == 'pos' || channel == 'bank_code') {
       _object(raw, ['channel']);
     } else {
       throw const FormatException();

@@ -100,9 +100,20 @@ class _TableCheckoutRecoveryPanelState extends State<TableCheckoutRecoveryPanel>
         throw const FormatException();
       }
       final rows = <TableCheckoutCommand>[];
-      for (final channel in ['wechat', 'alipay', 'cash', 'member_balance']) {
+      for (final channel in [
+        'wechat',
+        'alipay',
+        'cash',
+        'bank_code',
+        'pos',
+        'member_balance',
+      ]) {
         if (identity.permissions.contains(
-          'payment.${channel == 'member_balance' ? 'balance' : channel}',
+          'payment.${channel == 'member_balance'
+              ? 'balance'
+              : ['pos', 'bank_code'].contains(channel)
+              ? 'cash'
+              : channel}',
         )) {
           rows.addAll(await widget.auth.pendingTableCheckouts(channel));
           if (!current()) return;

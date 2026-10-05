@@ -100,6 +100,18 @@ void main() {
     expect(api.calls.map((e)=>e.$1),['K260930001939','K260930001941']);
     expect(await controller.pendingTableCheckouts('wechat'),isEmpty);
   });
+  test('bank QR uses the original checkout, records employee and configured account, then clears journal', () async {
+    final command=TableCheckoutCommand.decode({...fixture.command().encoded,'channel':'bank_code','accountType':null});
+    final storage=staff.TestStorage(),api=CollectionApi(command),controller=await setup(storage,api);
+    final result=await controller.collectTableCheckout(command,confirmed:true,stillCurrent:()=>true,
+      cashReceivedCents:300,employeeIdentityCode:'KC:M:${'A' * 32}',receivingAccount:'TEST_BANK_QR');
+    expect(result.settled,true);
+    expect(api.calls.map((e)=>e.$1),['K260930001939','K260930001942']);
+    expect(api.calls.last.$2['receivingAccount'],'TEST_BANK_QR');
+    expect(api.calls.last.$2['identityCode'],'KC:M:${'A' * 32}');
+    expect(await controller.pendingTableCheckouts('bank_code'),isEmpty);
+    expect(storage.data.values.join(),isNot(contains('KC:M:')));
+  });
   for (final channel in ['wechat', 'alipay', 'cash', 'member_balance']) {
     test(
       '$channel uses shared original lookup then one confirmation and removes settled record',
@@ -117,7 +129,7 @@ void main() {
           confirmed: true,
           stillCurrent: () => true,
           payerCode: code(channel),
-          cashReceivedCents: channel == 'cash' ? 400 : null,
+          employeeIdentityCode: 'KC:M:${'A' * 32}', cashReceivedCents: channel == 'cash' ? 400 : null,
         );
         expect(result.settled, true);
         final collectId = channel == 'cash'
