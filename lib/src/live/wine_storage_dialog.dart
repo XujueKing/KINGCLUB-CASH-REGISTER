@@ -11,6 +11,7 @@ import '../hardware/scanner_input.dart';
 import '../strings.dart';
 import 'member_identity.dart';
 import 'touch_quantity.dart';
+import 'wine_location_picker.dart';
 
 class WineStorageDialog extends StatefulWidget {
   const WineStorageDialog({
@@ -41,6 +42,8 @@ class _WineStorageDialogState extends State<WineStorageDialog>
   StreamSubscription<String>? scans;
   String? key;
   Map<String, dynamic>? pending;
+  List<String> locations = [];
+  String? locationCode;
   int maximum = 0, stored = 0, percent = 50;
   bool loading = true,
       busy = false,
@@ -120,6 +123,7 @@ class _WineStorageDialogState extends State<WineStorageDialog>
         if (result['state'] != 'not_observed') throw const FormatException();
         quantity.text = '${pending!['quantity']}';
         percent = pending!['remainingPercent'] as int;
+        locationCode = pending!['locationCode'] as String?;
         ready = true;
       }
       final result = await widget.auth.wineStorage({
@@ -139,6 +143,13 @@ class _WineStorageDialogState extends State<WineStorageDialog>
         throw const FormatException();
       maximum = available;
       stored = previous;
+      locations = (result['locations'] as List).cast<String>();
+      if (pending == null && !locations.contains(locationCode))
+        locationCode = null;
+      if (pending != null && locationCode == null) {
+        // A prior-version unresolved deposit must never silently move shelves.
+        throw const FormatException();
+      }
     } catch (_) {
       if (mounted) failed = true;
     } finally {
@@ -167,6 +178,7 @@ class _WineStorageDialogState extends State<WineStorageDialog>
         'quantity': int.parse(quantity.text),
         'remainingPercent': percent,
         'expectedStoredQuantity': stored,
+        'locationCode': locationCode,
       };
       final saved = jsonEncode(pending);
       await vault.write(key!, saved);
@@ -183,7 +195,8 @@ class _WineStorageDialogState extends State<WineStorageDialog>
       if (result['state'] != 'confirmed' ||
           receipt is! Map ||
           receipt['quantity'] != pending!['quantity'] ||
-          receipt['remainingPercent'] != percent)
+          receipt['remainingPercent'] != percent ||
+          receipt['locationCode'] != locationCode)
         throw const FormatException();
       await vault.delete(key!);
       if (current) Navigator.pop(context, true);
@@ -201,72 +214,103 @@ class _WineStorageDialogState extends State<WineStorageDialog>
       title: Text(text(['存酒', 'Store wine', '存酒', 'ฝากสุรา'])),
       content: SizedBox(
         width: 430,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.name),
-            const SizedBox(height: 12),
-            Text(
-              text([
-                '保管30天，从本次存入时间起算',
-                'Stored for 30 days from deposit',
-                '保管30天，從本次存入時間起算',
-                'ฝากได้ 30 วันนับจากเวลาฝาก',
-              ]),
-            ),
-            if (loading)
-              const LinearProgressIndicator()
-            else if (!ready && !failed && maximum == 0)
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.name),
+              const SizedBox(height: 12),
               Text(
                 text([
-                  '没有可存的已付款、已上酒水',
-                  'No paid, served bottles available',
-                  '沒有可存的已付款、已上酒水',
-                  'ไม่มีสุราที่ชำระและเสิร์ฟแล้วสำหรับฝาก',
+                  '保管30天，从本次存入时间起算',
+                  'Stored for 30 days from deposit',
+                  '保管30天，從本次存入時間起算',
+                  'ฝากได้ 30 วันนับจากเวลาฝาก',
                 ]),
-              )
-            else if (!ready && !failed) ...[
-              TouchQuantity(
-                controller: quantity,
-                maximum: maximum,
-                label: text(['瓶数', 'Bottles', '瓶數', 'จำนวนขวด']),
-                onChanged: () => setState(() {}),
               ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final p in [100, 75, 50, 25])
-                    ChoiceChip(
-                      label: Text('$p%'),
-                      selected: percent == p,
-                      onSelected: (_) => setState(() => percent = p),
-                    ),
-                ],
-              ),
-            ],
-            if (ready)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                child: Text(
+              if (loading)
+                const LinearProgressIndicator()
+              else if (!ready && !failed && maximum == 0)
+                Text(
                   text([
-                    '请顾客出示 KING 会员码，扫码直接存入',
-                    'Scan the guest’s KING member code to deposit',
-                    '請顧客出示 KING 會員碼，掃碼直接存入',
-                    'สแกนรหัสสมาชิก KING ของลูกค้าเพื่อฝาก',
+                    '没有可存的已付款、已上酒水',
+                    'No paid, served bottles available',
+                    '沒有可存的已付款、已上酒水',
+                    'ไม่มีสุราที่ชำระและเสิร์ฟแล้วสำหรับฝาก',
+                  ]),
+                )
+              else if (!ready && !failed) ...[
+                TouchQuantity(
+                  controller: quantity,
+                  maximum: maximum,
+                  label: text(['瓶数', 'Bottles', '瓶數', 'จำนวนขวด']),
+                  onChanged: () => setState(() {}),
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final p in [100, 75, 50, 25])
+                      ChoiceChip(
+                        label: Text('$p%'),
+                        selected: percent == p,
+                        onSelected: (_) => setState(() => percent = p),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  text([
+                    '存放位置（上高下低）',
+                    'Storage location (top to bottom)',
+                    '存放位置（上高下低）',
+                    'ตำแหน่งจัดเก็บ (บนลงล่าง)',
                   ]),
                 ),
-              ),
-            if (failed)
-              Text(
-                text([
-                  '尚未确认存酒结果，请查询后再试',
-                  'Deposit unconfirmed. Check the result before retrying.',
-                  '尚未確認存酒結果，請查詢後再試',
-                  'ยังไม่ยืนยันการฝาก กรุณาตรวจสอบก่อนลองใหม่',
-                ]),
-              ),
-          ],
+                if (locations.isEmpty)
+                  Text(
+                    text([
+                      '本店尚未设置存放位置',
+                      'No storage locations configured',
+                      '本店尚未設定存放位置',
+                      'ยังไม่ได้ตั้งค่าตำแหน่งจัดเก็บ',
+                    ]),
+                  )
+                else
+                  WineLocationPicker(
+                    locations: locations,
+                    selected: locationCode,
+                    onSelected: (value) => setState(() => locationCode = value),
+                  ),
+              ],
+              if (ready && locationCode != null)
+                Text(
+                  locationCode!,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              if (ready)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Text(
+                    text([
+                      '请顾客出示 KING 会员码，扫码直接存入',
+                      'Scan the guest’s KING member code to deposit',
+                      '請顧客出示 KING 會員碼，掃碼直接存入',
+                      'สแกนรหัสสมาชิก KING ของลูกค้าเพื่อฝาก',
+                    ]),
+                  ),
+                ),
+              if (failed)
+                Text(
+                  text([
+                    '尚未确认存酒结果，请查询后再试',
+                    'Deposit unconfirmed. Check the result before retrying.',
+                    '尚未確認存酒結果，請查詢後再試',
+                    'ยังไม่ยืนยันการฝาก กรุณาตรวจสอบก่อนลองใหม่',
+                  ]),
+                ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -281,7 +325,9 @@ class _WineStorageDialogState extends State<WineStorageDialog>
           ),
         if (!loading && !failed && !ready && maximum > 0)
           FilledButton(
-            onPressed: () => setState(() => ready = true),
+            onPressed: locationCode == null
+                ? null
+                : () => setState(() => ready = true),
             child: Text(text(['存酒', 'Store wine', '存酒', 'ฝากสุรา'])),
           ),
       ],

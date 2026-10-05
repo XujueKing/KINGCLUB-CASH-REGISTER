@@ -36,12 +36,14 @@ class StorageAuth extends TableAuth {
         'availableQuantity': 2,
         'storedQuantity': 0,
         'storageDays': 30,
+        'locations': ['A1-1', 'A6-4'],
       };
     if (params['action'] == 'lookup')
       return receipt == null
           ? {'state': 'not_observed'}
           : {'state': 'confirmed', 'receipt': receipt};
     receipt = {
+      'locationCode': params['locationCode'],
       'quantity': params['quantity'],
       'remainingPercent': params['remainingPercent'],
     };
@@ -93,6 +95,8 @@ void main() {
         await tester.tap(find.text('OPEN'));
         await tester.pumpAndSettle();
         expect(find.byType(TextField), findsNothing);
+        await tester.tap(find.text('A1-1'));
+        await tester.pumpAndSettle();
         expect(find.textContaining('30天'), findsOneWidget);
         await tester.tap(find.widgetWithText(FilledButton, '存酒'));
         await tester.pumpAndSettle();
