@@ -1,3 +1,6 @@
+import 'wine_pickup_panel.dart';
+import 'product_thumbnail.dart';
+
 import 'dart:convert';
 
 import 'wine_storage_dialog.dart';
@@ -1089,48 +1092,67 @@ class _TableBillPanelState extends State<TableBillPanel>
             Text(t('billNoItems')),
           if (filter == 'all' || filter == 'paid')
             for (final wine in storedWineServed)
-              Card(
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.wine_bar_outlined),
-                  title: Text('${wine['name']}'),
-                  subtitle: Text(
-                    '${wine['locationCode'] ?? ''} / ${wine['remainingPercent']}%',
-                  ),
-                  trailing: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        [
-                          '存酒',
-                          'Stored wine',
-                          '存酒',
-                          'Stored wine',
-                        ][widget.language.index],
-                      ),
-                      Text(
-                        t('tableBillPaid'),
-                        style: const TextStyle(color: Colors.green),
-                      ),
-                      Text(
-                        wine['served'] == true
-                            ? [
-                                '已上',
-                                'Served',
-                                '已上',
-                                'Served',
-                              ][widget.language.index]
-                            : [
-                                '未上',
-                                'Not served',
-                                '未上',
-                                'Not served',
-                              ][widget.language.index],
-                      ),
-                    ],
-                  ),
+              BillProductCard(
+                key: ValueKey('stored-wine-${wine['itemRef']}'),
+                language: widget.language,
+                name: '${(wine['names'] as Map?)?['zh-CN'] ?? wine['name']}',
+                specification: '${wine['specification'] ?? ''}',
+                quantity: 1,
+                priceCents: 0,
+                totalCents: 0,
+                base: widget.auth.session?.base,
+                thumbnailPath: productThumbnail(
+                  wine['bottleMaterial'],
+                  widget.auth.session?.storeRef ?? '',
                 ),
+                priceLabel: '${wine['remainingPercent']}%',
+                totalLabel: [
+                  '存酒',
+                  'Stored wine',
+                  '存酒',
+                  'Stored wine',
+                ][widget.language.index],
+                badges: status(
+                  '${t('tableBillPaid')} 1',
+                  const Color(0xff216344),
+                ),
+                leadingBadge: status(
+                  '${t('billServed')} ${wine['served'] == true ? 1 : 0} / ${t('billNotServed')} ${wine['served'] == true ? 0 : 1}',
+                  wine['served'] == true
+                      ? const Color(0xff216344)
+                      : const Color(0xff994a16),
+                ),
+                onTap: () async {
+                  await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      content: SizedBox(
+                        width: 420,
+                        child: WinePickupPanel(
+                          auth: widget.auth,
+                          language: widget.language,
+                          tableRef: widget.tableRef,
+                          sessionRef: widget.sessionRef,
+                          bottleItem: wine,
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(
+                            [
+                              '关闭',
+                              'Close',
+                              '關閉',
+                              'Close',
+                            ][widget.language.index],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (mounted) await loadStoredWine(epoch);
+                },
               ),
           for (final group in groups)
             BillProductCard(

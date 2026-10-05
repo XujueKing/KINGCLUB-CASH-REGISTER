@@ -20,6 +20,7 @@ class BillProductCard extends StatelessWidget {
     this.leadingBadge,
     this.onTap,
     this.priceLabel,
+    this.totalLabel,
     this.quantityControls = false,
     this.onPlus,
     this.onMinus,
@@ -35,7 +36,7 @@ class BillProductCard extends StatelessWidget {
   final Widget? badges;
   final Widget? leadingBadge;
   final VoidCallback? onTap;
-  final String? priceLabel;
+  final String? priceLabel, totalLabel;
   final bool quantityControls;
   final VoidCallback? onPlus, onMinus;
   final String? productRef;
@@ -211,7 +212,7 @@ class BillProductCard extends StatelessWidget {
                           style: const TextStyle(fontSize: 13),
                         ),
                       Text(
-                        '¥${formatCents(totalCents)}',
+                        totalLabel ?? '¥${formatCents(totalCents)}',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,

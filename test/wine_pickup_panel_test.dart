@@ -46,46 +46,28 @@ class PickupAuth extends TableAuth {
 }
 
 void main() {
-  for (final lost in [false, true])
-    testWidgets(
-      'pickup code then physical bottle, lost response $lost never repeats collection',
-      (tester) async {
-        final scans = StreamController<String>.broadcast(),
-            auth = PickupAuth()..loseReply = lost,
-            vault = MemoryStorage();
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: WinePickupPanel(
-                auth: auth,
-                language: UiLanguage.en,
-                tableRef: 'test-table',
-                sessionRef: 'H00000000001',
-                scannerEvents: scans.stream,
-                storage: vault,
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        scans.add('X' * 43);
-        await tester.pumpAndSettle();
-        expect(find.textContaining('A1-1'), findsOneWidget);
-        scans.add('KC:W:' + 'B' * 32);
-        await tester.pumpAndSettle();
-        if (lost) {
-          expect(vault.values.values.single, isNot(contains('KC:M:')));
-          await tester.tap(find.text('Retry lookup'));
-          await tester.pumpAndSettle();
-        }
-        expect(find.textContaining('Collected and served:'), findsOneWidget);
-        expect(auth.calls.where((c) => c['action'] == 'collect'), hasLength(1));
-        expect(auth.calls.every((c) => !c.containsKey('identityCode')), isTrue);
-        expect(vault.values, isEmpty);
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(const SizedBox());
-        await scans.close();
-        auth.dispose();
-      },
-    );
+  testWidgets('registration has no reprint button and cannot directly collect', (tester) async {
+    final auth=PickupAuth(), scans=StreamController<String>.broadcast();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: WinePickupPanel(auth:auth, language:UiLanguage.en,tableRef:'test-table',sessionRef:'H00000000001',scannerEvents:scans.stream,storage:MemoryStorage()))));
+    await tester.pumpAndSettle();scans.add('X'*43);await tester.pumpAndSettle();
+    expect(find.text('Print label'),findsNothing);
+    scans.add('KC:W:'+'B'*32);await tester.pumpAndSettle();
+    expect(auth.calls.where((c)=>c['action']=='collect'),isEmpty);
+    await tester.pumpWidget(const SizedBox());await scans.close();auth.dispose();
+  });
+  for(final lost in [false,true]) testWidgets('serve requires button and bottle, lost reply $lost', (tester) async {
+    final auth=PickupAuth()..loseReply=lost, scans=StreamController<String>.broadcast(),vault=MemoryStorage();
+    await tester.pumpWidget(MaterialApp(home: Builder(builder:(context)=>Scaffold(body:TextButton(onPressed:()=>showDialog(context:context,builder:(_)=>AlertDialog(content:WinePickupPanel(auth:auth,language:UiLanguage.en,tableRef:'test-table',sessionRef:'H00000000001',scannerEvents:scans.stream,storage:vault,bottleItem:{'itemRef':'test-item','name':'Test wine','locationCode':'A1-1'}))),child:const Text('Open'))))));
+    await tester.tap(find.text('Open'));await tester.pumpAndSettle();
+    expect(find.text('A1-1'),findsOneWidget);
+    scans.add('KC:W:'+'B'*32);await tester.pumpAndSettle();expect(auth.calls,isEmpty);
+    await tester.tap(find.text('Serve'));await tester.pumpAndSettle();
+    scans.add('KC:W:'+'B'*32);await tester.pumpAndSettle();
+    if(lost){await tester.tap(find.text('Retry lookup'));await tester.pumpAndSettle();}
+    expect(find.byType(AlertDialog),findsNothing);
+    expect(auth.calls.where((c)=>c['action']=='collect'),hasLength(1));
+    expect(auth.calls.firstWhere((c)=>c['action']=='collect')['itemRef'],'test-item');
+    expect(vault.values,isEmpty);expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox());await scans.close();auth.dispose();
+  });
 }

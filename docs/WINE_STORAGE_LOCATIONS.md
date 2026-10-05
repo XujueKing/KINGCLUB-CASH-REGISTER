@@ -22,3 +22,14 @@ Verification: 3808 backend tests passed; two deployment-check process timeouts p
 ## Pickup-code-first correction (2026-10-05)
 
 Migration 327 extends existing holding/pickup records for requested state and request lookup; no parallel inventory or customer identity table. Backend 39 targeted tests and 20 cashier tests passed. Backend build/static/migration checks passed; deployed health/readiness passed. ARM32 build signed with matching installed certificate, install -r succeeded. Device is at V1 unified scanner; real customer scan and bottle scan are pending user cooperation. Flutter analyzer reports informational lint only.
+
+
+## Unified product card and explicit physical serving
+
+Stored wine now uses BillProductCard and the original store-scoped commerce product material, name and specification. It retains a separate physical holding identity so sale quantities/prices cannot merge into a stored bottle. The amount displays Stored wine; paid/served badges share sale-card styling. Registration no longer adds a label reprint card to the scanner workspace.
+
+Tap the stored wine card for its large shelf location, then Serve to arm the scanner. The physical label must match that exact itemRef and table/session; unrelated bottle scans and replay mismatches are rejected. Successful delivery closes the dialog and refreshes that bill. Already served bottles open read-only location details.
+
+StaffAccessPage now retains the same workspace element during a same-session credential refresh, with touch input blocked while authentication is unavailable. Stable identity keys exclude rotating credential objects; failed refresh/revocation removes the workspace. A widget regression verifies retained state across refresh and removal on revocation. This addresses the timed return to the table overview.
+
+Backend 23 pickup tests passed. Cashier pickup, bill, voucher, access and refresh regressions passed; ARM32 signed upgrade installed preserving data. Real bottle picture/name confirmed on the attached terminal. New physical serving still requires the customer's next real bottle scan; no transaction was simulated.

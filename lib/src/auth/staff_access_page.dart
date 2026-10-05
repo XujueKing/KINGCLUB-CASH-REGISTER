@@ -1,3 +1,4 @@
+import 'staff_session.dart';
 import 'staff_qr_login.dart';
 
 import 'dart:async';
@@ -30,6 +31,7 @@ class _StaffAccessPageState extends State<StaffAccessPage>
   bool foreground = true;
   bool passwordMode = false;
   String? notice;
+  StaffSession? lastWorkspaceSession;
   String t(String key) => tr(language, key);
 
   @override
@@ -160,17 +162,24 @@ class _StaffAccessPageState extends State<StaffAccessPage>
 
   @override
   Widget build(BuildContext context) {
-    final session = auth.session;
+    if (auth.session != null) lastWorkspaceSession = auth.session;
+    if (auth.session == null && !auth.busy) lastWorkspaceSession = null;
+    final session = auth.session ?? (auth.busy ? lastWorkspaceSession : null);
     final message = auth.errorCode == 'SECURE_STORAGE_FAILED'
         ? 'staffStorageFailure'
         : notice;
     if (session != null) {
-      return WorkbenchPage(
-        key: ObjectKey(session),
-        auth: auth,
-        language: language,
-        onLanguage: (value) => setState(() => language = value),
-        onLogout: auth.busy ? null : logout,
+      return IgnorePointer(
+        ignoring: auth.busy || auth.session == null,
+        child: WorkbenchPage(
+          key: ValueKey(
+            '${session.base}/${session.storeRef}/${session.employeeRef}/${session.sessionId}',
+          ),
+          auth: auth,
+          language: language,
+          onLanguage: (value) => setState(() => language = value),
+          onLogout: auth.busy ? null : logout,
+        ),
       );
     }
     return Scaffold(

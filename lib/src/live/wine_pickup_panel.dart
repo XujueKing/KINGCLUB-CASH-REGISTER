@@ -8,10 +8,7 @@ import 'package:flutter/material.dart';
 import '../auth/staff_auth_controller.dart';
 import '../auth/session_vault.dart';
 import '../hardware/scanner_input.dart';
-import '../hardware/wine_label_printer.dart';
 import '../strings.dart';
-
-import 'wine_location_picker.dart';
 
 class WinePickupPanel extends StatefulWidget {
   const WinePickupPanel({
@@ -23,6 +20,7 @@ class WinePickupPanel extends StatefulWidget {
     this.scannerEvents,
     this.storage,
     this.initialCode,
+    this.bottleItem,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -30,6 +28,7 @@ class WinePickupPanel extends StatefulWidget {
   final Stream<String>? scannerEvents;
   final SecretStorage? storage;
   final String? initialCode;
+  final Map<String, dynamic>? bottleItem;
   @override
   State<WinePickupPanel> createState() => _WinePickupPanelState();
 }
@@ -43,7 +42,7 @@ class _WinePickupPanelState extends State<WinePickupPanel>
   String? message, key;
   Map<String, dynamic>? pending;
   bool busy = false, foreground = true, initializing = true;
-  bool initialHandled = false;
+  bool initialHandled = false, armed = false;
   String t(List<String> values) => values[widget.language.index];
   Map<String, dynamic> get scope => {
     'tableRef': widget.tableRef,
@@ -157,8 +156,8 @@ class _WinePickupPanelState extends State<WinePickupPanel>
           items.removeWhere((r) => r['itemRef'] == receipt['itemRef']);
           items.add(receipt);
           message = t([
-            '已加入消费明细：存酒，已付款／未上。请取实物扫瓶身码',
-            'Stored wine added: paid / not served. Scan bottle to deliver',
+            '已加入消费明细：存酒，已付款／未上。请点击右侧卡片上酒',
+            'Added to bill. Open the wine card to serve.',
             '已加入消費明細：存酒，已付款／未上。請掃瓶身碼',
             'Added: paid / not served. Scan bottle',
           ]);
@@ -169,6 +168,10 @@ class _WinePickupPanelState extends State<WinePickupPanel>
       throw const FormatException();
     await vault.delete(key!);
     pending = null;
+    if (widget.bottleItem?['itemRef'] == receipt['itemRef'] && mounted) {
+      Navigator.pop(context, true);
+      return;
+    }
     if (mounted)
       setState(() {
         items.removeWhere((r) => r['itemRef'] == receipt['itemRef']);
@@ -191,6 +194,19 @@ class _WinePickupPanelState extends State<WinePickupPanel>
       if (pending != null && await recover()) return;
       final isPickup = RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(code);
       final isBottle = RegExp(r'^KC:W:[0-9A-F]{32}$').hasMatch(code);
+      if (isBottle &&
+          (widget.bottleItem == null ||
+              !armed ||
+              widget.bottleItem!['served'] == true)) {
+        message = t([
+          '请点击右侧存酒卡片，选择上酒',
+          'Open the stored wine card and tap Serve',
+          '請點存酒卡片上酒',
+          'Open wine card and tap Serve',
+        ]);
+        return;
+      }
+      if (widget.bottleItem != null && !isBottle) return;
       if (!isPickup && !isBottle) {
         message = t([
           '请扫顾客取酒码或瓶身存酒标签',
@@ -205,6 +221,7 @@ class _WinePickupPanelState extends State<WinePickupPanel>
         'requestId': requestId(),
         'action': isPickup ? 'requestPickup' : 'collect',
         if (isBottle) 'bottleCode': code,
+        if (isBottle) 'itemRef': widget.bottleItem!['itemRef'],
       };
       final encoded = jsonEncode(pending);
       await vault.write(key!, encoded);
@@ -234,97 +251,43 @@ class _WinePickupPanelState extends State<WinePickupPanel>
     }
   }
 
-  Future<void> label(Map<String, dynamic> item) async {
-    if (busy || !current) return;
-    setState(() => busy = true);
-    try {
-      String? location = item['locationCode'] as String?;
-      if (location == null) {
-        location = await showDialog<String>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(
-              t(['选择存放位置', 'Choose shelf', '選擇存放位置', 'เลือกช่องเก็บ']),
-            ),
-            content: SizedBox(
-              width: 430,
-              child: SingleChildScrollView(
-                child: WineLocationPicker(
-                  locations: locations,
-                  selected: null,
-                  onSelected: (value) => Navigator.pop(context, value),
-                ),
-              ),
-            ),
-          ),
-        );
-        if (location == null) return;
-      }
-      if (!current) return;
-      final result = await widget.auth.wineStorage({
-        ...scope,
-        'action': 'label',
-
-        'itemRef': item['itemRef'],
-        'locationCode': location,
-      });
-      final label = WineLabel(
-        Map<String, dynamic>.from(result['label'] as Map),
-      );
-      final outcome = await printWineLabel(
-        auth: widget.auth,
-        label: label,
-        stillCurrent: () => current,
-        reprint: true,
-      );
-      if (mounted) {
-        item['locationCode'] = label.location;
-        item['hasLabel'] = true;
-        message = outcome == 'checkoutPrintSent'
-            ? t([
-                '标签已发送到打印机',
-                'Label sent to printer',
-                '標籤已送至印表機',
-                'ส่งฉลากไปยังเครื่องพิมพ์แล้ว',
-              ])
-            : t([
-                '打印未成功，可再次补打',
-                'Print failed; reprint available',
-                '列印未成功，可再次補印',
-                'พิมพ์ไม่สำเร็จ ลองพิมพ์อีกครั้ง',
-              ]);
-      }
-    } catch (_) {
-      if (mounted) {
-        message = t([
-          '请重新扫取酒码后补打；旧存酒多瓶合并记录需先核实实物',
-          'Rescan member; legacy multi-bottle records need physical verification',
-          '請重新掃取酒碼後補印；舊存酒多瓶合併紀錄需先核實實物',
-          'สแกนสมาชิกใหม่เพื่อตรวจสอบและพิมพ์',
-        ]);
-      }
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text(
-        widget.sessionRef == null
-            ? t(['请先选择桌台', 'Select a table first', '請先選擇桌台', 'เลือกโต๊ะก่อน'])
-            : items.isEmpty
-            ? t(['请出示取酒码', 'Scan pickup code', '請出示取酒碼', 'สแกนรหัสสมาชิก'])
-            : t([
-                '找到存放位置，扫描瓶身码即出库并已上',
-                'Find the shelf and scan the bottle to collect and serve',
-                '找到存放位置，掃描瓶身碼即出庫並已上',
-                'ค้นหาขวดแล้วสแกนฉลากเพื่อรับและเสิร์ฟ',
-              ]),
-        style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
-      ),
+      if (widget.bottleItem != null) ...[
+        Text(
+          '${widget.bottleItem!['name']}',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          '${widget.bottleItem!['locationCode'] ?? "--"}',
+          style: const TextStyle(fontSize: 52, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 18),
+        if (widget.bottleItem!['served'] == true)
+          Text(t(['已上', 'Served', '已上', 'Served']))
+        else if (!armed)
+          FilledButton(
+            onPressed: busy || initializing
+                ? null
+                : () => setState(() => armed = true),
+            child: Text(t(['上酒', 'Serve', '上酒', 'Serve'])),
+          )
+        else
+          Text(
+            t([
+              '请扫这瓶酒的瓶身二维码',
+              'Scan this bottle label',
+              '請掃這瓶酒的瓶身碼',
+              'Scan this bottle label',
+            ]),
+            style: const TextStyle(fontSize: 22),
+          ),
+      ],
       if (busy || initializing) const LinearProgressIndicator(),
       if (message != null)
         Padding(
@@ -345,21 +308,6 @@ class _WinePickupPanelState extends State<WinePickupPanel>
                   }
                 },
           child: Text(t(['重试查询', 'Retry lookup', '重試查詢', 'ตรวจสอบอีกครั้ง'])),
-        ),
-      for (final item in items)
-        Card(
-          child: ListTile(
-            title: Text('${item['locationCode'] ?? '—'}   ${item['name']}'),
-            subtitle: Text(
-              '${item['specification'] ?? ''} · ${item['remainingPercent']}% · ${item['quantity']}',
-            ),
-            trailing: TextButton(
-              onPressed: busy || item['quantity'] != 1
-                  ? null
-                  : () => label(item),
-              child: Text(t(['补打标签', 'Print label', '補印標籤', 'พิมพ์ฉลาก'])),
-            ),
-          ),
         ),
     ],
   );
