@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 /// Immutable attachment IDs survive rotating download signatures and restarts.
 class ProductImageStore {
@@ -45,7 +46,10 @@ class ProductImageStore {
       file = await _file(uri);
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
-        if (_png(bytes)) return bytes;
+        if (_png(bytes)) {
+          debugPrint('cashier_product_image source=disk');
+          return bytes;
+        }
         await file.delete();
       }
     } on FileSystemException {
@@ -54,6 +58,7 @@ class ProductImageStore {
       /* Desktop/test hosts without the Android bridge. */
     }
     final bytes = await download(uri);
+    debugPrint('cashier_product_image source=network');
     if (!_png(bytes)) throw const FormatException('Invalid product image');
     if (file != null) {
       final temp = File('${file.path}.part');

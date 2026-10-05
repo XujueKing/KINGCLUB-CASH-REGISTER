@@ -12,6 +12,7 @@ import '../hardware/receipt_print_identity.dart';
 import '../hardware/paid_receipt_printer.dart';
 import 'bill_product_group.dart';
 import 'workspace_read_cache.dart';
+import 'table_detail_snapshot.dart';
 import 'bill_product_card.dart';
 import 'bill_details_dialog.dart';
 import 'bill_serving_dialog.dart';
@@ -60,6 +61,7 @@ class TableBillPanel extends StatefulWidget {
     this.receiptCaption,
     this.receiptDate,
     this.initialBill,
+    this.detailRead,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -71,6 +73,7 @@ class TableBillPanel extends StatefulWidget {
   /// Selected unused seat: render the same bill without creating a session.
   final bool emptySeat;
   final bool readOnly;
+  final Future<TableDetailSnapshot>? detailRead;
   final ReceiptCaption? receiptCaption;
   final String? receiptDate;
   final ({OrderSnapshot snapshot, List<LiveOrder> orders})? initialBill;
@@ -326,8 +329,10 @@ class _TableBillPanelState extends State<TableBillPanel>
         old.tableRef != widget.tableRef ||
         old.sessionRef != widget.sessionRef) {
       reset(useCache: old.auth == widget.auth);
-    } else if (old.revision != widget.revision && foreground) {
-      unawaited(load());
+    } else if ((old.revision != widget.revision ||
+            old.detailRead != widget.detailRead) &&
+        foreground) {
+      unawaited(load(fresh: true));
     } else if (old.onQuickAddProduct == null &&
         widget.onQuickAddProduct != null &&
         !loading &&
@@ -343,6 +348,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   }
 
   Future<void>? activeRead;
+  Future<TableDetailSnapshot>? consumedDetail;
   Future<void> load({bool more = false, bool fresh = false}) async {
     if (widget.emptySeat) return;
     if (widget.readOnly && widget.initialBill != null) {
@@ -373,6 +379,74 @@ class _TableBillPanelState extends State<TableBillPanel>
       return;
     }
     final ticket = ++epoch, identity = widget.auth.session;
+    if (widget.detailRead != null) {
+      setState(() {
+        loading = true;
+        failed = false;
+      });
+      try {
+        final request = consumedDetail != widget.detailRead
+            ? widget.detailRead!
+            : widget.auth.readTableDetail(
+                tableRef: widget.tableRef,
+                sessionRef: widget.sessionRef,
+              );
+        consumedDetail = widget.detailRead;
+        final detail = await request;
+        if (!mounted ||
+            ticket != epoch ||
+            !foreground ||
+            !identical(identity, widget.auth.session))
+          return;
+        final allOrders = List<LiveOrder>.of(detail.bill.orders);
+        final allWine = List<Map<String, dynamic>>.of(detail.wine);
+        final allProducts = List<CatalogProduct>.of(detail.products);
+        for (final seat in widget.seatSessions.where(
+          (s) => s['sessionRef'] != widget.sessionRef,
+        )) {
+          final extra = await widget.auth.readTableDetail(
+            tableRef: seat['tableRef']!,
+            sessionRef: seat['sessionRef']!,
+          );
+          if (!mounted ||
+              ticket != epoch ||
+              !foreground ||
+              !identical(identity, widget.auth.session))
+            return;
+          allOrders.addAll(extra.bill.orders);
+          allWine.addAll(extra.wine);
+          allProducts.addAll(extra.products);
+        }
+        WorkspaceReadCache.put(identity, displayKey, (
+          snapshot: detail.bill,
+          orders: List<LiveOrder>.unmodifiable(allOrders),
+        ));
+        WorkspaceReadCache.put(
+          identity,
+          'wine/$displayKey',
+          List<Map<String, dynamic>>.unmodifiable(allWine),
+        );
+        setState(() {
+          snapshot = detail.bill;
+          orders = allOrders;
+          storedWineServed = allWine;
+          inventory
+            ..clear()
+            ..addEntries(allProducts.map((p) => MapEntry(p.reference, p)));
+          verifiedSnapshot = true;
+          loading = false;
+          failed = false;
+        });
+      } catch (_) {
+        if (mounted && ticket == epoch)
+          setState(() {
+            loading = false;
+            failed = true;
+            verifiedSnapshot = false;
+          });
+      }
+      return;
+    }
     unawaited(loadStoredWine(ticket));
     final cursor = more ? snapshot?.nextAfterOrder : null;
     final previous = more ? List<LiveOrder>.of(orders) : <LiveOrder>[];
@@ -508,6 +582,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   }
 
   Future<void> loadInventory(int ticket) async {
+    if (widget.detailRead != null) return;
     try {
       final wanted = orders
           .expand((o) => o.items)

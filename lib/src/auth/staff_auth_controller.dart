@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../live/catalog_snapshot.dart';
+import '../live/table_detail_snapshot.dart';
 import '../live/member_identity.dart';
 import '../live/seating_command.dart';
 import '../live/seating_journal.dart';
@@ -1745,6 +1746,18 @@ class StaffAuthController extends ChangeNotifier {
       );
     }
     return selectionRef as String;
+  }
+
+  Future<TableDetailSnapshot> readTableDetail({required String tableRef, required String sessionRef}) async {
+    final identity=_session,api=_api,epoch=_epoch;
+    if(identity==null||api==null||_busy||!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    if(!identity.permissions.contains('orders.read')) throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    final timer=Stopwatch()..start();
+    final raw=await api.call('K261006002014',{'storeRef':identity.storeRef,'tableRef':tableRef,'sessionRef':sessionRef});
+    _check(epoch);
+    if(!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    debugPrint('cashier_table_detail elapsed_ms=${timer.elapsedMilliseconds}');
+    return TableDetailSnapshot.parse(raw,storeRef:identity.storeRef,tableRef:tableRef,sessionRef:sessionRef);
   }
 
   /// Read-only, bound-store order query; late responses cannot survive a session change.

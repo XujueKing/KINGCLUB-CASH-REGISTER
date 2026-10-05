@@ -1,3 +1,11 @@
+## 2026-10-06 One request for the selected table
+
+Current open-table detail uses K261006002014 and the scoped kingclub_cashier_table_detail stored procedure. Context, bill, stored wine, linked member avatars and stock for products on this bill share one page Future. This supersedes the earlier cache-only latency fix; it does not replace unrelated command endpoints or merge-seat scope checks. Money, refund and mutation checks remain server-authoritative.
+
+Product images persist in Android noBackupFilesDir/product-images-v1; immutable attachment identity survives signed URL rotation. Real-device logs after data-preserving upgrade/restart confirmed disk hits. Cashier reads now sign only the thumbnail, with bounded five-minute server token reuse.
+
+Validation: 60 focused Flutter tests passed; analysis had no errors/warnings; ARM32 build installed with the existing certificate and retained data. V1/V2/return-V1 produced one aggregate read each, taking 236/161/351 ms respectively in api.call (not first-frame measurements). Backend old/new bill and refund summaries matched; server-only reads measured 9-38 ms. No payment, serving, storage or membership command was submitted. Backend migrations 337/338 applied only to KINGCLUB; runtime checks passed.
+
 ## 2026-10-06 Table bill switching latency
 
 Bill and stored-wine display snapshots now survive table switches for up to five minutes within the same staff identity, store and session scope. Fresh server reads still gate payment and item operations. Concurrent identical read-only requests share one in-flight call; failures are retryable and completed calls are not reused as mutation authority. Historical table bills reuse orders already read for the selected business day.

@@ -640,7 +640,7 @@ void main() {
       await show(tester, auth);
       await tap(tester, 'catalog-add-p001');
       await tap(tester, 'catalog-category-c1');
-      expect(find.text('CNY 12.34'), findsNWidgets(2));
+      expect(find.text('CNY 12.34'), findsOneWidget);
       expect(enabled(tester), true);
       expect(auth.submits, 0);
       await tester.pumpWidget(const SizedBox());
@@ -750,12 +750,7 @@ void main() {
   testWidgets('unknown inventory cannot be added', (tester) async {
     final auth = CartAuth()..unknown = true;
     await show(tester, auth);
-    expect(
-      tester
-          .widget<IconButton>(find.byKey(const ValueKey('catalog-add-p001')))
-          .onPressed,
-      isNull,
-    );
+    expect(find.byKey(const ValueKey('catalog-add-p001')), findsNothing);
     expect(enabled(tester), false);
     await tester.pumpWidget(const SizedBox());
     auth.dispose();

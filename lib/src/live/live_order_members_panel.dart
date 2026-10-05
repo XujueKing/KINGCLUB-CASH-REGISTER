@@ -1,4 +1,5 @@
 import 'workspace_read_cache.dart';
+import 'table_detail_snapshot.dart';
 import 'table_snapshot.dart';
 import 'catalog_snapshot.dart';
 import 'table_bill_panel.dart';
@@ -55,6 +56,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
 class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     with WidgetsBindingObserver {
   OrderContextSnapshot? data;
+  Future<TableDetailSnapshot>? detailRead;
   SeatedOrderMember? selected;
   bool cart = false;
   bool seating = false;
@@ -98,6 +100,9 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         (cart || data?.tableOrderAllowed == true) &&
         foreground) {
       // The cart handles refresh hints and owns any submitted request's receipt.
+      if (detailRead != null && oldWidget.revision != widget.revision) {
+        unawaited(load());
+      }
       return;
     }
     if (oldWidget.auth != widget.auth) {
@@ -140,28 +145,38 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
       page = 0;
     }
     final requestedPage = target ?? page;
+    if (requestedPage == 0 &&
+        widget.auth.session?.permissions.contains('orders.read') == true) {
+      detailRead = widget.auth.readTableDetail(
+        tableRef: widget.tableRef,
+        sessionRef: widget.sessionRef,
+      );
+    }
     setState(() {
       if (reset || target != null) data = null;
-      selected = null;
+      if (reset || target != null) selected = null;
       loading = true;
-      cart = false;
+      if (reset || target != null) cart = false;
       failed = false;
     });
     try {
-      final value = await WorkspaceReadCache.readOnce(
-        identity!,
-        'context/${widget.tableRef}/${widget.sessionRef}/${cursors[requestedPage]}',
-        () => widget.auth.readOrderContext(
-          tableRef: widget.tableRef,
-          sessionRef: widget.sessionRef,
-          afterMember: cursors[requestedPage],
-        ),
-      );
+      final value = requestedPage == 0 && detailRead != null
+          ? (await detailRead!).context
+          : await WorkspaceReadCache.readOnce(
+              identity!,
+              'context/${widget.tableRef}/${widget.sessionRef}/${cursors[requestedPage]}',
+              () => widget.auth.readOrderContext(
+                tableRef: widget.tableRef,
+                sessionRef: widget.sessionRef,
+                afterMember: cursors[requestedPage],
+              ),
+            );
       if (!mounted ||
           generation != epoch ||
           !identical(identity, widget.auth.session)) {
         return;
       }
+      if (value == null) throw const FormatException();
       if (value.nextAfterMember != null &&
           cursors.take(requestedPage + 1).contains(value.nextAfterMember)) {
         throw const FormatException();
@@ -231,6 +246,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     if (data != null &&
         (data!.tableOrderAllowed || (cart && selected != null))) {
       return LiveCartPanel(
+        detailRead: detailRead,
         auth: widget.auth,
         language: widget.language,
         orderContext: data!,
@@ -266,6 +282,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: TableBillPanel(
+                detailRead: detailRead,
                 auth: widget.auth,
                 language: widget.language,
                 tableRef: widget.tableRef,

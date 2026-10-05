@@ -308,6 +308,7 @@ class OrderSnapshot {
     required String tableRef,
     required String sessionRef,
     String? afterOrder,
+    int maximumOrders = 20,
   }) {
     final data = _map(_map(raw)['result']),
         session = _map(_map(_map(raw)['result'])['session']);
@@ -323,7 +324,7 @@ class OrderSnapshot {
         (value) => LiveOrder(_map(value), storeRef: storeRef),
       ),
     );
-    if (orders.length > 20 ||
+    if (orders.length > maximumOrders ||
         orders.map((order) => order.reference).toSet().length !=
             orders.length) {
       throw const FormatException();

@@ -1,4 +1,5 @@
 import 'bar_bill_header.dart';
+import 'table_detail_snapshot.dart';
 import 'voucher_workspace_panel.dart';
 import 'table_members_panel.dart';
 import 'item_price_dialog.dart';
@@ -41,8 +42,10 @@ class LiveCartPanel extends StatefulWidget {
     this.initialProduct,
     this.onInitialProductConsumed,
     this.onDraftChanged,
+    this.detailRead,
   });
   final bool? menuVisible;
+  final Future<TableDetailSnapshot>? detailRead;
   final ValueChanged<bool>? onMenuChanged;
   final StaffAuthController auth;
   final UiLanguage language;
@@ -665,6 +668,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         filter: filter,
         voucherAction: voucher,
         member: TableMembersButton(
+          detailRead: widget.detailRead,
           auth: widget.auth,
           language: widget.language,
           tableRef: currentContext.tableRef,
@@ -837,6 +841,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
         filter,
         voucher,
         TableMembersButton(
+          detailRead: widget.detailRead,
           auth: widget.auth,
           language: widget.language,
           tableRef: currentContext.tableRef,
@@ -908,6 +913,7 @@ class _LiveCartPanelState extends State<LiveCartPanel>
               children: [
                 Expanded(
                   child: TableBillPanel(
+                    detailRead: widget.detailRead,
                     onQuickAddSpecialProduct: acceptingAdds
                         ? (
                             ref,

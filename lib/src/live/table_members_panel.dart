@@ -10,6 +10,7 @@ import '../auth/staff_auth_controller.dart';
 import '../hardware/scanner_input.dart';
 import '../strings.dart';
 import 'member_identity.dart';
+import 'table_detail_snapshot.dart';
 
 class TableMembersPanel extends StatefulWidget {
   const TableMembersPanel({
@@ -273,11 +274,13 @@ class TableMembersButton extends StatefulWidget {
     required this.tableRef,
     required this.sessionRef,
     this.revision = 0,
+    this.detailRead,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef, sessionRef;
   final int revision;
+  final Future<TableDetailSnapshot>? detailRead;
   @override
   State<TableMembersButton> createState() => _TableMembersButtonState();
 }
@@ -319,16 +322,21 @@ class _TableMembersButtonState extends State<TableMembersButton> {
       members = [];
       avatar = null;
     }
-    if (changed || old.revision != widget.revision) unawaited(load());
+    if (changed ||
+        old.revision != widget.revision ||
+        old.detailRead != widget.detailRead)
+      unawaited(load());
   }
 
-  Future<void> load() async {
+  Future<void> load({bool refresh = false}) async {
     final generation = ++epoch;
     try {
-      final rows = await widget.auth.tableMembers(
-        tableRef: widget.tableRef,
-        sessionRef: widget.sessionRef,
-      );
+      final rows = !refresh && widget.detailRead != null
+          ? (await widget.detailRead!).members
+          : await widget.auth.tableMembers(
+              tableRef: widget.tableRef,
+              sessionRef: widget.sessionRef,
+            );
       if (!mounted || generation != epoch) return;
       Uint8List? bytes;
       try {
@@ -392,7 +400,7 @@ class _TableMembersButtonState extends State<TableMembersButton> {
           ],
         ),
       );
-      if (mounted) await load();
+      if (mounted) await load(refresh: true);
     },
     icon: Badge(
       isLabelVisible: members.length > 1,
