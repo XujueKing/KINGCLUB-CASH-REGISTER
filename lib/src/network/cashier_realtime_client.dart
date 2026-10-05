@@ -33,6 +33,7 @@ class CashierRealtimeClient extends ChangeNotifier {
   CashierRealtimeState _state = CashierRealtimeState.offline;
   CashierRealtimeState get state => _state;
   int get revision => _revision;
+  String? lastTopic;
   bool _current(int epoch) => !_disposed && _active && epoch == _epoch;
   void _changed() {
     if (!_disposed) notifyListeners();
@@ -129,6 +130,7 @@ class CashierRealtimeClient extends ChangeNotifier {
       _attempt = 0;
       _lastPong = _now();
       ++_revision;
+      lastTopic = null;
       _heartbeat = Timer.periodic(
         const Duration(seconds: 20),
         (_) => unawaited(_ping(epoch)),
@@ -137,10 +139,16 @@ class CashierRealtimeClient extends ChangeNotifier {
     } else if (event == 'commerce.changed') {
       if (payload.length != 2 ||
           payload['storeRef'] != session.storeRef ||
-          !{'tables', 'orders', 'inventory'}.contains(payload['topic'])) {
+          !{
+            'tables',
+            'orders',
+            'inventory',
+            'members',
+          }.contains(payload['topic'])) {
         throw const FormatException('Invalid store event');
       }
       ++_revision;
+      lastTopic = payload['topic'] as String;
       _changed();
     } else if (event == 'pong') {
       if (payload.length != 1 || payload['serverTime'] is! int) {

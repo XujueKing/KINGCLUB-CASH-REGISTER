@@ -7,3 +7,8 @@
 复用 K261005002010 和既有充值收款/查询。APP 收藏共用后端 K261005000810，APP 收藏按钮由 APP 会话接入。手机号暂无可展示来源时显示未提供，不能从登录指纹恢复。当前新充值入口为微信，支付宝充值原路退款未开放。
 
 验证：会员扫码流程及现有工作台五项测试通过；四语言文本、固定1366×768布局、ARM32发布包。真实扣款和退款不在自动验收内。
+
+
+## 2026-10-05 follow-up
+
+The member-number display, target-account request contract, realtime refresh and top-aligned layout are corrected in [member page fixes](2026-10-05-member-page-fixes.md). This supersedes the earlier raw userAccount display. Historical account consolidation remains outstanding.

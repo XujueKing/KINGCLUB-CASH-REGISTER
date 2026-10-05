@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 
 import '../auth/staff_auth_controller.dart';
+import '../auth/staff_session.dart';
+import '../network/cashier_realtime_client.dart';
 import '../hardware/scanner_input.dart';
 import '../strings.dart';
 import 'member_identity.dart';
@@ -17,9 +19,13 @@ class StoreMembersPanel extends StatefulWidget {
     super.key,
     required this.auth,
     required this.language,
+    this.enableRealtime = const bool.fromEnvironment('CASHIER_REALTIME'),
+    this.realtimeFactory,
   });
   final StaffAuthController auth;
   final UiLanguage language;
+  final bool enableRealtime;
+  final CashierRealtimeClient Function(StaffSession)? realtimeFactory;
   @override
   State<StoreMembersPanel> createState() => _StoreMembersPanelState();
 }
@@ -31,6 +37,11 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   String? next, notice;
   bool busy = false, foreground = true;
   int epoch = 0;
+  int listEpoch = 0, socketRevision = -1;
+  String? selectedAccount;
+  StaffSession? session;
+  CashierRealtimeClient? socket;
+  Timer? fallback, refreshDelay;
   StreamSubscription<String>? scans;
   String w(String zh, String en) => memberCopy(widget.language, zh, en);
   String newRequestId() {
@@ -43,7 +54,8 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   }
 
   String money(Object? v) => (int.parse('${v ?? 0}') / 100).toStringAsFixed(2);
-  String? get account => detail?['member']?['userAccount'] as String?;
+  String? get account => selectedAccount;
+  String memberNumber(Map member) => member['memberId'] as String? ?? '';
   @override
   void initState() {
     super.initState();
@@ -57,34 +69,87 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
           MemberIdentity.codePattern.hasMatch(code))
         unawaited(link(code));
     });
+    session = widget.auth.session;
+    syncSocket();
+    fallback = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (foreground && socket?.state != CashierRealtimeState.connected) {
+        unawaited(load());
+      }
+    });
     unawaited(load());
   }
 
   void changed() {
     if (widget.auth.busy) return;
+    if (identical(session, widget.auth.session)) return;
+    final previous = session;
+    session = widget.auth.session;
     epoch++;
-    if (widget.auth.session == null) {
+    listEpoch++;
+    syncSocket();
+    if (session == null ||
+        previous?.storeRef != session?.storeRef ||
+        previous?.employeeRef != session?.employeeRef ||
+        previous?.base != session?.base) {
       setState(() {
         members = [];
         detail = null;
+        selectedAccount = null;
       });
-      return;
     }
+    if (session == null) return;
     unawaited(load());
+    if (account != null) unawaited(select(account!, background: true));
+  }
+
+  void syncSocket() {
+    socket?.removeListener(realtimeChanged);
+    socket?.dispose();
+    socket = null;
+    socketRevision = -1;
+    if (!widget.enableRealtime || session == null) return;
+    socket =
+        widget.realtimeFactory?.call(session!) ??
+        CashierRealtimeClient(session!);
+    socket!.addListener(realtimeChanged);
+    socket!.start();
+  }
+
+  void realtimeChanged() {
+    if (!mounted ||
+        !foreground ||
+        socket?.state != CashierRealtimeState.connected ||
+        socketRevision == socket!.revision)
+      return;
+    socketRevision = socket!.revision;
+    if (socket!.lastTopic != null && socket!.lastTopic != 'members') return;
+    refreshDelay?.cancel();
+    refreshDelay = Timer(const Duration(milliseconds: 150), () {
+      unawaited(load());
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     foreground = state == AppLifecycleState.resumed;
-    if (!foreground)
+    if (!foreground) {
       epoch++;
-    else
+      listEpoch++;
+      socket?.stop();
+    } else {
+      socket?.start();
       unawaited(load());
+      if (account != null) unawaited(select(account!, background: true));
+    }
   }
 
   @override
   void dispose() {
     epoch++;
+    listEpoch++;
+    fallback?.cancel();
+    refreshDelay?.cancel();
+    socket?.dispose();
     scans?.cancel();
     widget.auth.removeListener(changed);
     WidgetsBinding.instance.removeObserver(this);
@@ -92,13 +157,13 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   }
 
   Future<void> load({bool more = false}) async {
-    final ticket = epoch;
+    final ticket = ++listEpoch;
     try {
       final r = await widget.auth.storeMembers({
         'action': 'list',
         if (more && next != null) 'after': next,
       });
-      if (!mounted || ticket != epoch) return;
+      if (!mounted || ticket != listEpoch) return;
       setState(() {
         members = [
           if (more) ...members,
@@ -107,23 +172,32 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
         next = r['nextAfter'] as String?;
       });
     } catch (_) {
-      if (mounted)
+      if (mounted && ticket == listEpoch)
         setState(
           () => notice = w('会员列表暂未加载，请重试', 'Could not load members. Retry.'),
         );
     }
   }
 
-  Future<void> select(String user) async {
+  Future<void> select(String user, {bool background = false}) async {
     final ticket = ++epoch;
+    setState(() {
+      selectedAccount = user;
+      notice = null;
+      if (!background || detail?['member']?['userAccount'] != user)
+        detail = null;
+    });
     try {
       final r = await widget.auth.storeMembers({
         'action': 'detail',
-        'userAccount': user,
+        'targetAccount': user,
       });
+      if (r['member']?['userAccount'] != user)
+        throw const FormatException('Member mismatch');
       if (mounted && ticket == epoch)
         setState(() {
           detail = r;
+          selectedAccount = r['member']['userAccount'] as String;
           notice = null;
         });
     } catch (_) {
@@ -143,6 +217,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
       if (mounted && ticket == epoch) {
         setState(() {
           detail = r;
+          selectedAccount = r['member']['userAccount'] as String;
           notice = w('已加入本店会员', 'Added to this store');
         });
         await load();
@@ -177,6 +252,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
   Widget build(BuildContext context) {
     final d = detail, m = d?['member'] as Map?, b = d?['balance'] as Map?;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
           width: 300,
@@ -194,10 +270,6 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                    IconButton(
-                      onPressed: () => load(),
-                      icon: const Icon(Icons.refresh),
                     ),
                   ],
                 ),
@@ -217,13 +289,16 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
                   children: [
                     for (final member in members)
                       ListTile(
+                        key: ValueKey('store-member-${member['userAccount']}'),
                         selected: member['userAccount'] == account,
                         leading: avatar(member),
                         title: Text(
                           member['nickname'] ?? member['userAccount'],
                         ),
-                        subtitle: Text(member['userAccount']),
-                        onTap: () => select(member['userAccount']),
+                        subtitle: Text(memberNumber(member)),
+                        onTap: busy
+                            ? null
+                            : () => select(member['userAccount']),
                       ),
                     if (members.isEmpty)
                       Padding(
@@ -246,7 +321,8 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
         const VerticalDivider(width: 1),
         Expanded(
           child: d == null
-              ? Center(
+              ? Align(
+                  alignment: Alignment.topCenter,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -281,7 +357,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              Text(m['userAccount']),
+                              Text(memberNumber(m)),
                               Text(
                                 w('手机号：', 'Phone: ') +
                                     (m['phone'] ?? w('未提供', 'Not provided')),
@@ -634,7 +710,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
     try {
       final r = await widget.auth.storeMembers({
         'action': 'prepare',
-        'userAccount': account,
+        'targetAccount': account,
         'requestId': newRequestId(),
         'campaignRef': offer['campaignRef'],
         'campaignRevision': offer['revision'],
@@ -692,7 +768,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
     final selected = row;
     try {
       final scope = {
-        'userAccount': account,
+        'targetAccount': account,
         'rechargeRef': selected['rechargeRef'],
       };
       var r = await widget.auth.storeMembers({
@@ -731,7 +807,7 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
           return;
       }
       if (mounted) {
-        await select(scope['userAccount'] as String);
+        await select(scope['targetAccount'] as String);
         setState(
           () => notice = r['state'] == 'refunded'
               ? w('退款完成，赠送已取消', 'Refund completed; gifts cancelled')

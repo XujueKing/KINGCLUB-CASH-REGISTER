@@ -67,6 +67,15 @@ void main() {
       }),
     );
     await until(() => client.revision == 2);
+    socket.inbound.add(
+      await serverFrame(session, uri!, 3, 'commerce.changed', {
+        'storeRef': 'test-store',
+        'topic': 'members',
+      }),
+    );
+    await until(() => client.revision == 3);
+    expect(client.lastTopic, 'members');
+    expect(client.state, CashierRealtimeState.connected);
     client.stop();
     expect(socket.closed, isTrue);
     expect(client.state, CashierRealtimeState.offline);
