@@ -16,7 +16,7 @@ import 'live/store_members_panel.dart';
 import 'live/receipt_accounts_settings.dart';
 import 'live/live_tables_panel.dart';
 import 'live/order_history_panel.dart';
-import 'live/voucher_report_panel.dart';
+import 'live/business_report_panel.dart';
 import 'strings.dart';
 import 'power_icon.dart';
 
@@ -351,10 +351,9 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     3 => StoreMembersPanel(auth: widget.auth, language: widget.language),
     4 =>
       widget.auth.session?.permissions.contains('report.read') == true
-          ? VoucherReportPanel(
+          ? BusinessReportPanel(
               auth: widget.auth,
               language: widget.language,
-              onBack: () => setState(() => page = 0),
             )
           : Center(child: Text(t('staffAuthFailure'))),
     _ => Center(

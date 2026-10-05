@@ -700,7 +700,7 @@ const copy = <String, String>{
   'ordering': '点单|Menu|點單|เมนู',
   'orders': '订单|Orders|訂單|คำสั่งซื้อ',
   'members': '会员|Members|會員|สมาชิก',
-  'reports': '交班报表|Shift reports|交班報表|รายงานกะ',
+  'reports': '报表|Reports|報表|รายงาน',
   'settings': '设置|Settings|設定|ตั้งค่า',
   'preview': '界面演示|UI preview|介面示範|ตัวอย่างหน้าจอ',
   'live': '待接入门店|Store not connected|待接入門店|ยังไม่เชื่อมต่อร้าน',

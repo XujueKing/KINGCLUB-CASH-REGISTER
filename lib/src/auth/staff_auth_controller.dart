@@ -1807,6 +1807,20 @@ class StaffAuthController extends ChangeNotifier {
     return value;
   }
 
+  Future<Map<String,dynamic>> readBusinessReport({required String from,required String to}) async {
+    final identity=_session,api=_api,epoch=_epoch;
+    if(identity==null||api==null||!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    if(!identity.permissions.contains('report.read')) throw const CcsopFailure('CASHIER_PERMISSION_DENIED');
+    final timer=Stopwatch()..start();
+    final raw=await api.call('K261006002016',{'storeRef':identity.storeRef,'from':from,'to':to});
+    _check(epoch);
+    if(!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    final result=raw is Map?raw['result']:null;
+    if(result is! Map||result['storeRef']!=identity.storeRef||result['from']!=from||result['to']!=to||result['summaries'] is! List) throw const FormatException();
+    debugPrint('cashier_business_report elapsed_ms=${timer.elapsedMilliseconds}');
+    return Map<String,dynamic>.from(result);
+  }
+
   Future<Map<String,dynamic>> readOrderHistory({required String from,required String to,
     String search='',String status='all',int page=0}) async {
     final identity=_session,api=_api,epoch=_epoch;
