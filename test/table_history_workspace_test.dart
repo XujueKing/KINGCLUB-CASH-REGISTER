@@ -14,6 +14,7 @@ import 'table_bill_panel_test.dart' show BillAuth;
 import 'support/table_fixture.dart';
 
 class HistoryAuth extends BillAuth {
+  int orderReads = 0;
   @override
   Future<Map<String, dynamic>> wineStorage(Map<String, dynamic> params) async =>
       {
@@ -66,6 +67,7 @@ class HistoryAuth extends BillAuth {
     required String sessionRef,
     String? afterOrder,
   }) async {
+    orderReads++;
     final result = await super.readOrders(
       tableRef: tableRef,
       sessionRef: sessionRef,
@@ -219,8 +221,10 @@ void main() {
       expect(find.byType(TableCalendarPanel), findsNothing);
       expect(find.byKey(const ValueKey('live-table-test-000')), findsOneWidget);
       expect(find.byKey(const ValueKey('live-table-test-001')), findsOneWidget);
+      final readsBeforeSelecting = auth.orderReads;
       await tester.tap(find.byKey(const ValueKey('live-table-test-000')));
       await tester.pumpAndSettle();
+      expect(auth.orderReads, readsBeforeSelecting);
       final bill = tester.widget<TableBillPanel>(find.byType(TableBillPanel));
       expect(bill.readOnly, isTrue);
       expect(bill.seatSessions.length, 2);

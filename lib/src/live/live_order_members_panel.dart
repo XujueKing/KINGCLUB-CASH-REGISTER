@@ -72,6 +72,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     data = WorkspaceReadCache.read<OrderContextSnapshot>(
       widget.auth.session,
       'context/${widget.tableRef}/${widget.sessionRef}',
+      maxAge: const Duration(minutes: 5),
     );
     unawaited(load());
   }
@@ -130,6 +131,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
     int? target,
     String? seatedMember,
   }) async {
+    final timer = Stopwatch()..start();
     final generation = ++epoch, identity = widget.auth.session;
     if (reset) {
       cursors
@@ -146,10 +148,14 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
       failed = false;
     });
     try {
-      final value = await widget.auth.readOrderContext(
-        tableRef: widget.tableRef,
-        sessionRef: widget.sessionRef,
-        afterMember: cursors[requestedPage],
+      final value = await WorkspaceReadCache.readOnce(
+        identity!,
+        'context/${widget.tableRef}/${widget.sessionRef}/${cursors[requestedPage]}',
+        () => widget.auth.readOrderContext(
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          afterMember: cursors[requestedPage],
+        ),
       );
       if (!mounted ||
           generation != epoch ||
@@ -190,6 +196,10 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
           failed = true;
         });
       }
+    } finally {
+      debugPrint(
+        'cashier_context_read elapsed_ms=${timer.elapsedMilliseconds}',
+      );
     }
   }
 

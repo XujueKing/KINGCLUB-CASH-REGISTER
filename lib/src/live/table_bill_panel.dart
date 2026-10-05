@@ -59,6 +59,7 @@ class TableBillPanel extends StatefulWidget {
     this.readOnly = false,
     this.receiptCaption,
     this.receiptDate,
+    this.initialBill,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -72,6 +73,7 @@ class TableBillPanel extends StatefulWidget {
   final bool readOnly;
   final ReceiptCaption? receiptCaption;
   final String? receiptDate;
+  final ({OrderSnapshot snapshot, List<LiveOrder> orders})? initialBill;
   final bool changesAllowed;
   final Widget? leading;
   final Widget? orderAction, primaryAction, beforeActions;
@@ -113,6 +115,16 @@ class _TableBillPanelState extends State<TableBillPanel>
   int epoch = 0;
   final inventory = <String, CatalogProduct>{};
   bool printingBill = false;
+  String get displayKey {
+    final refs =
+        widget.seatSessions
+            .map((s) => '${s['tableRef']}/${s['sessionRef']}')
+            .toSet()
+            .toList()
+          ..sort();
+    return 'bill/${widget.tableRef}/${widget.sessionRef}${refs.isEmpty ? '' : '/${refs.join(',')}'}';
+  }
+
   Future<void> printBill() async {
     final identity = widget.auth.session;
     if (identity == null || printingBill || loading || failed) return;
@@ -256,19 +268,28 @@ class _TableBillPanelState extends State<TableBillPanel>
 
   void restoreDisplayCache() {
     if (widget.emptySeat) return;
-    if (widget.seatSessions.isNotEmpty) return;
     if (foreground && canRead) {
       final cached =
+          (widget.readOnly ? widget.initialBill : null) ??
           WorkspaceReadCache.read<
             ({OrderSnapshot snapshot, List<LiveOrder> orders})
           >(
             widget.auth.session,
-            'bill/${widget.tableRef}/${widget.sessionRef}',
+            displayKey,
+            maxAge: const Duration(minutes: 5),
           );
       if (cached != null) {
         snapshot = cached.snapshot;
         orders = List.of(cached.orders);
       }
+      storedWineServed = List.of(
+        WorkspaceReadCache.read<List<Map<String, dynamic>>>(
+              widget.auth.session,
+              'wine/$displayKey',
+              maxAge: const Duration(minutes: 5),
+            ) ??
+            [],
+      );
     }
   }
 
@@ -324,6 +345,11 @@ class _TableBillPanelState extends State<TableBillPanel>
   Future<void>? activeRead;
   Future<void> load({bool more = false, bool fresh = false}) async {
     if (widget.emptySeat) return;
+    if (widget.readOnly && widget.initialBill != null) {
+      restoreDisplayCache();
+      await loadStoredWine(epoch);
+      return;
+    }
     final previous = activeRead;
     if (previous != null) {
       await previous;
@@ -339,6 +365,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   }
 
   Future<void> readBill({bool more = false}) async {
+    final timer = Stopwatch()..start();
     if (!mounted ||
         !foreground ||
         !canRead ||
@@ -358,10 +385,14 @@ class _TableBillPanelState extends State<TableBillPanel>
       final collected = List<LiveOrder>.of(previous);
       OrderSnapshot? next;
       do {
-        final raw = await widget.auth.readOrders(
-          tableRef: widget.tableRef,
-          sessionRef: widget.sessionRef,
-          afterOrder: after,
+        final raw = await WorkspaceReadCache.readOnce(
+          identity!,
+          'orders/${widget.tableRef}/${widget.sessionRef}/$after',
+          () => widget.auth.readOrders(
+            tableRef: widget.tableRef,
+            sessionRef: widget.sessionRef,
+            afterOrder: after,
+          ),
         );
         if (!mounted ||
             ticket != epoch ||
@@ -371,7 +402,7 @@ class _TableBillPanelState extends State<TableBillPanel>
         }
         next = OrderSnapshot.parse(
           raw,
-          storeRef: identity!.storeRef,
+          storeRef: identity.storeRef,
           tableRef: widget.tableRef,
           sessionRef: widget.sessionRef,
           afterOrder: after,
@@ -384,10 +415,14 @@ class _TableBillPanelState extends State<TableBillPanel>
       )) {
         String? seatCursor;
         do {
-          final raw = await widget.auth.readOrders(
-            tableRef: seat['tableRef']!,
-            sessionRef: seat['sessionRef']!,
-            afterOrder: seatCursor,
+          final raw = await WorkspaceReadCache.readOnce(
+            identity,
+            'orders/${seat['tableRef']}/${seat['sessionRef']}/$seatCursor',
+            () => widget.auth.readOrders(
+              tableRef: seat['tableRef']!,
+              sessionRef: seat['sessionRef']!,
+              afterOrder: seatCursor,
+            ),
           );
           if (!mounted ||
               ticket != epoch ||
@@ -405,12 +440,10 @@ class _TableBillPanelState extends State<TableBillPanel>
           seatCursor = extra.nextAfterOrder;
         } while (seatCursor != null);
       }
-      if (widget.seatSessions.isEmpty)
-        WorkspaceReadCache.put(
-          identity,
-          'bill/${widget.tableRef}/${widget.sessionRef}',
-          (snapshot: next, orders: List<LiveOrder>.unmodifiable(collected)),
-        );
+      WorkspaceReadCache.put(identity, displayKey, (
+        snapshot: next,
+        orders: List<LiveOrder>.unmodifiable(collected),
+      ));
       setState(() {
         orders = collected;
         snapshot = next;
@@ -425,10 +458,13 @@ class _TableBillPanelState extends State<TableBillPanel>
           loading = false;
         });
       }
+    } finally {
+      debugPrint('cashier_bill_read elapsed_ms=${timer.elapsedMilliseconds}');
     }
   }
 
   Future<void> loadStoredWine(int ticket) async {
+    final timer = Stopwatch()..start();
     final identity = widget.auth.session;
     final scope = '${widget.tableRef}/${widget.sessionRef}';
     try {
@@ -440,7 +476,11 @@ class _TableBillPanelState extends State<TableBillPanel>
       ];
       final results = await Future.wait(
         seats.map(
-          (seat) => widget.auth.wineStorage({...seat, 'action': 'served'}),
+          (seat) => WorkspaceReadCache.readOnce(
+            identity!,
+            'wine/${seat['tableRef']}/${seat['sessionRef']}',
+            () => widget.auth.wineStorage({...seat, 'action': 'served'}),
+          ),
         ),
       );
       if (!mounted ||
@@ -455,8 +495,15 @@ class _TableBillPanelState extends State<TableBillPanel>
               Map<String, dynamic>.from(item as Map),
         ],
       );
+      WorkspaceReadCache.put(
+        identity,
+        'wine/$displayKey',
+        List<Map<String, dynamic>>.unmodifiable(storedWineServed),
+      );
     } catch (_) {
       /* Keep the existing bill usable; a failed read never implies pickup success. */
+    } finally {
+      debugPrint('cashier_wine_read elapsed_ms=${timer.elapsedMilliseconds}');
     }
   }
 
@@ -1148,7 +1195,11 @@ class _TableBillPanelState extends State<TableBillPanel>
                       ? const Color(0xff216344)
                       : const Color(0xff994a16),
                 ),
-                onTap: widget.readOnly || wine['restoredItemRef'] != null
+                onTap:
+                    widget.readOnly ||
+                        loading ||
+                        !verifiedSnapshot ||
+                        wine['restoredItemRef'] != null
                     ? null
                     : () async {
                         await showDialog<bool>(

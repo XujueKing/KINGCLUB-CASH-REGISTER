@@ -1,3 +1,9 @@
+## 2026-10-06 Table bill switching latency
+
+Bill and stored-wine display snapshots now survive table switches for up to five minutes within the same staff identity, store and session scope. Fresh server reads still gate payment and item operations. Concurrent identical read-only requests share one in-flight call; failures are retryable and completed calls are not reused as mutation authority. Historical table bills reuse orders already read for the selected business day.
+
+Validated with 30 focused tests (including cached display during blocked refresh, scope isolation, failed-read retry and no redundant history order read), static analysis with no errors/warnings, and same-certificate data-preserving ARM32 installation. SUNMI V1/V2 switching was inspected; observed context/bill/wine read elapsed times were 150-840 ms including request and client processing, not pure API latency or first-frame measurements. No transactions were submitted.
+
 ## 2026-10-06 历史日期复用桌台工作区
 
 左侧“点单”在页面切换前校验当前营业日；历史/未来日期弹出“请先切回今日”，可继续查看或切回今日。取消不改变日期、桌卡或明细；确认先清除旧日期选中场次、读取今日桌台，再打开点单。日期变更统一清理上一日期的工作区引用，默认吧台选择不再自行改日期。导航回归测试覆盖提示、取消、确认读取今日、返回桌台标题与数据一致。

@@ -927,6 +927,7 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                                 tableRef: focused.reference,
                                 sessionRef: focused.session?.reference ?? '',
                                 seatSessions: scopes,
+                                initialBill: history!.bills[focused.reference],
                                 receiptCaption: ReceiptCaption(
                                   storeName: data.storeName,
                                   tableName: focused.name,

@@ -64,6 +64,24 @@ class BillAuth extends TableAuth {
   }
 }
 
+class CachedWineAuth extends BillAuth {
+  Completer<Map<String, dynamic>>? wineGate;
+  @override
+  Future<Map<String, dynamic>> wineStorage(Map<String, dynamic> params) async =>
+      wineGate == null
+      ? {
+          'items': [
+            {
+              'itemRef': 'stored-test',
+              'name': 'Stored bottle',
+              'remainingPercent': 25,
+              'served': false,
+            },
+          ],
+        }
+      : wineGate!.future;
+}
+
 void main() {
   for (final language in UiLanguage.values) {
     testWidgets(
@@ -322,6 +340,33 @@ void main() {
       auth.dispose();
     },
   );
+  testWidgets('returning table shows stored bottles while refresh is pending', (
+    tester,
+  ) async {
+    final auth = CachedWineAuth();
+    await tester.pumpWidget(page(auth, 0));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('stored-wine-stored-test')),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox());
+    auth.ordersGate = Completer<Object?>();
+    auth.wineGate = Completer<Map<String, dynamic>>();
+    await tester.pumpWidget(page(auth, 0));
+    await tester.pump();
+    final card = tester.widget<BillProductCard>(
+      find.byKey(const ValueKey('stored-wine-stored-test')),
+    );
+    expect(card.onTap, isNull);
+    expect(find.text('Test product'), findsOneWidget);
+    auth.ordersGate!.complete(orderFixture());
+    auth.wineGate!.complete({'items': []});
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('stored-wine-stored-test')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    auth.dispose();
+  });
   testWidgets(
     'new draft reveals unpaid tab and contributes to preview totals',
     (tester) async {

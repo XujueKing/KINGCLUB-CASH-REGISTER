@@ -3,11 +3,33 @@
 class WorkspaceReadCache {
   static final _sessions =
       Expando<Map<String, ({DateTime at, Object value})>>();
-  static T? read<T>(Object? identity, String key) {
+  static final _reads = Expando<Map<String, Future<Object?>>>();
+
+  /// Share concurrent read-only requests. Completed calls are not reused as authority.
+  static Future<T> readOnce<T>(
+    Object identity,
+    String key,
+    Future<T> Function() read,
+  ) {
+    final pending = _reads[identity] ??= {};
+    final existing = pending[key];
+    if (existing != null) return existing.then((value) => value as T);
+    late final Future<T> request;
+    request = Future<T>.sync(read).whenComplete(() {
+      if (identical(pending[key], request)) pending.remove(key);
+    });
+    pending[key] = request;
+    return request;
+  }
+
+  static T? read<T>(
+    Object? identity,
+    String key, {
+    Duration maxAge = const Duration(seconds: 30),
+  }) {
     if (identity == null) return null;
     final entry = _sessions[identity]?[key];
-    if (entry == null ||
-        DateTime.now().difference(entry.at) > const Duration(seconds: 30)) {
+    if (entry == null || DateTime.now().difference(entry.at) > maxAge) {
       return null;
     }
     return entry.value is T ? entry.value as T : null;

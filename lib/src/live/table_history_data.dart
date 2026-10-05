@@ -4,9 +4,10 @@ import 'table_snapshot.dart';
 
 /// Reuses the calendar and original order reads; never creates a second bill.
 class TableHistoryData {
-  TableHistoryData(this.snapshot, this.sessions);
+  TableHistoryData(this.snapshot, this.sessions, this.bills);
   final TableSnapshot snapshot;
   final List<Map<String, dynamic>> sessions;
+  final Map<String, ({OrderSnapshot snapshot, List<LiveOrder> orders})> bills;
 
   List<Map<String, String>> scopes(String tableRef) => [
     for (final row in sessions.where((r) => r['tableRef'] == tableRef))
@@ -59,6 +60,7 @@ class TableHistoryData {
     } while (after != null);
 
     final bills = <String, List<LiveOrder>>{};
+    final snapshots = <String, OrderSnapshot>{};
     final timing = <String, String>{};
     // A few independent reads at a time, including every page of each session.
     for (var start = 0; start < rows.length; start += 4) {
@@ -83,6 +85,7 @@ class TableHistoryData {
             );
             orders.addAll(page.orders);
             timing[row['sessionRef']] = page.paymentTiming;
+            snapshots[row['sessionRef']] = page;
             cursor = page.nextAfterOrder;
           } while (cursor != null);
           bills[row['sessionRef']] = orders;
@@ -101,6 +104,8 @@ class TableHistoryData {
       );
     }
     final tables = <LiveTable>[];
+    final tableBills =
+        <String, ({OrderSnapshot snapshot, List<LiveOrder> orders})>{};
     final orderedRefs = <String>{
       for (final table in current.tables)
         if (definitions.containsKey(table.reference)) table.reference,
@@ -116,6 +121,12 @@ class TableHistoryData {
         );
       final orders = [for (final row in sessions) ...bills[row['sessionRef']]!];
       final last = sessions.lastOrNull;
+      if (last != null) {
+        tableBills[ref] = (
+          snapshot: snapshots[last['sessionRef']]!,
+          orders: List.unmodifiable(orders),
+        );
+      }
       final refunded = orders.where((o) => o.refundedCents > 0).toList();
       tables.add(
         LiveTable({
@@ -161,6 +172,10 @@ class TableHistoryData {
         }),
       );
     }
-    return TableHistoryData(TableSnapshot.history(current, date, tables), rows);
+    return TableHistoryData(
+      TableSnapshot.history(current, date, tables),
+      rows,
+      tableBills,
+    );
   }
 }
