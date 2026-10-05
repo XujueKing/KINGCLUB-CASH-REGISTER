@@ -46,6 +46,18 @@ class StorageAuth extends TableAuth {
       'locationCode': params['locationCode'],
       'quantity': params['quantity'],
       'remainingPercent': params['remainingPercent'],
+      'labels': [
+        {
+          'itemRef': '22222222-2222-4222-8222-222222222222',
+          'bottleCode': 'KC:W:' + 'B' * 32,
+          'name': 'Test wine',
+          'nickname': 'Member',
+          'memberNumber': 'KM0000000001',
+          'locationCode': params['locationCode'],
+          'remainingPercent': params['remainingPercent'],
+          'expiresAt': '2026-11-04T00:00:00Z',
+        },
+      ],
     };
     if (loseReply) throw StateError('network reply lost');
     return {'state': 'confirmed', 'receipt': receipt};
@@ -84,6 +96,7 @@ void main() {
                       name: 'Test wine',
                       isCurrent: () => true,
                       storage: vault,
+                      printLabel: (_, _) async => 'checkoutPrintSent',
                     ),
                   ),
                   child: const Text('OPEN'),

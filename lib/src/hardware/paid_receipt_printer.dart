@@ -110,6 +110,23 @@ Future<String> printReceiptPlan({
   required bool Function() current,
   bool reprint = false,
 }) async {
+  return printRasterDocument(
+    render: () async => [
+      for (var page = 0; page < plan.pages.length; page++)
+        (await plan.renderPage(page)).raster,
+    ],
+    printIdentity: printIdentity,
+    current: current,
+    reprint: reprint,
+  );
+}
+
+Future<String> printRasterDocument({
+  required Future<List<MonochromeRaster>> Function() render,
+  required ReceiptPrintIdentity printIdentity,
+  required bool Function() current,
+  bool reprint = false,
+}) async {
   try {
     final discovery = await const PrinterDiscoveryClient().inspect();
     // Installed XP-80U USB printer. Never send raster bytes to a scanner,
@@ -127,11 +144,8 @@ Future<String> printReceiptPlan({
             UsbPrinterSelection.choose(device, interface, endpoint),
     ];
     if (targets.length != 1 || !current()) return 'checkoutPrintUnavailable';
-    final rasters = <MonochromeRaster>[];
-    for (var page = 0; page < plan.pages.length; page++) {
-      if (!current()) return 'checkoutPrintFailed';
-      rasters.add((await plan.renderPage(page)).raster);
-    }
+    final rasters = await render();
+    if (!current()) return 'checkoutPrintFailed';
     final result =
         await RasterPrintCoordinator(
           transport: const NativeRasterPrintTransport(),

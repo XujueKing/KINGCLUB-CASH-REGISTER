@@ -12,6 +12,7 @@ import '../strings.dart';
 import 'member_identity.dart';
 import 'touch_quantity.dart';
 import 'wine_location_picker.dart';
+import '../hardware/wine_label_printer.dart';
 
 class WineStorageDialog extends StatefulWidget {
   const WineStorageDialog({
@@ -25,12 +26,14 @@ class WineStorageDialog extends StatefulWidget {
     required this.name,
     required this.isCurrent,
     this.storage,
+    this.printLabel,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef, sessionRef, orderRef, productRef, name;
   final bool Function() isCurrent;
   final SecretStorage? storage;
+  final Future<String> Function(WineLabel label, bool reprint)? printLabel;
   @override
   State<WineStorageDialog> createState() => _WineStorageDialogState();
 }
@@ -43,6 +46,9 @@ class _WineStorageDialogState extends State<WineStorageDialog>
   String? key;
   Map<String, dynamic>? pending;
   List<String> locations = [];
+  Map<String, dynamic>? confirmedReceipt;
+  bool printFailed = false;
+  final sentLabels = <String>{};
   String? locationCode;
   int maximum = 0, stored = 0, percent = 50;
   bool loading = true,
@@ -116,8 +122,7 @@ class _WineStorageDialogState extends State<WineStorageDialog>
         });
         if (!current) return;
         if (result['state'] == 'confirmed') {
-          await vault.delete(key!);
-          if (current) Navigator.pop(context, true);
+          await finish(Map<String, dynamic>.from(result['receipt'] as Map));
           return;
         }
         if (result['state'] != 'not_observed') throw const FormatException();
@@ -198,10 +203,44 @@ class _WineStorageDialogState extends State<WineStorageDialog>
           receipt['remainingPercent'] != percent ||
           receipt['locationCode'] != locationCode)
         throw const FormatException();
-      await vault.delete(key!);
-      if (current) Navigator.pop(context, true);
+      await finish(Map<String, dynamic>.from(receipt));
     } catch (_) {
       if (mounted) failed = true;
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> finish(
+    Map<String, dynamic> receipt, {
+    bool reprint = false,
+  }) async {
+    confirmedReceipt = receipt;
+    ready = false;
+    if (mounted) setState(() => busy = true);
+    try {
+      final labels = (receipt['labels'] as List)
+          .map((v) => WineLabel(Map<String, dynamic>.from(v as Map)))
+          .toList();
+      if (labels.length != receipt['quantity'] || labels.isEmpty)
+        throw const FormatException();
+      for (final label in labels) {
+        if (sentLabels.contains(label.itemRef)) continue;
+        final result =
+            await (widget.printLabel?.call(label, reprint) ??
+                printWineLabel(
+                  auth: widget.auth,
+                  label: label,
+                  stillCurrent: () => current,
+                  reprint: reprint,
+                ));
+        if (result != 'checkoutPrintSent') throw const FormatException();
+        sentLabels.add(label.itemRef);
+      }
+      await vault.delete(key!);
+      if (mounted && current) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) setState(() => printFailed = true);
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -229,7 +268,23 @@ class _WineStorageDialogState extends State<WineStorageDialog>
                   'ฝากได้ 30 วันนับจากเวลาฝาก',
                 ]),
               ),
-              if (loading)
+              if (confirmedReceipt != null)
+                Text(
+                  printFailed
+                      ? text([
+                          '存酒已成功，标签未确认打印，可补打',
+                          'Wine stored; label not confirmed. Reprint available',
+                          '存酒已成功，標籤未確認列印，可補印',
+                          'Stored; reprint label',
+                        ])
+                      : text([
+                          '存酒已成功，正在打印瓶身标签',
+                          'Wine stored. Printing bottle labels',
+                          '存酒已成功，正在列印瓶身標籤',
+                          'Stored; printing labels',
+                        ]),
+                )
+              else if (loading)
                 const LinearProgressIndicator()
               else if (!ready && !failed && maximum == 0)
                 Text(
@@ -314,8 +369,20 @@ class _WineStorageDialogState extends State<WineStorageDialog>
         ),
       ),
       actions: [
+        if (printFailed && confirmedReceipt != null)
+          FilledButton(
+            onPressed: busy
+                ? null
+                : () => finish(confirmedReceipt!, reprint: true),
+            child: Text(
+              text(['补打存酒标签', 'Reprint labels', '補印存酒標籤', 'Reprint labels']),
+            ),
+          ),
+
         TextButton(
-          onPressed: busy ? null : () => Navigator.pop(context),
+          onPressed: busy
+              ? null
+              : () => Navigator.pop(context, confirmedReceipt != null),
           child: Text(tr(widget.language, 'staffCancelSelection')),
         ),
         if (failed)
@@ -323,7 +390,11 @@ class _WineStorageDialogState extends State<WineStorageDialog>
             onPressed: busy ? null : load,
             child: Text(text(['刷新', 'Refresh', '重新整理', 'รีเฟรช'])),
           ),
-        if (!loading && !failed && !ready && maximum > 0)
+        if (confirmedReceipt == null &&
+            !loading &&
+            !failed &&
+            !ready &&
+            maximum > 0)
           FilledButton(
             onPressed: locationCode == null
                 ? null

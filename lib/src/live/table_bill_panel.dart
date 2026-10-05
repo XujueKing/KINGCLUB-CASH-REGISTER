@@ -94,6 +94,7 @@ class TableBillPanel extends StatefulWidget {
 class _TableBillPanelState extends State<TableBillPanel>
     with WidgetsBindingObserver {
   List<LiveOrder> orders = [];
+  List<Map<String, dynamic>> storedWineServed = [];
   String filter = 'all';
   OrderSnapshot? snapshot;
   bool loading = false, failed = false, foreground = true, checkout = false;
@@ -257,6 +258,7 @@ class _TableBillPanelState extends State<TableBillPanel>
     verifiedSnapshot = false;
     setState(() {
       orders = [];
+      storedWineServed = [];
       snapshot = null;
       loading = false;
       failed = false;
@@ -323,6 +325,7 @@ class _TableBillPanelState extends State<TableBillPanel>
       return;
     }
     final ticket = ++epoch, identity = widget.auth.session;
+    unawaited(loadStoredWine(ticket));
     final cursor = more ? snapshot?.nextAfterOrder : null;
     final previous = more ? List<LiveOrder>.of(orders) : <LiveOrder>[];
     setState(() {
@@ -401,6 +404,38 @@ class _TableBillPanelState extends State<TableBillPanel>
           loading = false;
         });
       }
+    }
+  }
+
+  Future<void> loadStoredWine(int ticket) async {
+    final identity = widget.auth.session;
+    final scope = '${widget.tableRef}/${widget.sessionRef}';
+    try {
+      final seats = [
+        {'tableRef': widget.tableRef, 'sessionRef': widget.sessionRef},
+        ...widget.seatSessions.where(
+          (s) => s['sessionRef'] != widget.sessionRef,
+        ),
+      ];
+      final results = await Future.wait(
+        seats.map(
+          (seat) => widget.auth.wineStorage({...seat, 'action': 'served'}),
+        ),
+      );
+      if (!mounted ||
+          ticket != epoch ||
+          !identical(identity, widget.auth.session) ||
+          scope != '${widget.tableRef}/${widget.sessionRef}')
+        return;
+      setState(
+        () => storedWineServed = [
+          for (final result in results)
+            for (final item in result['items'] as List)
+              Map<String, dynamic>.from(item as Map),
+        ],
+      );
+    } catch (_) {
+      /* Keep the existing bill usable; a failed read never implies pickup success. */
     }
   }
 
@@ -1046,8 +1081,33 @@ class _TableBillPanelState extends State<TableBillPanel>
             ),
           if (filter == 'voucher')
             Text(t('billSourceUnavailable'))
-          else if (!loading && !failed && visible.isEmpty && drafts.isEmpty)
+          else if (!loading &&
+              !failed &&
+              visible.isEmpty &&
+              drafts.isEmpty &&
+              storedWineServed.isEmpty)
             Text(t('billNoItems')),
+          if (filter == 'all')
+            for (final wine in storedWineServed)
+              Card(
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.wine_bar_outlined),
+                  title: Text('${wine['name']}'),
+                  subtitle: Text(
+                    '${wine['locationCode'] ?? ''} ? ${wine['remainingPercent']}%',
+                  ),
+                  trailing: Text(
+                    [
+                      '取存酒·已上',
+                      'Stored wine ? served',
+                      '取存酒·已上',
+                      'Served stored wine',
+                    ][widget.language.index],
+                    style: const TextStyle(color: Colors.green),
+                  ),
+                ),
+              ),
           for (final group in groups)
             BillProductCard(
               key: ValueKey(

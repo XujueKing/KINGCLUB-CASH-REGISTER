@@ -9,6 +9,7 @@ import '../network/ccsop_client.dart';
 import '../strings.dart';
 import 'provider_payment.dart';
 import 'voucher_group_admission_card.dart';
+import 'wine_pickup_panel.dart';
 
 /// Official single-coupon redemption is separate from package fulfillment.
 /// No preview or redemption alone adds AA drinks to the table bill.
@@ -18,11 +19,13 @@ class VoucherWorkspacePanel extends StatefulWidget {
     required this.auth,
     required this.language,
     this.tableName,
+    this.tableRef,
+    this.sessionRef,
     this.scannerEvents,
   });
   final StaffAuthController auth;
   final UiLanguage language;
-  final String? tableName;
+  final String? tableName, tableRef, sessionRef;
   final Stream<String>? scannerEvents;
   @override
   State<VoucherWorkspacePanel> createState() => _VoucherWorkspacePanelState();
@@ -52,7 +55,8 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     scanner = (widget.scannerEvents ?? ScannerInput.codes).listen(
       (value) {
-        if (mounted &&
+        if (channel != 'wine' &&
+            mounted &&
             foreground &&
             !busy &&
             ModalRoute.of(context)?.isCurrent == true)
@@ -291,7 +295,7 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
                         channel = item;
                         result = null;
                         choices.clear();
-                        message = item == 'douyin'
+                        message = item == 'douyin' || item == 'wine'
                             ? null
                             : 'voucherChannelPending';
                       }),
@@ -306,17 +310,30 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
         ],
       ),
       const SizedBox(height: 28),
-      const Icon(Icons.qr_code_scanner, size: 48),
-      const SizedBox(height: 12),
-      Text(
-        t(busy ? 'voucherReading' : 'voucherScanHint'),
-        textAlign: TextAlign.center,
-      ),
-      if (message != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: Text(t(message!), textAlign: TextAlign.center),
+      if (channel == 'wine')
+        WinePickupPanel(
+          key: ValueKey(
+            'wine/${widget.tableRef}/${widget.sessionRef}/${widget.auth.session?.employeeRef}',
+          ),
+          auth: widget.auth,
+          language: widget.language,
+          tableRef: widget.tableRef,
+          sessionRef: widget.sessionRef,
+          scannerEvents: widget.scannerEvents,
+        )
+      else ...[
+        const Icon(Icons.qr_code_scanner, size: 48),
+        const SizedBox(height: 12),
+        Text(
+          t(busy ? 'voucherReading' : 'voucherScanHint'),
+          textAlign: TextAlign.center,
         ),
+        if (message != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(t(message!), textAlign: TextAlign.center),
+          ),
+      ],
       if (result != null) ...[
         const SizedBox(height: 16),
         if (confirmationMessage != null)

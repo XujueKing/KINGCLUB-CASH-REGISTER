@@ -682,6 +682,8 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                             auth: widget.auth,
                             language: widget.language,
                             tableName: focused?.name,
+                            tableRef: focused?.reference,
+                            sessionRef: focused?.session?.reference,
                           )
                         : Column(
                             children: [

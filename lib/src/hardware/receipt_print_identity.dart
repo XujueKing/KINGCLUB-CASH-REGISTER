@@ -58,6 +58,26 @@ class ReceiptPrintIdentity {
       throw const FormatException('RECEIPT_PRINT_SCOPE_INVALID');
     }
   }
+  ReceiptPrintIdentity.wineLabel({
+    required this.base,
+    required this.storeRef,
+    required String itemRef,
+  }) : orderRef = 'wine-label:$itemRef',
+       isTable = false {
+    final uri = Uri.tryParse(base);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        !RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(storeRef) ||
+        !RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ).hasMatch(itemRef)) {
+      throw const FormatException('WINE_LABEL_SCOPE_INVALID');
+    }
+  }
   final bool isTable;
   final String base, storeRef, orderRef;
   String get canonical => jsonEncode([
