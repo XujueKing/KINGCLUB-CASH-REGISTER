@@ -7,6 +7,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'scan_icon.dart';
+
 import '../main.dart';
 import 'auth/staff_auth_controller.dart';
 import 'hardware/printer_discovery_dialog.dart';
@@ -66,13 +68,13 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     'voucherWorkspace',
   ];
   static const icons = [
-    Icons.grid_view_rounded,
-    Icons.restaurant_menu,
-    Icons.receipt_long_outlined,
-    Icons.people_outline,
-    Icons.bar_chart_rounded,
-    Icons.tune_rounded,
-    Icons.qr_code_scanner,
+    Icon(Icons.grid_view_rounded),
+    Icon(Icons.restaurant_menu),
+    Icon(Icons.receipt_long_outlined),
+    Icon(Icons.people_outline),
+    Icon(Icons.bar_chart_rounded),
+    Icon(Icons.tune_rounded),
+    ScanIcon(),
   ];
 
   @override
@@ -136,12 +138,14 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                                     isLabelVisible:
                                         index == 0 && orderAlerts.count > 0,
                                     label: Text(orderAlerts.count.toString()),
-                                    child: Icon(
-                                      icons[index],
-                                      color: page == index
-                                          ? const Color(0xFFE2C88D)
-                                          : const Color(0xFFB9C9C2),
-                                      size: 23,
+                                    child: IconTheme(
+                                      data: IconThemeData(
+                                        color: page == index
+                                            ? const Color(0xFFE2C88D)
+                                            : const Color(0xFFB9C9C2),
+                                        size: 23,
+                                      ),
+                                      child: icons[index],
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -290,7 +294,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                               language: widget.language,
                             ),
                           ),
-                          icon: const Icon(Icons.qr_code_scanner),
+                          icon: const ScanIcon(),
                           label: Text(t('togetherAdmission')),
                         ),
                       Text(

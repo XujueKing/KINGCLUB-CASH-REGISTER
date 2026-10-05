@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../hardware/scanner_input.dart';
 import '../network/ccsop_client.dart';
@@ -321,7 +323,7 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
           initialCode: wineInitialCode,
         )
       else ...[
-        const Icon(Icons.qr_code_scanner, size: 48),
+        const ScanIcon(size: 48),
         const SizedBox(height: 12),
         Text(
           busy

@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../auth/session_vault.dart';
 import '../hardware/scanner_input.dart';
@@ -555,7 +557,7 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
                                   ].any(original.permissions.contains)
                               ? null
                               : scan,
-                          icon: const Icon(Icons.qr_code_scanner),
+                          icon: const ScanIcon(),
                           label: Text(
                             rechargeText(
                               l,
@@ -842,7 +844,7 @@ class _RechargeOfflineReceiptDialogState
             ],
             if (ready) ...[
               const SizedBox(height: 20),
-              const Icon(Icons.qr_code_scanner, size: 54),
+              const ScanIcon(size: 54),
               const SizedBox(height: 12),
               Text(
                 t(
@@ -1115,7 +1117,7 @@ class _RechargeScanDialogState extends State<RechargeScanDialog>
               style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
-            const Icon(Icons.qr_code_scanner, size: 72),
+            const ScanIcon(size: 72),
             const SizedBox(height: 16),
             Text(
               t(

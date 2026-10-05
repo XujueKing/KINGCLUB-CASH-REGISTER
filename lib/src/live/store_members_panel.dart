@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import 'dart:math';
 
 import '../auth/staff_auth_controller.dart';
@@ -355,11 +357,11 @@ class _StoreMembersPanelState extends State<StoreMembersPanel>
         Expanded(
           child: d == null
               ? Align(
-                  alignment: Alignment.topCenter,
+                  alignment: const Alignment(0, -0.2),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.qr_code_scanner, size: 64),
+                      const ScanIcon(size: 64),
                       const SizedBox(height: 16),
                       Text(
                         notice ??

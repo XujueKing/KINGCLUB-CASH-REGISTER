@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../hardware/scanner_input.dart';
 import '../strings.dart';
@@ -87,7 +89,7 @@ class _AuthorizationState extends State<_Authorization> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.qr_code_scanner, size: 64),
+          const ScanIcon(size: 64),
           const SizedBox(height: 16),
           Text(
             words([

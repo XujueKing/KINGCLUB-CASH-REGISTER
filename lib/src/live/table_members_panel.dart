@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../hardware/scanner_input.dart';
 import '../strings.dart';
@@ -192,7 +194,7 @@ class TableMembersPanelState extends State<TableMembersPanel>
     children: [
       Row(
         children: [
-          const Icon(Icons.qr_code_scanner, size: 20),
+          const ScanIcon(size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

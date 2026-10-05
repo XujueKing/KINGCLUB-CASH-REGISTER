@@ -7,6 +7,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'order_context_snapshot.dart';
@@ -323,7 +325,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
                 onPressed: data == null || loading
                     ? null
                     : () => setState(() => seating = true),
-                icon: const Icon(Icons.qr_code_scanner, size: 18),
+                icon: const ScanIcon(size: 18),
                 label: Text(t('seatingTitle')),
               ),
             IconButton(

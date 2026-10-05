@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import 'recharge_touch_dialog.dart' show rechargeText;
@@ -166,7 +168,7 @@ class _ReceiptAccountsSettingsState extends State<ReceiptAccountsSettings> {
                         for (final value in accounts)
                           ListTile(
                             contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.qr_code),
+                            leading: const ScanIcon(),
                             title: Text(value),
                             trailing: IconButton(
                               onPressed: saving

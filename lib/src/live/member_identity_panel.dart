@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../strings.dart';
 import '../hardware/scanner_input.dart';
@@ -212,7 +214,7 @@ class _MemberIdentityPanelState extends State<MemberIdentityPanel>
                       textInputAction: TextInputAction.go,
                       decoration: InputDecoration(
                         labelText: t('memberIdentityInput'),
-                        prefixIcon: const Icon(Icons.qr_code_scanner),
+                        prefixIcon: const ScanIcon(),
                       ),
                       onSubmitted: (_) => unawaited(scan()),
                       onEditingComplete: () {},

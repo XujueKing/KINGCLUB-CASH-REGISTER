@@ -4,6 +4,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import '../scan_icon.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../auth/staff_auth_controller.dart';
@@ -217,7 +219,7 @@ class _TableDiscountDialogState extends State<TableDiscountDialog>
                 ],
               ),
             if (scanning) ...[
-              const Icon(Icons.qr_code_scanner, size: 64),
+              const ScanIcon(size: 64),
               const SizedBox(height: 16),
               Text(t('checkoutManagerScan')),
             ],

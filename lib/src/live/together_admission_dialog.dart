@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../scan_icon.dart';
+
 import '../auth/staff_auth_controller.dart';
 import '../hardware/scanner_input.dart';
 import '../strings.dart';
@@ -148,7 +150,7 @@ class _TogetherAdmissionDialogState extends State<TogetherAdmissionDialog>
               autocorrect: false,
               enableSuggestions: false,
               decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.qr_code_scanner),
+                prefixIcon: ScanIcon(),
               ),
               onSubmitted: (value) => unawaited(scan(value.trim())),
               onEditingComplete: () {},
