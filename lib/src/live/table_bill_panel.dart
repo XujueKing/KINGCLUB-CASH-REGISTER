@@ -56,6 +56,9 @@ class TableBillPanel extends StatefulWidget {
     this.beforeActions,
     this.seatSessions = const [],
     this.emptySeat = false,
+    this.readOnly = false,
+    this.receiptCaption,
+    this.receiptDate,
   });
   final StaffAuthController auth;
   final UiLanguage language;
@@ -66,6 +69,9 @@ class TableBillPanel extends StatefulWidget {
 
   /// Selected unused seat: render the same bill without creating a session.
   final bool emptySeat;
+  final bool readOnly;
+  final ReceiptCaption? receiptCaption;
+  final String? receiptDate;
   final bool changesAllowed;
   final Widget? leading;
   final Widget? orderAction, primaryAction, beforeActions;
@@ -162,26 +168,38 @@ class _TableBillPanelState extends State<TableBillPanel>
         ));
       }
     }
+    if (filter == 'all' || filter == 'paid') {
+      for (final wine in storedWineServed) {
+        items.add((
+          name: '${(wine['names'] as Map?)?['zh-CN'] ?? wine['name']}',
+          specification:
+              '${wine['specification'] ?? ''} ${wine['remainingPercent']}%',
+          quantity: 1,
+          priceCents: 0,
+          state: [
+            '存酒',
+            'Stored wine',
+            '存酒',
+            'รับเครื่องดื่ม',
+          ][widget.language.index],
+        ));
+      }
+    }
     if (items.isEmpty) return;
     setState(() => printingBill = true);
     try {
-      final caption = await readReceiptCaption(
-        widget.auth,
-        widget.tableRef,
-        widget.sessionRef,
-      );
+      final caption =
+          widget.receiptCaption ??
+          await readReceiptCaption(
+            widget.auth,
+            widget.tableRef,
+            widget.sessionRef,
+          );
       final plan = ReceiptRasterPlan.bill(
         language: widget.language,
         caption: caption,
-        filterLabel: t(
-          {
-            'all': 'billAllConsumption',
-            'pending': 'tableBillUnpaid',
-            'paid': 'tableBillPaid',
-            'gift': 'billGift',
-            'voucher': 'billVoucher',
-          }[filter]!,
-        ),
+        filterLabel:
+            '${widget.receiptDate == null ? '' : '${widget.receiptDate} · '}${t({'all': 'billAllConsumption', 'pending': 'tableBillUnpaid', 'paid': 'tableBillPaid', 'gift': 'billGift', 'voucher': 'billVoucher'}[filter]!)}',
         items: items,
       );
       final digest = await Sha256().hash(
@@ -540,6 +558,7 @@ class _TableBillPanelState extends State<TableBillPanel>
   }
 
   bool canReduce(BillProductGroup group) =>
+      !widget.readOnly &&
       verifiedSnapshot &&
       !checkout &&
       widget.changesAllowed &&
@@ -1129,7 +1148,7 @@ class _TableBillPanelState extends State<TableBillPanel>
                       ? const Color(0xff216344)
                       : const Color(0xff994a16),
                 ),
-                onTap: wine['restoredItemRef'] != null
+                onTap: widget.readOnly || wine['restoredItemRef'] != null
                     ? null
                     : () async {
                         await showDialog<bool>(
@@ -1197,19 +1216,20 @@ class _TableBillPanelState extends State<TableBillPanel>
               totalCents: group.totalCents + (draftFor(group)?.totalCents ?? 0),
               thumbnailPath: group.item.thumbnailPath,
               base: widget.auth.session?.base,
-              onTap: widget.seatSessions.isEmpty
+              onTap: !widget.readOnly && widget.seatSessions.isEmpty
                   ? () => openGroup(group)
                   : null,
               specialPrice: group.specialPrice,
               quantityControls: true,
               productRef: group.groupingRef,
-              onMinus: !failed && !checkout
+              onMinus: !widget.readOnly && !failed && !checkout
                   ? (draftFor(group) != null
                         ? draftFor(group)!.onMinus
                         : (canReduce(group) ? () => reduceGroup(group) : null))
                   : null,
               onPlus:
-                  !failed &&
+                  !widget.readOnly &&
+                      !failed &&
                       (group.specialPrice
                           ? widget.onQuickAddSpecialProduct != null
                           : widget.onQuickAddProduct != null) &&
@@ -1390,16 +1410,21 @@ class _TableBillPanelState extends State<TableBillPanel>
                       backgroundColor: const Color(0xFFDC2626),
                       foregroundColor: Colors.white,
                       disabledBackgroundColor:
-                          (pending?.totalCents ?? 0) > 0 || widget.recording
+                          !widget.readOnly &&
+                              ((pending?.totalCents ?? 0) > 0 ||
+                                  widget.recording)
                           ? const Color(0xFFDC2626)
                           : null,
                       disabledForegroundColor:
-                          (pending?.totalCents ?? 0) > 0 || widget.recording
+                          !widget.readOnly &&
+                              ((pending?.totalCents ?? 0) > 0 ||
+                                  widget.recording)
                           ? Colors.white
                           : null,
                     ),
                     onPressed:
-                        !loading &&
+                        !widget.readOnly &&
+                            !loading &&
                             !failed &&
                             !checkout &&
                             widget.checkoutAllowed &&

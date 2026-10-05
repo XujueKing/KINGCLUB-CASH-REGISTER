@@ -85,7 +85,7 @@ class TableSessionSnapshot {
             ? refundedCents != 0
             : refundedCents < refundedOrders) ||
         !value.containsKey('partySize') ||
-        !{'open', 'clearing'}.contains(status) ||
+        !{'open', 'clearing', 'closed'}.contains(status) ||
         !{'prepay', 'postpay'}.contains(paymentTiming)) {
       throw const FormatException();
     }
@@ -158,6 +158,8 @@ class LiveTable {
       ? (reservation == null ? 'free' : 'tableReserved')
       : session!.status == 'clearing'
       ? 'cleaning'
+      : session!.status == 'closed' && session!.pendingCents == 0
+      ? 'tableClosed'
       : session!.temporaryHold
       ? 'tableTemporaryHold'
       : session!.pendingCents > 0
@@ -167,6 +169,18 @@ class LiveTable {
 
 /// One server transaction/page, not a claim of an atomic all-store snapshot.
 class TableSnapshot {
+  factory TableSnapshot.history(
+    TableSnapshot current,
+    String date,
+    List<LiveTable> tables,
+  ) => TableSnapshot._(
+    current.storeName,
+    current.currency,
+    date,
+    current.observedAt,
+    List.unmodifiable(tables),
+    null,
+  );
   TableSnapshot._(
     this.storeName,
     this.currency,

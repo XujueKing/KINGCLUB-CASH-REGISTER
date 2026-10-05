@@ -34,6 +34,9 @@ import '../strings.dart';
 import 'table_snapshot.dart';
 import 'table_status_color.dart';
 import 'table_bill_panel.dart';
+import 'table_history_data.dart';
+import '../scan_icon.dart';
+import '../hardware/receipt_document_renderer.dart';
 import 'live_orders_panel.dart';
 import 'table_checkout_recovery_panel.dart';
 import 'live_opening_panel.dart';
@@ -240,6 +243,49 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   Timer? refreshDebounce;
   Timer? clockTimer;
   DateTime? selectedDate;
+  TableHistoryData? history;
+  bool historyLoading = false, historyFailed = false;
+  int historyEpoch = 0;
+  bool get historyMode =>
+      selectedDate != null &&
+      selectedDate!.isBefore(tableBusinessDay(DateTime.now()));
+
+  Future<void> changeDate(DateTime? date) async {
+    if (date == tableBusinessDay(DateTime.now())) date = null;
+    final generation = ++historyEpoch;
+    setState(() {
+      selectedDate = date;
+      history = null;
+      historyFailed = false;
+      historyLoading = historyMode;
+      emptyBarMenu = false;
+      autoSeatPending = false;
+    });
+    widget.onMenuChanged?.call(false);
+    if (!historyMode) return;
+    final identity = widget.auth.session;
+    try {
+      if (snapshot == null) await load();
+      if (!mounted || generation != historyEpoch || snapshot == null) return;
+      final value = await TableHistoryData.read(
+        widget.auth,
+        snapshot!,
+        date!.toIso8601String().substring(0, 10),
+      );
+      if (!mounted ||
+          generation != historyEpoch ||
+          !identical(identity, widget.auth.session))
+        return;
+      setState(() => history = value);
+    } catch (_) {
+      if (mounted && generation == historyEpoch)
+        setState(() => historyFailed = true);
+    } finally {
+      if (mounted && generation == historyEpoch)
+        setState(() => historyLoading = false);
+    }
+  }
+
   String t(String key) => tr(widget.language, key);
   bool autoSeatPending = false;
 
@@ -289,7 +335,9 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   @override
   void didUpdateWidget(covariant LiveTablesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.menuVisible == true && oldWidget.menuVisible != true) {
+    if (!historyMode &&
+        widget.menuVisible == true &&
+        oldWidget.menuVisible != true) {
       autoSeatPending = focusedTableRef == null;
       selectDefaultBarSeat();
     }
@@ -628,8 +676,8 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         },
       );
     }
-    final data = snapshot;
-    if (selectedDate != null) {
+    final data = historyMode ? history?.snapshot : snapshot;
+    if (selectedDate != null && !historyMode) {
       return Column(
         children: [
           workspaceHeader(),
@@ -652,9 +700,10 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (data == null) workspaceHeader(),
-        if (loading && data == null) const LinearProgressIndicator(),
+        if ((historyMode ? historyLoading : loading) && data == null)
+          const LinearProgressIndicator(),
         Expanded(
-          child: failed
+          child: (historyMode ? historyFailed : failed)
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
@@ -718,6 +767,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                 for (final seat in data.tables.where(
                                   (s) =>
                                       s.parentBarRef == bar.reference &&
+                                      !historyMode &&
                                       widget.orderAlerts?.hasTable(
                                             s.reference,
                                           ) ==
@@ -729,12 +779,16 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                                 for (final seat in data.tables.where(
                                   (s) =>
                                       s.parentBarRef == bar.reference &&
+                                      !historyMode &&
                                       barDrafts.contains(s.reference),
                                 ))
                                   seat.barSeatNumber!,
                               },
                               groups: [
-                                for (final refs in barGroups)
+                                for (final refs
+                                    in historyMode
+                                        ? <List<String>>[]
+                                        : barGroups)
                                   if (data.tables
                                           .where(
                                             (t) =>
@@ -801,6 +855,52 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                         ],
                       ],
                     );
+                    if (historyMode && focused != null) {
+                      final scopes = history!.scopes(focused.reference);
+                      return Row(
+                        children: [
+                          Expanded(flex: 2, child: grid),
+                          const VerticalDivider(
+                            width: 1,
+                            thickness: 1,
+                            color: Color(0xffd7e2dc),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: TableBillPanel(
+                                key: ValueKey(
+                                  'history-${selectedDate}-${focused.reference}',
+                                ),
+                                auth: widget.auth,
+                                language: widget.language,
+                                tableRef: focused.reference,
+                                sessionRef: focused.session?.reference ?? '',
+                                seatSessions: scopes,
+                                receiptCaption: ReceiptCaption(
+                                  storeName: data.storeName,
+                                  tableName: focused.name,
+                                  partySize: focused.session?.partySize,
+                                ),
+                                receiptDate: data.businessDate,
+                                revision: 0,
+                                fillHeight: true,
+                                readOnly: true,
+                                changesAllowed: false,
+                                checkoutAllowed: false,
+                                emptySeat: scopes.isEmpty,
+                                headerBuilder: (filter) =>
+                                    historyBillHeader(focused, filter),
+                                orderAction: OutlinedButton(
+                                  onPressed: null,
+                                  child: Text(t('ordering')),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
                     if (focused?.isBarSeat == true &&
                         focused?.session == null) {
                       final seat = focused!;
@@ -1197,13 +1297,17 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
           child: Row(
             children: [
               Text(
-                t((widget.menuVisible ?? emptyBarMenu) ? 'ordering' : 'tables'),
+                t(
+                  !historyMode && (widget.menuVisible ?? emptyBarMenu)
+                      ? 'ordering'
+                      : 'tables',
+                ),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (!(widget.menuVisible ?? emptyBarMenu)) ...[
+              if (historyMode || !(widget.menuVisible ?? emptyBarMenu)) ...[
                 const SizedBox(width: 14),
                 for (final floor in [1, 2]) ...[
                   ChoiceChip(
@@ -1236,12 +1340,12 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
         IconButton(
           key: const ValueKey('table-tools'),
           tooltip: t('tableTools'),
-          onPressed: foreground ? showTools : null,
+          onPressed: foreground && !historyMode ? showTools : null,
           icon: const Icon(Icons.more_horiz),
         ),
         if (selectedDate != null)
           TextButton(
-            onPressed: () => setState(() => selectedDate = null),
+            onPressed: () => unawaited(changeDate(null)),
             child: Text(t('ordersBack')),
           ),
         TextButton.icon(
@@ -1266,10 +1370,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
               lastDate: DateTime(now.year + 3, 12, 31),
             );
             if (!mounted || date == null) return;
-            setState(() {
-              selectedDate = date;
-              focusedTableRef = null;
-            });
+            await changeDate(date);
           },
           icon: const Icon(Icons.calendar_month_outlined, size: 18),
           label: Text(
@@ -1283,6 +1384,111 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
       ],
     ),
   );
+
+  Widget historyBillHeader(LiveTable table, Widget filter) {
+    const member = IconButton(
+      onPressed: null,
+      icon: CircleAvatar(
+        radius: 16,
+        backgroundColor: Color(0xffdedede),
+        child: Icon(Icons.person, color: Color(0xff9e9e9e), size: 23),
+      ),
+    );
+    const voucher = IconButton(
+      onPressed: null,
+      icon: ScanIcon(size: 24, color: Color(0xffa7adaa)),
+    );
+    final color = tableStatusColor(table);
+    if (table.isBarSeat) {
+      return BarBillHeader(
+        number: table.barSeatNumber!,
+        color: color,
+        language: widget.language,
+        filter: filter,
+        member: member,
+        voucherAction: voucher,
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          key: const ValueKey('bill-table-badge'),
+          constraints: const BoxConstraints(
+            minWidth: 52,
+            maxWidth: 82,
+            minHeight: 48,
+          ),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            gradient: tableStatusGradient(color),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            table.name,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            style: TextStyle(
+              color: color == Colors.white
+                  ? const Color(0xff263c30)
+                  : Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      t('ordersDetails'),
+                      key: const ValueKey('bill-heading'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: TextButton(
+                      onPressed: null,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        minimumSize: const Size(0, 20),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        t(table.stateLabel),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                '${t('guests')}: ${table.session?.partySize ?? '—'}/${table.maximumSeats}',
+                style: const TextStyle(fontSize: 10, color: Color(0xff9e9e9e)),
+              ),
+            ],
+          ),
+        ),
+        filter,
+        voucher,
+        member,
+      ],
+    );
+  }
 
   void showTools() {
     final toolsSession = widget.auth.session;
@@ -1565,6 +1771,14 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   }
 
   Future<void> selectTable(LiveTable table) async {
+    if (historyMode) {
+      setState(() {
+        focusedTableRef = table.reference;
+        emptyBarMenu = false;
+      });
+      widget.onMenuChanged?.call(false);
+      return;
+    }
     widget.orderAlerts?.viewed(table);
     if (table.isBarCounter || table.isBarSeat) {
       if (table.status != 'active') return;
@@ -1595,7 +1809,7 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
   }
 
   Color tableColor(LiveTable table) =>
-      widget.orderAlerts?.hasTable(table.reference) == true
+      !historyMode && widget.orderAlerts?.hasTable(table.reference) == true
       ? const Color(0xffea580c)
       : tableStatusColor(table);
 
@@ -1679,11 +1893,14 @@ class _LiveTablesPanelState extends State<LiveTablesPanel>
                               if (session != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
-                                  tableOpeningLabel(
-                                    session,
-                                    widget.language,
-                                    snapshot?.observedAt ?? DateTime.now(),
-                                  ),
+                                  historyMode
+                                      ? '${session.openedAt!.toLocal().month}/${session.openedAt!.toLocal().day} ${session.openedAt!.toLocal().hour.toString().padLeft(2, '0')}:${session.openedAt!.toLocal().minute.toString().padLeft(2, '0')}'
+                                      : tableOpeningLabel(
+                                          session,
+                                          widget.language,
+                                          snapshot?.observedAt ??
+                                              DateTime.now(),
+                                        ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(fontSize: 11),
