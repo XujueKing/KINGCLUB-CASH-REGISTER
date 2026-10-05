@@ -509,16 +509,18 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
                 localized('美团', 'Meituan', '美團', 'Meituan'),
               ),
               mark(
-                const Text(
-                  'KING',
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
-                    color: ink,
-                  ),
+                Image.asset(
+                  'assets/brand/platform-coupon.png',
+                  width: 54,
+                  height: 32,
+                  fit: BoxFit.contain,
                 ),
-                localized('KING 券', 'KING vouchers', 'KING 券', 'คูปอง KING'),
+                localized(
+                  '平台优惠券',
+                  'Platform coupons',
+                  '平台優惠券',
+                  'คูปองแพลตฟอร์ม',
+                ),
               ),
               mark(
                 Image.asset(
@@ -529,7 +531,12 @@ class _VoucherWorkspacePanelState extends State<VoucherWorkspacePanel>
                   colorBlendMode: BlendMode.srcIn,
                   fit: BoxFit.contain,
                 ),
-                localized('本店', 'This store', '本店', 'ร้านนี้'),
+                localized(
+                  '本店会员卡',
+                  'Store member card',
+                  '本店會員卡',
+                  'บัตรสมาชิกร้าน',
+                ),
               ),
               mark(
                 const Icon(Icons.wine_bar_outlined, size: 30, color: ink),
