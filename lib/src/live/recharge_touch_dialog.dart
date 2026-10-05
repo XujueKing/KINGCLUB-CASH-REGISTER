@@ -210,9 +210,12 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
         }
         bank = pendingCash!['channel'] == 'bank_code';
       }
-      final bankKey =
-          'recharge-bank-account:${original.base}:${original.storeRef}';
-      final savedAccount = bank ? await storage.read(bankKey) : null;
+      final settings = bank
+          ? await widget.auth.storeMembers({'action': 'receiptAccounts'})
+          : null;
+      final accounts = List<String>.from(
+        settings?['receiptSettings']?['accounts'] ?? const [],
+      );
       if (!mounted || !current) return;
       final done = await showDialog<bool>(
         context: context,
@@ -221,11 +224,8 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
           language: widget.language,
           bank: bank,
           amountCents: pendingCash?['displayPrincipalCents'] ?? cents,
-          account:
-              pendingCash?['receivingAccount'] ??
-              savedAccount ??
-              t('门店收款贴纸', 'Store payment QR', '門店收款貼紙', 'QR รับเงินของร้าน'),
-          accountLocked: pendingCash != null,
+          accounts: accounts,
+          account: pendingCash?['receivingAccount'] ?? '',
           confirm: (code, account) async {
             if (!current) throw StateError('Session changed');
             pendingCash ??= {
@@ -236,6 +236,7 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
               'displayPrincipalCents': cents,
               'displayGiftCents': gift,
             };
+            if (bank) pendingCash!['receivingAccount'] = account;
             // Save only original scope. Raw employee QR remains in memory.
             await storage.write(storageKey, jsonEncode(pendingCash));
             if (!current) throw StateError('Session changed');
@@ -254,13 +255,6 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
               throw StateError('Receipt unresolved');
             }
             await storage.delete(storageKey);
-            if (bank) {
-              try {
-                await storage.write(bankKey, account);
-              } catch (_) {
-                /* Credit already confirmed. */
-              }
-            }
           },
         ),
       );
@@ -660,11 +654,12 @@ class RechargeOfflineReceiptDialog extends StatefulWidget {
     required this.bank,
     required this.amountCents,
     required this.account,
-    required this.accountLocked,
+    required this.accounts,
     required this.confirm,
   });
   final UiLanguage language;
-  final bool bank, accountLocked;
+  final bool bank;
+  final List<String> accounts;
   final int amountCents;
   final String account;
   final Future<void> Function(String code, String account) confirm;
@@ -675,8 +670,9 @@ class RechargeOfflineReceiptDialog extends StatefulWidget {
 
 class _RechargeOfflineReceiptDialogState
     extends State<RechargeOfflineReceiptDialog> {
-  late final account = TextEditingController(text: widget.account);
-  final code = TextEditingController();
+  late String account = widget.accounts.contains(widget.account)
+      ? widget.account
+      : (widget.accounts.length == 1 ? widget.accounts.single : '');
   StreamSubscription<String>? subscription;
   bool busy = false, failed = false, submitted = false;
   String t(String zh, String en, String tw, String th) =>
@@ -693,9 +689,8 @@ class _RechargeOfflineReceiptDialogState
 
   Future<void> scan(String value) async {
     if (busy || !mounted) return;
-    code.clear();
     if (!RegExp(r'^KC:M:[0-9A-F]{32}$').hasMatch(value.trim()) ||
-        (widget.bank && account.text.trim().length < 2)) {
+        (widget.bank && !widget.accounts.contains(account))) {
       setState(() => failed = true);
       return;
     }
@@ -705,7 +700,7 @@ class _RechargeOfflineReceiptDialogState
       submitted = true;
     });
     try {
-      await widget.confirm(value.trim(), account.text.trim());
+      await widget.confirm(value.trim(), account);
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
       if (mounted) {
@@ -720,8 +715,6 @@ class _RechargeOfflineReceiptDialogState
   @override
   void dispose() {
     subscription?.cancel();
-    account.dispose();
-    code.dispose();
     super.dispose();
   }
 
@@ -750,26 +743,35 @@ class _RechargeOfflineReceiptDialogState
             ),
             if (widget.bank) ...[
               const SizedBox(height: 16),
-              TextField(
-                controller: account,
-                readOnly: widget.accountLocked || submitted,
-                maxLength: 100,
-                decoration: InputDecoration(
-                  labelText: t(
-                    '收款码名称',
-                    'Payment QR name',
-                    '收款碼名稱',
-                    'ชื่อ QR รับเงิน',
+              if (widget.accounts.isEmpty)
+                Text(
+                  t(
+                    '请先到设置中配置收款码',
+                    'Configure payment QR options in Settings first.',
+                    '請先到設定中配置收款碼',
+                    'ตั้งค่า QR รับเงินก่อน',
                   ),
-                  hintText: t(
-                    '例如：收钱吧／银行收款码',
-                    'For example: bank or third-party QR',
-                    '例如：收錢吧／銀行收款碼',
-                    'เช่น QR ธนาคาร',
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final name in widget.accounts)
+                          ChoiceChip(
+                            label: Text(name),
+                            selected: account == name,
+                            onSelected: busy || submitted
+                                ? null
+                                : (_) => setState(() => account = name),
+                          ),
+                      ],
+                    ),
                   ),
-                  counterText: '',
                 ),
-              ),
             ],
             const SizedBox(height: 20),
             const Icon(Icons.qr_code_scanner, size: 54),
@@ -785,21 +787,11 @@ class _RechargeOfflineReceiptDialogState
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: code,
-              autofocus: !widget.bank,
-              obscureText: true,
-              enableSuggestions: false,
-              autocorrect: false,
-              decoration: InputDecoration(
-                hintText: t(
-                  '等待员工扫码',
-                  'Waiting for staff code',
-                  '等待員工掃碼',
-                  'รอสแกนรหัสพนักงาน',
-                ),
+            Text(
+              t('等待员工扫码', 'Ready to scan', '等待員工掃碼', 'พร้อมสแกนรหัสพนักงาน'),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              onSubmitted: scan,
             ),
             if (busy)
               const Padding(

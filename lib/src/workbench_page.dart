@@ -11,6 +11,7 @@ import '../main.dart';
 import 'auth/staff_auth_controller.dart';
 import 'hardware/printer_discovery_dialog.dart';
 import 'live/store_members_panel.dart';
+import 'live/receipt_accounts_settings.dart';
 import 'live/live_tables_panel.dart';
 import 'live/voucher_report_panel.dart';
 import 'strings.dart';
@@ -381,6 +382,31 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             ),
             icon: const Icon(Icons.print_outlined),
             label: Text(t('printerInspectTitle')),
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            key: const ValueKey('receipt-accounts-settings'),
+            onPressed:
+                widget.auth.session?.permissions.contains('price.adjust') !=
+                    true
+                ? null
+                : () => showDialog<void>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => ReceiptAccountsSettings(
+                      auth: widget.auth,
+                      language: widget.language,
+                    ),
+                  ),
+            icon: const Icon(Icons.account_balance_outlined),
+            label: Text(
+              [
+                '银行／第三方收款码',
+                'Bank / third-party QR',
+                '銀行／第三方收款碼',
+                'QR ธนาคาร / ผู้ให้บริการ',
+              ][widget.language.index],
+            ),
           ),
         ],
       ),
