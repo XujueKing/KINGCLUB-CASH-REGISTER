@@ -9,6 +9,14 @@ import 'table_receipt_document_test.dart' as fixture;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('reprint shows refund and actual net collection while keeping original tender', () {
+    final raw=fixture.tableReceiptFixture();raw['result']['refundedCents']=100;raw['result']['netPaidCents']=200;
+    final plan=ReceiptRasterPlan.forTable(fixture.parse(raw),language:UiLanguage.zh,widthDots:576);
+    final rows=plan.pages.expand((page)=>page).toList();
+    expect(rows,contains('${tr(UiLanguage.zh,'receiptRefundedAmount')}  1.00'));
+    expect(rows,contains('实收金额  2.00'));
+    expect(rows,contains('${tr(UiLanguage.zh,'orderPreviewTotal')}  3.00'));
+  });
   test('customer receipt preserves line prices and one parent tender without internal IDs', () {
     final document = fixture.parse(fixture.tableReceiptFixture());
     for (final language in UiLanguage.values) {

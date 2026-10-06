@@ -164,9 +164,11 @@ class ReceiptRasterPlan {
       ],
       _rule,
       _money(t('orderPreviewTotal'), d.totalCents),
+      if (d.refundedCents > 0)
+        _money(t('receiptRefundedAmount'), d.refundedCents),
       _money(
         _label(language, '实收金额', 'Amount paid', '實收金額', 'ยอดชำระแล้ว'),
-        d.totalCents,
+        d.netPaidCents,
         large: true,
       ),
       _money(

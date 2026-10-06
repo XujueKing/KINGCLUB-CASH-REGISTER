@@ -60,6 +60,10 @@ class TableReceiptContent extends StatelessWidget {
                 ),
               ),
               amount('orderPreviewTotal', document.totalCents),
+              if (document.refundedCents > 0) ...[
+                amount('receiptRefundedAmount', document.refundedCents),
+                amount('receiptNetAmount', document.netPaidCents),
+              ],
               if (tender.receivedCents != null)
                 amount('cashReceived', tender.receivedCents!),
               if (tender.changeCents != null)

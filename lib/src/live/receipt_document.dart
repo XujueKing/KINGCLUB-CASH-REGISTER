@@ -138,6 +138,8 @@ class TableReceiptDocument {
     required this.tableRef,
     required this.sessionRef,
     required this.totalCents,
+    required this.refundedCents,
+    required this.netPaidCents,
     required this.createdAt,
     required this.confirmedAt,
     required this.settledAt,
@@ -146,7 +148,7 @@ class TableReceiptDocument {
     required this.orders,
   });
   final String checkoutRef, storeRef, tableRef, sessionRef;
-  final int totalCents;
+  final int totalCents, refundedCents, netPaidCents;
   final DateTime createdAt, confirmedAt, settledAt, observedAt;
   final ReceiptTender tender;
   final List<TableReceiptOrder> orders;
@@ -190,8 +192,8 @@ class TableReceiptDocument {
         throw const FormatException();
       }
       final total = _number(row['totalCents'], min: 1);
-      if (_number(row['refundedCents']) != 0 ||
-          _number(row['netPaidCents']) != total) {
+      final refunded = _number(row['refundedCents']), net = _number(row['netPaidCents']);
+      if (refunded + net != total) {
         throw const FormatException();
       }
       final created = _date(row['createdAt']),
@@ -260,6 +262,8 @@ class TableReceiptDocument {
         tableRef: _ref(row['tableRef']),
         sessionRef: _ref(row['sessionRef']),
         totalCents: total,
+        refundedCents: refunded,
+        netPaidCents: net,
         createdAt: created,
         confirmedAt: confirmed,
         settledAt: settled,

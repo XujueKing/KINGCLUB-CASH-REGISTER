@@ -1843,6 +1843,16 @@ class StaffAuthController extends ChangeNotifier {
     return Map<String,dynamic>.from(result);
   }
 
+  Future<Map<String,dynamic>> providerItemRefund(Map<String,dynamic> command) => _refundOperation(() async {
+    final identity=_refundIdentity(),epoch=_epoch;
+    final raw=await _api!.call('K261006002020',{...command,'storeRef':identity.storeRef});
+    _check(epoch);_refundIdentity();
+    final result=raw is Map?raw['result']:null;
+    if(result is! Map||result['storeRef']!=identity.storeRef||result['orderRef']!=command['orderRef']||result['productRef']!=command['productRef'])
+      throw const FormatException('REFUND_SCOPE_INVALID');
+    return Map<String,dynamic>.from(result);
+  });
+
   Future<Map<String, dynamic>> reservations(
     Map<String, dynamic> command,
   ) async {

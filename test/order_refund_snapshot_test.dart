@@ -12,6 +12,17 @@ Map<String, dynamic> fixture() => {
   'refundedAt': '2026-09-30T00:00:00.000Z',
 };
 void main() {
+  test('table-paid APP orders retain WeChat refund quantities without pretending to be wallet refunds', () {
+    final raw = orderFixture();
+    final order = ((raw['result'] as Map)['orders'] as List).first as Map<String,dynamic>;
+    final item = Map<String,dynamic>.from((order['items'] as List).first);
+    final value = LiveOrder({...order, 'status':'paid','cashierOrder':false,
+      'refunds':[{...fixture(),'accountType':'wechat','totalCents':600,'principalCents':600,'giftCents':0}],
+      'items':[{...item,'refundedQuantity':1,'remainingQuantity':1}]});
+    expect(value.netPaidCents,600);expect(value.items.single.quantity,2);
+    expect(value.items.single.activeQuantity,1);expect(value.refunds.single.accountType,'wechat');
+    expect(() => OrderRefund({...fixture(),'accountType':'wechat'}),throwsFormatException);
+  });
   LiveOrder orderWithRefunds(List<Map<String, dynamic>> receipts) {
     final raw = orderFixture();
     final order =

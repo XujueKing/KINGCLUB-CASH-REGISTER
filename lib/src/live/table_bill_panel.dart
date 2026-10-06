@@ -1,3 +1,4 @@
+import 'provider_refund_dialog.dart';
 import 'wine_pickup_panel.dart';
 import 'product_thumbnail.dart';
 
@@ -985,6 +986,14 @@ class _TableBillPanelState extends State<TableBillPanel>
         order.refunds.isEmpty &&
         snapshot?.sessionStatus == 'open' &&
         (item.servedQuantity ?? 0) > item.storedQuantity;
+    bool canRefund(LiveOrder order, OrderItem item) =>
+        identity?.permissions.contains('payment.refund') == true &&
+        order.status == 'paid' &&
+        order.tableCheckoutRef != null &&
+        order.refundQuantitiesKnown &&
+        !order.fullyRefunded &&
+        item.activeQuantity > item.storedQuantity &&
+        {'open', 'clearing'}.contains(snapshot?.sessionStatus);
     final selected = await showDialog<BillDetailAction>(
       context: context,
       builder: (_) => BillDetailsDialog(
@@ -994,9 +1003,33 @@ class _TableBillPanelState extends State<TableBillPanel>
         canRecall: canRecall,
         canReturnUnserved: canReturnUnserved,
         canStoreWine: canStoreWine,
+        canRefund: canRefund,
       ),
     );
     if (!mounted || !current() || selected == null) return;
+    if (selected.action == 'refund' &&
+        canRefund(selected.order, selected.item)) {
+      final refundTable = widget.tableRef, refundSession = widget.sessionRef;
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => ProviderRefundDialog(
+          auth: widget.auth,
+          order: selected.order,
+          item: selected.item,
+          served: selected.served,
+          language: widget.language,
+          isCurrent: () =>
+              mounted &&
+              foreground &&
+              identical(identity, widget.auth.session) &&
+              widget.tableRef == refundTable &&
+              widget.sessionRef == refundSession,
+        ),
+      );
+      if (mounted && foreground) await load();
+      return;
+    }
     if (selected.action == 'storeWine' &&
         canStoreWine(selected.order, selected.item)) {
       await showDialog<bool>(

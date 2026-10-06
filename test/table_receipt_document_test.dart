@@ -65,6 +65,12 @@ TableReceiptDocument parse(Map<String, dynamic> raw) =>
       checkoutRef: checkout,
     );
 void main() {
+  test('keeps original paid total and displays validated refund and net amount', () {
+    final raw=tableReceiptFixture();raw['result']['refundedCents']=100;raw['result']['netPaidCents']=200;
+    final value=parse(raw);
+    expect(value.totalCents,300);expect(value.refundedCents,100);expect(value.netPaidCents,200);
+    raw['result']['netPaidCents']=201;expect(()=>parse(raw),throwsA(isA<CcsopFailure>()));
+  });
   test(
     'keeps one tender and immutable child allocations with all languages',
     () {

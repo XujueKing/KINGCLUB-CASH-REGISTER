@@ -180,7 +180,7 @@ class LiveOrder {
         refunds.map((r) => r.reference).toSet().length != refunds.length ||
         refunds.map((r) => r.accountType).toSet().length > 1 ||
         refundedCents > totalCents ||
-        (refunds.isNotEmpty && (status != 'paid' || !cashierOrder)) ||
+        (refunds.isNotEmpty && (status != 'paid' || (!cashierOrder && refunds.any((r) => r.accountType != 'wechat')))) ||
         (refund != null &&
             (refunds.length != 1 ||
                 refunds.single.reference != refund!.reference ||
@@ -194,7 +194,7 @@ class LiveOrder {
     if ((tableCheckoutRef != null && status != 'paid') ||
         (refund != null &&
             (status != 'paid' ||
-                !cashierOrder ||
+                (!cashierOrder && refund!.accountType != 'wechat') ||
                 refund!.totalCents != totalCents)) ||
         !{'pending', 'paid', 'expired', 'waived'}.contains(status) ||
         ((status == 'waived') != (totalCents == 0)) ||
@@ -208,7 +208,7 @@ class LiveOrder {
     }
     if (items.any((item) => item.refundedQuantity != null) &&
         (status != 'paid' ||
-            !cashierOrder ||
+            (!cashierOrder && refunds.any((r) => r.accountType != 'wechat')) ||
             items.any((item) => item.refundedQuantity == null) ||
             items.fold<int>(
                   0,
@@ -264,9 +264,9 @@ class OrderRefund {
         !RegExp(
           r'^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
         ).hasMatch(reference) ||
-        !{'platform_cash', 'store_balance'}.contains(accountType) ||
+        !{'platform_cash', 'store_balance', 'wechat'}.contains(accountType) ||
         principalCents + giftCents != totalCents ||
-        (accountType == 'platform_cash' && giftCents != 0)) {
+        (accountType != 'store_balance' && giftCents != 0)) {
       throw const FormatException();
     }
   }
