@@ -3,8 +3,6 @@ import 'dart:async';
 import 'live/paid_order_alerts.dart';
 import 'live/together_admission_dialog.dart';
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
 import 'scan_icon.dart';
@@ -20,7 +18,10 @@ import 'live/business_report_panel.dart';
 import 'live/inventory_panel.dart';
 import 'live/reservations_panel.dart';
 import 'strings.dart';
-import 'power_icon.dart';
+
+import 'package:flutter/services.dart';
+
+import 'live/cashbook_panel.dart';
 
 /// The single authenticated workspace, using server-backed business panels.
 class WorkbenchPage extends StatefulWidget {
@@ -86,6 +87,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     'settings',
     'inventory',
     'reservations',
+    'cashbook',
   ];
   static const icons = [
     Icon(Icons.grid_view_rounded),
@@ -96,6 +98,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     Icon(Icons.tune_rounded),
     Icon(Icons.inventory_2_outlined),
     Icon(Icons.event_seat_outlined),
+    Icon(Icons.menu_book_outlined),
   ];
 
   @override
@@ -134,7 +137,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                     padding: EdgeInsets.zero,
                     separatorBuilder: (_, _) => const SizedBox(height: 7),
                     itemBuilder: (context, position) {
-                      final index = const [0, 1, 3, 2, 7, 6, 4, 5][position];
+                      final index = const [0, 1, 3, 2, 7, 6, 4, 8, 5][position];
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Material(
@@ -190,77 +193,64 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: ValueListenableBuilder<Uint8List?>(
-                    valueListenable: widget.auth.operatorAvatar,
-                    builder: (context, bytes, _) => CircleAvatar(
-                      radius: 18,
-                      backgroundColor: const Color(0xffdce5df),
-                      child: bytes == null
-                          ? const Icon(
-                              Icons.person_outline,
-                              color: forest,
-                              size: 24,
-                            )
-                          : ClipOval(
-                              child: Image.memory(
-                                bytes,
-                                width: 36,
-                                height: 36,
-                                fit: BoxFit.cover,
-                                gaplessPlayback: true,
-                                errorBuilder: (_, error, stack) => const Icon(
-                                  Icons.person_outline,
-                                  color: forest,
-                                  size: 24,
-                                ),
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                    child: InkWell(
-                      key: const ValueKey('staff-logout'),
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: widget.onLogout,
-                      child: SizedBox(
-                        width: 72,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 13,
-                            horizontal: 3,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const ColorFiltered(
-                                colorFilter: ColorFilter.mode(
-                                  Color(0xffb9c9c2),
-                                  BlendMode.srcIn,
-                                ),
-                                child: PowerIcon(),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                [
-                                  '退出',
-                                  'Sign out',
-                                  '退出',
-                                  'ออก',
-                                ][widget.language.index],
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xffb9c9c2),
-                                ),
-                              ),
-                            ],
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                  child: PopupMenuButton<String>(
+                    key: const ValueKey('staff-avatar-menu'),
+                    tooltip: t('staffAccountMenu'),
+                    offset: const Offset(72, -120),
+                    onSelected: (value) {
+                      if (value == 'logout') widget.onLogout?.call();
+                      if (value == 'exit') SystemNavigator.pop();
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'logout',
+                        height: 56,
+                        enabled: widget.onLogout != null,
+                        child: ListTile(
+                          leading: const Icon(Icons.logout),
+                          title: Text(t('staffMenuSignOut')),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'exit',
+                        height: 56,
+                        child: ListTile(
+                          leading: const Icon(Icons.power_settings_new),
+                          title: Text(t('staffExitApp')),
+                        ),
+                      ),
+                    ],
+                    child: SizedBox(
+                      width: 56,
+                      height: 52,
+                      child: Center(
+                        child: ValueListenableBuilder<Uint8List?>(
+                          valueListenable: widget.auth.operatorAvatar,
+                          builder: (context, bytes, _) => CircleAvatar(
+                            radius: 18,
+                            backgroundColor: const Color(0xffdce5df),
+                            child: bytes == null
+                                ? const Icon(
+                                    Icons.person_outline,
+                                    color: forest,
+                                    size: 24,
+                                  )
+                                : ClipOval(
+                                    child: Image.memory(
+                                      bytes,
+                                      width: 36,
+                                      height: 36,
+                                      fit: BoxFit.cover,
+                                      gaplessPlayback: true,
+                                      errorBuilder: (_, error, stack) =>
+                                          const Icon(
+                                            Icons.person_outline,
+                                            color: forest,
+                                            size: 24,
+                                          ),
+                                    ),
+                                  ),
                           ),
                         ),
                       ),
@@ -361,6 +351,7 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
           : Center(child: Text(t('staffAuthFailure'))),
     6 => InventoryPanel(auth: widget.auth, language: widget.language),
     7 => ReservationsPanel(auth: widget.auth, language: widget.language),
+    8 => CashbookPanel(auth: widget.auth, language: widget.language),
     _ => Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
