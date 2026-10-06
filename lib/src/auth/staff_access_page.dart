@@ -75,9 +75,7 @@ class _StaffAccessPageState extends State<StaffAccessPage>
     } catch (_) {
       if (mounted)
         setState(
-          () => notice = auth.canRetryRestore
-              ? 'staffReconnectNotice'
-              : 'staffAuthFailure',
+          () => notice = auth.canRetryRestore ? 'staffReconnectNotice' : null,
         );
     }
   }
@@ -250,7 +248,10 @@ class _StaffAccessPageState extends State<StaffAccessPage>
                     Text(t('staffVerifying')),
                   ],
                   if (message != null) ...[
-                    Semantics(liveRegion: true, child: Text(t(message))),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(t(message), textAlign: TextAlign.center),
+                    ),
                     const SizedBox(height: 16),
                   ],
                   if (auth.canRetryRestore)
