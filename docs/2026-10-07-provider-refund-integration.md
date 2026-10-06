@@ -10,3 +10,10 @@ Validation: full suite 1075 passed, 5 skipped, 3 printing cases failed because t
 Unaccepted preparation is shown separately from processing. Recheck reloads server context and retains the original request ID when quantities are reconfirmed; journal revision cannot change employee/order/product/request identity. Original-result queries are authoritative if a delayed earlier request won the race. Recovery widget tests cover both ambiguous submission and not-observed/reconfirmation.
 
 Full release-flag suite: 1080 passed, 5 skipped. APK built and installed with install -r on the existing SUNMI device; app data retained. Backend migrations 357?361 and refund API/flag are enabled. No actual financial refund was executed.
+
+
+## Original payment eligibility (2026-10-07)
+
+The bill now uses the server providerRefundAvailable flag instead of inferring refund support from a table checkout pointer. Paid standalone APP WeChat orders can use the same touch refund dialog; member-balance and mixed-tender orders do not expose the WeChat refund operation. Missing/invalid eligibility flags default to false. The server always revalidates the original transaction and merchant before submission. Real-money refund acceptance remains unperformed.
+
+Validation: 47 focused Flutter tests passed. ARM32 release APK signed with the existing device key and installed with install -r on the target SUNMI; employee session and V1 data preserved. Backend read-only APP and cashier contexts passed. No actual refund submitted.

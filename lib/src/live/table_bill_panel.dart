@@ -989,7 +989,7 @@ class _TableBillPanelState extends State<TableBillPanel>
     bool canRefund(LiveOrder order, OrderItem item) =>
         identity?.permissions.contains('payment.refund') == true &&
         order.status == 'paid' &&
-        order.tableCheckoutRef != null &&
+        order.providerRefundAvailable &&
         order.refundQuantitiesKnown &&
         !order.fullyRefunded &&
         item.activeQuantity > item.storedQuantity &&

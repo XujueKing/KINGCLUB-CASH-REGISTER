@@ -12,6 +12,15 @@ OrderSnapshot parse(Object? raw, {String? after}) => OrderSnapshot.parse(
   afterOrder: after,
 );
 void main() {
+  test('refund eligibility comes from server and does not require a table payment', () {
+    for (final value in [true, false, null, 'true', 1]) {
+      final raw = orderFixture();
+      final order = ((raw['result'] as Map)['orders'] as List).first as Map;
+      order['providerRefundAvailable'] = value;
+      order['tableCheckoutRef'] = null;
+      expect(parse(raw).orders.single.providerRefundAvailable, value == true);
+    }
+  });
   test(
     'complimentary goods remain visible and are neither paid nor refunded',
     () {

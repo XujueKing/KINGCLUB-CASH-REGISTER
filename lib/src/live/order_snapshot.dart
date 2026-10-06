@@ -159,6 +159,7 @@ int? _servingCount(Map<String, dynamic> value, String key) {
 class LiveOrder {
   LiveOrder(Map<String, dynamic> value, {String? storeRef})
     : reference = _ref(value['orderRef']),
+      providerRefundAvailable = value['providerRefundAvailable'] == true,
       tableCheckoutRef = _tableCheckoutRef(value['tableCheckoutRef']),
       cashierOrder = value.containsKey('cashierOrder')
           ? _cashierOrigin(value['cashierOrder'])
@@ -180,7 +181,10 @@ class LiveOrder {
         refunds.map((r) => r.reference).toSet().length != refunds.length ||
         refunds.map((r) => r.accountType).toSet().length > 1 ||
         refundedCents > totalCents ||
-        (refunds.isNotEmpty && (status != 'paid' || (!cashierOrder && refunds.any((r) => r.accountType != 'wechat')))) ||
+        (refunds.isNotEmpty &&
+            (status != 'paid' ||
+                (!cashierOrder &&
+                    refunds.any((r) => r.accountType != 'wechat')))) ||
         (refund != null &&
             (refunds.length != 1 ||
                 refunds.single.reference != refund!.reference ||
@@ -221,6 +225,7 @@ class LiveOrder {
   final String reference, status, currency;
   // Read-only navigation, never a payment or refund authorization.
   final String? tableCheckoutRef;
+  final bool providerRefundAvailable;
   final bool cashierOrder;
   final int totalCents;
   final OrderRefund? refund;
