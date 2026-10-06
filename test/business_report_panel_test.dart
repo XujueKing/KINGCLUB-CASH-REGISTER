@@ -87,6 +87,13 @@ class ReportAuth extends TableAuth {
       'pendingOrders': 1,
       'pendingCents': 1000,
       'waivedOrders': 0,
+      'merchantSettlement': {
+        'directCollectedCents': 12000,
+        'originalDueCents': 8000,
+        'refundReductionCents': 2000,
+        'pendingCents': 6000,
+        'reviewOrders': 2,
+      },
     };
   }
 }

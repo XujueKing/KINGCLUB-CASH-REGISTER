@@ -501,6 +501,47 @@ class _BusinessReportPanelState extends State<BusinessReportPanel> {
   Widget overview() => Column(
     children: [
       metrics(),
+      if (data?['merchantSettlement'] is Map) ...[
+        const SizedBox(height: 14),
+        card(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              heading(
+                l(
+                  '收款去向与平台结算',
+                  'Collection and platform settlement',
+                  '收款去向與平台結算',
+                  'รับเงินและชำระแพลตฟอร์ม',
+                ),
+              ),
+              Wrap(
+                spacing: 28,
+                runSpacing: 12,
+                children: [
+                  text(
+                    '${l('门店直收', 'Store direct', '門店直收', 'ร้านรับตรง')}  ${money(data!['merchantSettlement']['directCollectedCents'])}',
+                  ),
+                  text(
+                    '${l('平台应付', 'Platform payable', '平台應付', 'แพลตฟอร์มค้างจ่าย')}  ${money(data!['merchantSettlement']['originalDueCents'])}',
+                  ),
+                  text(
+                    '${l('退款冲减', 'Refund reduction', '退款沖減', 'หักคืนเงิน')}  ${money(data!['merchantSettlement']['refundReductionCents'])}',
+                  ),
+                  text(
+                    '${l('待结算', 'Pending settlement', '待結算', 'รอชำระ')}  ${money(data!['merchantSettlement']['pendingCents'])}',
+                  ),
+                ],
+              ),
+              if ((data!['merchantSettlement']['reviewOrders'] as num? ?? 0) >
+                  0)
+                note(
+                  '${l('历史收款待核对', 'Historical collections to review', '歷史收款待核對', 'รายการเก่ารอตรวจสอบ')}：${data!['merchantSettlement']['reviewOrders']}',
+                ),
+            ],
+          ),
+        ),
+      ],
       const SizedBox(height: 14),
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
