@@ -31,6 +31,98 @@ class _InventoryPanelState extends State<InventoryPanel> {
       paper = Color(0xFFF5F4EF),
       muted = Color(0xFF748078);
   final search = TextEditingController();
+  String category = '', stockFilter = 'all';
+  List<Map<String, dynamic>> get visibleProducts => rows('products')
+      .where(
+        (p) =>
+            (category.isEmpty ||
+                (category == '_uncategorized'
+                    ? p['categoryRef'] == null
+                    : p['categoryRef'] == category)) &&
+            (stockFilter == 'all' ||
+                (stockFilter == 'empty'
+                    ? (p['available'] as num? ?? 0) <= 0
+                    : p['lowStock'] == true || p['lowStock'] == 1)) &&
+            '${name(p['names'])} ${name(p['specifications'])}'
+                .toLowerCase()
+                .contains(search.text.trim().toLowerCase()),
+      )
+      .toList();
+  void filterChanged(VoidCallback change) => setState(() {
+    change();
+    if (!visibleProducts.any((p) => p['productRef'] == selected)) selected = '';
+  });
+  Widget productFilters() {
+    final categories = rows('categories')
+      ..sort(
+        (a, b) => (a['sortOrder'] as num? ?? 0).compareTo(
+          b['sortOrder'] as num? ?? 0,
+        ),
+      );
+    final options = <(String, String)>[
+      ('', l('全部', 'All', '全部', 'ทั้งหมด')),
+      for (final c in categories) ('${c['categoryRef']}', name(c['names'])),
+      if (rows('products').any((p) => p['categoryRef'] == null))
+        ('_uncategorized', l('未分类', 'Uncategorized', '未分類', 'ไม่มีหมวด')),
+    ];
+    Widget choice(String key, String title, bool active, VoidCallback action) =>
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: ChoiceChip(
+            key: ValueKey(key),
+            label: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Text(title),
+            ),
+            selected: active,
+            onSelected: (_) => filterChanged(action),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 52,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final c in options)
+                  choice(
+                    'inventory-category-${c.$1}',
+                    c.$2,
+                    category == c.$1,
+                    () => category = c.$1,
+                  ),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              for (final s in [
+                ('all', l('所有库存', 'All stock', '所有庫存', 'สต็อกทั้งหมด')),
+                ('low', l('库存不足', 'Low stock', '庫存不足', 'สต็อกต่ำ')),
+                ('empty', l('无库存', 'Out of stock', '無庫存', 'สินค้าหมด')),
+              ])
+                choice(
+                  'inventory-stock-${s.$1}',
+                  s.$2,
+                  stockFilter == s.$1,
+                  () => stockFilter = s.$1,
+                ),
+              const Spacer(),
+              label(
+                '${visibleProducts.length} ${l('款', 'items', '款', 'รายการ')}',
+                color: muted,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   final countDraft = <String, Map<String, dynamic>>{};
   final storage = const FlutterSecureStorage();
   Map<String, dynamic>? data, pending;
@@ -124,6 +216,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
     epoch++;
     data = null;
     selected = '';
+    category = '';
+    stockFilter = 'all';
+    search.clear();
     countDraft.clear();
     pending = null;
     unawaited(restore());
@@ -1382,12 +1477,19 @@ class _InventoryPanelState extends State<InventoryPanel> {
               Expanded(
                 child: ListView(
                   children: [
-                    for (final p in rows('products').where(
-                      (p) =>
-                          productName('${p['productRef']}')
-                              .toLowerCase()
-                              .contains(search.text.toLowerCase()),
-                    ))
+                    if (visibleProducts.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          l(
+                            '没有符合条件的商品',
+                            'No matching products',
+                            '沒有符合條件的商品',
+                            'ไม่มีสินค้าที่ตรงกัน',
+                          ),
+                        ),
+                      ),
+                    for (final p in visibleProducts)
                       Material(
                         color: selected == p['productRef']
                             ? const Color(0xFFE4EEE8)
@@ -1565,12 +1667,19 @@ class _InventoryPanelState extends State<InventoryPanel> {
         Expanded(
           child: ListView(
             children: [
-              for (final p in rows('products').where(
-                (p) =>
-                    productName('${p['productRef']}')
-                        .toLowerCase()
-                        .contains(search.text.toLowerCase()),
-              ))
+              if (visibleProducts.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    l(
+                      '没有符合条件的商品',
+                      'No matching products',
+                      '沒有符合條件的商品',
+                      'ไม่มีสินค้าที่ตรงกัน',
+                    ),
+                  ),
+                ),
+              for (final p in visibleProducts)
                 ListTile(
                   onTap: canWrite ? () => productAction('count', p) : null,
                   leading: Icon(
@@ -1988,7 +2097,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 Expanded(
                   child: TextField(
                     controller: search,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) => filterChanged(() {}),
                     decoration: InputDecoration(
                       hintText: l(
                         '查找商品 / 规格',
@@ -2039,6 +2148,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   ),
               ],
             ),
+            if (data != null && (tab == 0 || tab == 1)) productFilters(),
             if (error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),

@@ -15,10 +15,13 @@ class InventoryAuth extends TableAuth {
     calls.add(command);
     return {
       'storeRef': 'test-store',
+      'categories': [{'categoryRef':'wine','names':{'zh-CN':'洋酒','en':'Spirits'},'sortOrder':1}],
       'locations': ['A1-1', 'A1-2'],
       'products': [
         {
           'productRef': 'wine',
+          'categoryRef': 'wine',
+          'lowStock': 0,
           'names': {'zh-CN': '测试酒品', 'en': 'Test wine'},
           'specifications': {'zh-CN': '500ML'},
           'onHand': 10,
@@ -79,6 +82,30 @@ class InventoryAuth extends TableAuth {
 
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  testWidgets('category and stock filtering require no additional requests', (tester) async {
+    tester.view.physicalSize = const Size(1274,710);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final auth=InventoryAuth();
+    await tester.pumpWidget(MaterialApp(home:Scaffold(body:InventoryPanel(auth:auth,language:UiLanguage.zh,enableRealtime:false))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('inventory-category-wine')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('测试酒品'),findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('inventory-stock-empty')));
+    await tester.pumpAndSettle();
+    expect(find.text('没有符合条件的商品'),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('inventory-stock-low')));
+    await tester.pumpAndSettle();
+    expect(find.text('没有符合条件的商品'),findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('inventory-stock-all')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('测试酒品'),findsWidgets);
+    expect(auth.calls.length,1);
+    expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   for (final lang in UiLanguage.values) {
     testWidgets('inventory touch layout and tabs ${lang.name}', (tester) async {
       tester.view.physicalSize = const Size(1274, 710);
