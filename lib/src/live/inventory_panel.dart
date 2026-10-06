@@ -52,7 +52,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
     change();
     if (!visibleProducts.any((p) => p['productRef'] == selected)) selected = '';
   });
-  Widget productFilters() {
+  Widget productFilters({bool categoryRail = false}) {
     final categories = rows('categories')
       ..sort(
         (a, b) => (a['sortOrder'] as num? ?? 0).compareTo(
@@ -78,26 +78,63 @@ class _InventoryPanelState extends State<InventoryPanel> {
             onSelected: (_) => filterChanged(action),
           ),
         );
+    if (categoryRail) {
+      return SizedBox(
+        width: 126,
+        child: Material(
+          color: const Color(0xFFECEEE8),
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: ListView(
+            key: const ValueKey('inventory-category-rail'),
+            children: [
+              for (final c in options)
+                Material(
+                  color: category == c.$1 ? Colors.white : Colors.transparent,
+                  child: InkWell(
+                    key: ValueKey('inventory-category-${c.$1}'),
+                    onTap: () => filterChanged(() => category = c.$1),
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 60),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                            color: category == c.$1
+                                ? green
+                                : Colors.transparent,
+                            width: 4,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        c.$2,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: category == c.$1 ? green : muted,
+                          fontWeight: category == c.$1
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: 52,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                for (final c in options)
-                  choice(
-                    'inventory-category-${c.$1}',
-                    c.$2,
-                    category == c.$1,
-                    () => category = c.$1,
-                  ),
-              ],
-            ),
-          ),
           Row(
             children: [
               for (final s in [
@@ -2148,7 +2185,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   ),
               ],
             ),
-            if (data != null && (tab == 0 || tab == 1)) productFilters(),
             if (error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -2193,8 +2229,23 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       ),
                     )
                   : switch (tab) {
-                      0 => stockList(),
-                      1 => counts(),
+                      0 || 1 => Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          productFilters(categoryRail: true),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                productFilters(),
+                                Expanded(
+                                  child: tab == 0 ? stockList() : counts(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                       2 => loans(),
                       3 => purchases(),
                       4 => history(),
