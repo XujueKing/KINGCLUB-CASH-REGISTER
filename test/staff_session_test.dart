@@ -131,6 +131,13 @@ Future<void> login(StaffAuthController controller) => controller.login(
 );
 
 void main() {
+  test('cashbook reviewer permission is accepted without granting it to other staff', () {
+    final reviewer = response()..['permissions'] = ['workbench.read', 'cashbook.review'];
+    expect(session(reviewer).permissions, contains('cashbook.review'));
+    expect(session().permissions, isNot(contains('cashbook.review')));
+    final invalid = response()..['permissions'] = ['workbench.read', 'unknown.permission'];
+    expect(() => session(invalid), throwsA(isA<CcsopFailure>()));
+  });
   test('workbench result supplies staff avatar and logout clears it', () async {
     final storage=TestStorage(), auth=TestAuth(), api=TestApi();
     final c=controller(storage,auth,api);

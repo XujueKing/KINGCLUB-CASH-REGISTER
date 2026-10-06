@@ -8,6 +8,7 @@ final uuidPattern = RegExp(
 );
 final _reference = RegExp(r'^[A-Za-z0-9_-]{1,64}$');
 const staffPermissions = {
+  'cashbook.review',
   'workbench.read',
   'orders.read',
   'table.open',
