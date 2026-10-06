@@ -11,6 +11,7 @@ import '../hardware/scanner_input.dart';
 import '../network/cashier_realtime_client.dart';
 import '../scan_icon.dart';
 import '../strings.dart';
+import 'supplier_catalog_dialog.dart';
 
 class InventoryPanel extends StatefulWidget {
   const InventoryPanel({
@@ -2098,7 +2099,23 @@ class _InventoryPanelState extends State<InventoryPanel> {
                     '${s['contact']}  ${s['phone']}\n${s['notes']}',
                     color: muted,
                   ),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: TextButton.icon(
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (_) => SupplierCatalogDialog(
+                        name: '${s['name']}',
+                        l: l,
+                        load: () => widget.auth.inventory({
+                          'action': 'supplier_catalog',
+                          'supplierRef': s['supplierRef'],
+                        }),
+                      ),
+                    ),
+                    icon: const Icon(Icons.menu_book_outlined),
+                    label: Text(
+                      l('采购备选', 'Procurement catalog', '採購備選', 'รายการจัดซื้อ'),
+                    ),
+                  ),
                 ),
             ],
           ),
