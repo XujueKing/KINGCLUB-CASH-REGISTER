@@ -5,3 +5,8 @@ Consumption-detail actions now open a touch quantity/reason/physical-return dial
 Order snapshots accept completed WeChat refund projections without pretending they are wallet credits. Paid receipts retain original gross amount and add refunded/net amount. No automatic financial transaction was performed.
 
 Validation: full suite 1075 passed, 5 skipped, 3 printing cases failed because the run omitted CASHIER_USB_RASTER_OUTPUT. All 23 targeted printing/journal/bill tests passed when rerun with the shipping printing define; the new touch refund/uncertain-query test also passed. Analyzer has no errors, existing informational findings remain. This code has not been installed on the cashier; backend coordinated release and actual authorized refund acceptance remain pending.
+
+## Release follow-up
+Unaccepted preparation is shown separately from processing. Recheck reloads server context and retains the original request ID when quantities are reconfirmed; journal revision cannot change employee/order/product/request identity. Original-result queries are authoritative if a delayed earlier request won the race. Recovery widget tests cover both ambiguous submission and not-observed/reconfirmation.
+
+Full release-flag suite: 1080 passed, 5 skipped. APK built and installed with install -r on the existing SUNMI device; app data retained. Backend migrations 357?361 and refund API/flag are enabled. No actual financial refund was executed.

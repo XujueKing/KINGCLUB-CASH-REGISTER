@@ -33,16 +33,45 @@ class ProviderRefundJournal {
     return {'employeeRef': value['employeeRef'], 'command': command};
   }
 
-  static Future<void> _tail = Future.value();
+  static Future<void>? _tail;
   Future<T> _serial<T>(Future<T> Function() operation) {
-    final next = _tail.then((_) => operation());
-    _tail = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    final next = (_tail ?? Future<void>.value()).then((_) => operation());
+    final barrier = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _tail = barrier;
+    barrier.then((_) {
+      if (identical(_tail, barrier)) _tail = null;
+    });
     return next;
   }
 
   Future<void> save(Map<String, dynamic> command) => _serial(() async {
     if (await read() != null)
       throw const FormatException('REFUND_ALREADY_PENDING');
+    final raw = jsonEncode({
+      'employeeRef': identity.employeeRef,
+      'command': command,
+    });
+    await storage.write(key, raw);
+    if (await storage.read(key) != raw)
+      throw const FormatException('REFUND_JOURNAL_UNAVAILABLE');
+  });
+
+  /// Reconfirmation retains the SAME original ID, even after a not-observed reply.
+  Future<void> revise(Map<String, dynamic> command) => _serial(() async {
+    final prior = await read(), old = prior?['command'] as Map?;
+    if (prior?['employeeRef'] != identity.employeeRef ||
+        old == null ||
+        [
+          'requestId',
+          'orderRef',
+          'productRef',
+          'action',
+        ].any((k) => old[k] != command[k])) {
+      throw const FormatException('REFUND_JOURNAL_CONFLICT');
+    }
     final raw = jsonEncode({
       'employeeRef': identity.employeeRef,
       'command': command,

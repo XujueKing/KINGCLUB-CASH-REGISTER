@@ -35,7 +35,7 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
   final quantity = TextEditingController(text: '1'),
       returned = TextEditingController(text: '1');
   Map<String, dynamic>? data, pending;
-  String? originalEmployee, state, message;
+  String? originalEmployee, state, message, reconfirmId;
   bool busy = true, returnStock = false;
   int reason = 0;
   String l(String zh, String en, String tw, String th) =>
@@ -60,11 +60,15 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
     super.dispose();
   }
 
-  Future<void> load() async {
+  Future<void> load({bool reconfirm = false}) async {
+    setState(() {
+      busy = true;
+      message = null;
+    });
     try {
       final saved = await journal.read();
       if (!mounted || !current) return;
-      if (saved != null) {
+      if (saved != null && !reconfirm) {
         pending = Map<String, dynamic>.from(saved['command'] as Map);
         originalEmployee = saved['employeeRef'] as String;
         await query();
@@ -105,6 +109,10 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
         await query();
         return;
       }
+      if (reconfirm) {
+        pending = null;
+        state = null;
+      }
       quantity.text = '${maximum > 0 ? maximum : 1}';
       returned.text = quantity.text;
       if (value['enabled'] != true)
@@ -127,6 +135,16 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
     }
   }
 
+  Future<void> recheck() async {
+    if (busy ||
+        state != 'not_observed' ||
+        originalEmployee != identity.employeeRef ||
+        pending?['productRef'] != widget.item.productRef)
+      return;
+    reconfirmId = pending!['requestId'] as String;
+    await load(reconfirm: true);
+  }
+
   Future<void> query() async => send(false);
   Future<void> send(bool submit) async {
     if (!current || pending == null) return;
@@ -147,6 +165,12 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
               },
       );
       if (!mounted || !current) return;
+      if (!submit &&
+          result['state'] == 'not_observed' &&
+          result['refundRef'] == command['requestId']) {
+        setState(() => state = 'not_observed');
+        return;
+      }
       if (result['refundRef'] != command['requestId'] ||
           !['pending', 'review', 'refunded'].contains(result['state']) ||
           result['totalCents'] is! int ||
@@ -154,7 +178,8 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
           result['stockReturnQuantity'] is! int ||
           (result['totalCents'] as int) <= 0 ||
           (result['quantity'] as int) <= 0 ||
-          (command.containsKey('expectedRefundCents') &&
+          (submit &&
+              command.containsKey('expectedRefundCents') &&
               (result['totalCents'] != command['expectedRefundCents'] ||
                   result['quantity'] != command['quantity'] ||
                   result['stockReturnQuantity'] !=
@@ -193,6 +218,7 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
       bytes[8] = (bytes[8] & 63) | 128;
       final hex = bytes.map((n) => n.toRadixString(16).padLeft(2, '0')).join();
       final id =
+          reconfirmId ??
           '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
       final command = <String, dynamic>{
         'action': 'refund',
@@ -208,7 +234,11 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
         'expectedServingEpoch': n('servingEpoch'),
         'expectedRefundedQuantity': n('refundedQuantity'),
       };
-      await journal.save(command);
+      if (reconfirmId == null) {
+        await journal.save(command);
+      } else {
+        await journal.revise(command);
+      }
       pending = command;
       originalEmployee = identity.employeeRef;
       if (mounted && current) await send(true);
@@ -257,7 +287,14 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
               const SizedBox(height: 16),
               if (pending != null)
                 Text(
-                  state == 'review'
+                  state == 'not_observed'
+                      ? l(
+                          '\u7533\u8bf7\u672a\u53d7\u7406\uff0c\u8bf7\u91cd\u65b0\u6838\u5bf9',
+                          'Request not accepted. Recheck details.',
+                          '\u7533\u8bf7\u672a\u53d7\u7406\uff0c\u8bf7\u91cd\u65b0\u6838\u5bf9',
+                          '\u7533\u8bf7\u672a\u53d7\u7406\uff0c\u8bf7\u91cd\u65b0\u6838\u5bf9',
+                        )
+                      : state == 'review'
                       ? l(
                           '退款需核对，请查询原退款',
                           'Refund needs review',
@@ -377,7 +414,17 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
       ),
       actions: [
         if (pending != null) ...[
+          if (state == 'not_observed' &&
+              originalEmployee == identity.employeeRef &&
+              pending!['productRef'] == widget.item.productRef)
+            FilledButton(
+              onPressed: busy ? null : recheck,
+              child: Text(
+                l('重新核对', 'Recheck details', '重新核對', 'Recheck details'),
+              ),
+            ),
           if (state != 'review' &&
+              state != 'not_observed' &&
               originalEmployee == identity.employeeRef &&
               pending!['action'] == 'refund')
             TextButton(
