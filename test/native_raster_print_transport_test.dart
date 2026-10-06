@@ -1,4 +1,3 @@
-
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kingclub_cash_register/src/hardware/native_raster_print_transport.dart';
@@ -17,7 +16,7 @@ void main() {
       null,
     ),
   );
-  test('default-off transport never invokes native output', () async {
+  test('disabled transport never invokes native output', () async {
     var calls = 0;
     messenger.setMockMethodCallHandler(NativeRasterPrintTransport.channel, (
       call,
@@ -26,7 +25,8 @@ void main() {
       return null;
     });
     await expectLater(
-      const NativeRasterPrintTransport().send(selection(), bytes, id),
+      const NativeRasterPrintTransport(enabled: false)
+          .send(selection(), bytes, id),
       throwsFormatException,
     );
     expect(calls, 0);

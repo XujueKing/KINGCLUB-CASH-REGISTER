@@ -44,7 +44,7 @@ void main() {
         if (removed) {
           expect(find.byType(DropdownButton<String>), findsNothing);
           expect(
-            find.text(tr(UiLanguage.en, 'tableCheckoutReview')),
+            find.text('Could not load the bill. Please retry.'),
             findsOneWidget,
           );
         }

@@ -109,7 +109,7 @@ void main() {
       expect(WorkspaceReadCache.read<String>(a, 'table-a'), 'old');
       expect(WorkspaceReadCache.read<String>(b, 'table-a'), isNull);
       expect(WorkspaceReadCache.read<String>(a, 'table-b'), isNull);
-      for (var i = 0; i < 24; i++) {
+      for (var i = 0; i < 128; i++) {
         WorkspaceReadCache.put(a, 'table-$i', i);
       }
       expect(WorkspaceReadCache.read<String>(a, 'table-a'), isNull);

@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../hardware/scanner_input.dart';
 import '../strings.dart';
+import '../network/ccsop_client.dart';
 import 'staff_auth_controller.dart';
 
 class StaffQrLogin extends StatefulWidget {
@@ -108,6 +109,7 @@ class _StaffQrLoginState extends State<StaffQrLogin>
         });
         return;
       }
+      if (message != null) setState(() => message = null);
     } catch (_) {
       if (current(g)) {
         setState(() => message = 'staffQrFailed');
@@ -135,7 +137,12 @@ class _StaffQrLoginState extends State<StaffQrLogin>
     try {
       // Invalidate the displayed QR before using the other login direction.
       if (ticket != null) {
-        await call({'action': 'cancel', ...credentials}, g);
+        try {
+          await call({'action': 'cancel', ...credentials}, g);
+        } on CcsopFailure catch (e) {
+          // An already-expired screen QR cannot block a fresh member-code login.
+          if (e.code != 'CASHIER_QR_EXPIRED') rethrow;
+        }
         if (!current(g)) return;
       }
       var result = await call({'action': 'member', 'identityCode': code}, g);
