@@ -785,7 +785,11 @@ class _LiveOrdersPanelState extends State<LiveOrdersPanel>
                                   ),
                                 for (final refund in order.refunds) ...[
                                   Text(
-                                    '${t('refundPrincipal')}: ${order.currency} ${formatCents(refund.principalCents)} · ${t('refundGift')}: ${order.currency} ${formatCents(refund.giftCents)}',
+                                    refund.funding != null
+                                        ? refund.funding!
+                                              .lines(widget.language)
+                                              .join('\n')
+                                        : '${t('refundPrincipal')}: ${order.currency} ${formatCents(refund.principalCents)} · ${t('refundGift')}: ${order.currency} ${formatCents(refund.giftCents)}',
                                   ),
                                   Text(
                                     '${t('liveRefunded')}: ${refund.refundedAt.toLocal()}',

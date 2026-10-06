@@ -1,3 +1,4 @@
+import 'refund_funding.dart';
 import 'product_thumbnail.dart';
 import '../strings.dart';
 
@@ -184,7 +185,9 @@ class LiveOrder {
         (refunds.isNotEmpty &&
             (status != 'paid' ||
                 (!cashierOrder &&
-                    refunds.any((r) => r.accountType != 'wechat')))) ||
+                    refunds.any(
+                      (r) => !{'wechat', 'mixed'}.contains(r.accountType),
+                    )))) ||
         (refund != null &&
             (refunds.length != 1 ||
                 refunds.single.reference != refund!.reference ||
@@ -198,7 +201,8 @@ class LiveOrder {
     if ((tableCheckoutRef != null && status != 'paid') ||
         (refund != null &&
             (status != 'paid' ||
-                (!cashierOrder && refund!.accountType != 'wechat') ||
+                (!cashierOrder &&
+                    !{'wechat', 'mixed'}.contains(refund!.accountType)) ||
                 refund!.totalCents != totalCents)) ||
         !{'pending', 'paid', 'expired', 'waived'}.contains(status) ||
         ((status == 'waived') != (totalCents == 0)) ||
@@ -212,7 +216,10 @@ class LiveOrder {
     }
     if (items.any((item) => item.refundedQuantity != null) &&
         (status != 'paid' ||
-            (!cashierOrder && refunds.any((r) => r.accountType != 'wechat')) ||
+            (!cashierOrder &&
+                refunds.any(
+                  (r) => !{'wechat', 'mixed'}.contains(r.accountType),
+                )) ||
             items.any((item) => item.refundedQuantity == null) ||
             items.fold<int>(
                   0,
@@ -264,17 +271,31 @@ class OrderRefund {
       totalCents = _positive(value['totalCents'], 100000000),
       principalCents = _refundAmount(value['principalCents']),
       giftCents = _refundAmount(value['giftCents']),
+      funding = value['funding'] == null
+          ? null
+          : RefundFunding(_map(value['funding'])),
       refundedAt = _time(value['refundedAt']) {
-    if (value.length != 6 ||
+    if (value.length != (funding == null ? 6 : 7) ||
         !RegExp(
           r'^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
         ).hasMatch(reference) ||
-        !{'platform_cash', 'store_balance', 'wechat'}.contains(accountType) ||
-        principalCents + giftCents != totalCents ||
-        (accountType != 'store_balance' && giftCents != 0)) {
+        !{
+          'platform_cash',
+          'store_balance',
+          'wechat',
+          'mixed',
+        }.contains(accountType) ||
+        (accountType != 'mixed' && principalCents + giftCents != totalCents) ||
+        (!{'store_balance', 'mixed'}.contains(accountType) && giftCents != 0) ||
+        ((accountType == 'mixed') != (funding != null)) ||
+        (funding != null &&
+            (funding!.n('grossCents') != totalCents ||
+                funding!.principal != principalCents ||
+                funding!.n('storeGiftCents') != giftCents))) {
       throw const FormatException();
     }
   }
+  final RefundFunding? funding;
   final String reference, accountType;
   final int totalCents, principalCents, giftCents;
   final DateTime refundedAt;

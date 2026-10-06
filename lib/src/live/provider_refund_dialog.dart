@@ -8,6 +8,7 @@ import 'order_snapshot.dart';
 import 'table_snapshot.dart';
 import 'touch_quantity.dart';
 import 'provider_refund_journal.dart';
+import 'refund_funding.dart';
 
 class ProviderRefundDialog extends StatefulWidget {
   const ProviderRefundDialog({
@@ -38,6 +39,8 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
   String? originalEmployee, state, message, reconfirmId;
   bool busy = true, returnStock = false;
   int reason = 0;
+  Map<int, RefundFunding> fundingOptions = {};
+  RefundFunding? get funding => fundingOptions[count];
   String l(String zh, String en, String tw, String th) =>
       [zh, en, tw, th][widget.language.index];
   bool get current =>
@@ -97,6 +100,25 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
           value['unitPriceCents'] <= 0)
         throw const FormatException();
       data = value;
+      final options = value['fundingOptions'] ?? <dynamic>[];
+      if (options is! List || options.length > 1000)
+        throw const FormatException();
+      final parsed = <int, RefundFunding>{};
+      for (final raw in options) {
+        if (raw is! Map || raw['quantity'] is! int || raw['plan'] is! Map)
+          throw const FormatException();
+        final q = raw['quantity'] as int,
+            plan = RefundFunding(Map<String, dynamic>.from(raw['plan'] as Map));
+        if (q < 1 ||
+            q > n('availableQuantity') ||
+            parsed.containsKey(q) ||
+            plan.n('grossCents') != q * n('unitPriceCents'))
+          throw const FormatException();
+        parsed[q] = plan;
+      }
+      if (parsed.isNotEmpty && parsed.length != n('availableQuantity'))
+        throw const FormatException();
+      fundingOptions = parsed;
       if (value['pendingRef'] != null) {
         if (value['pendingProductRef'] is! String)
           throw const FormatException();
@@ -123,6 +145,8 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
           'ยังไม่เปิดการคืนเงิน',
         );
     } catch (_) {
+      data = null;
+      fundingOptions = {};
       if (mounted)
         message = l(
           '暂时无法读取，请重试',
@@ -185,6 +209,14 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
                   result['stockReturnQuantity'] !=
                       command['stockReturnQuantity'])))
         throw const FormatException();
+      if (command.containsKey('expectedFundingFingerprint')) {
+        final raw = result['funding'];
+        if (raw is! Map ||
+            RefundFunding(Map<String, dynamic>.from(raw)).fingerprint !=
+                command['expectedFundingFingerprint']) {
+          throw const FormatException();
+        }
+      }
       state = result['state'] as String;
       if (state == 'refunded') {
         await journal.acknowledge(command['requestId'] as String);
@@ -233,6 +265,7 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
         'expectedRefundCents': count * n('unitPriceCents'),
         'expectedServingEpoch': n('servingEpoch'),
         'expectedRefundedQuantity': n('refundedQuantity'),
+        if (funding != null) 'expectedFundingFingerprint': funding!.fingerprint,
       };
       if (reconfirmId == null) {
         await journal.save(command);
@@ -390,8 +423,14 @@ class _ProviderRefundDialogState extends State<ProviderRefundDialog> {
                   ),
                 ],
                 const SizedBox(height: 18),
+                if (funding != null)
+                  for (final line in funding!.lines(widget.language))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(line, style: const TextStyle(fontSize: 18)),
+                    ),
                 Text(
-                  '${l('原路退回', 'Original payment refund', '原路退回', 'คืนผ่านช่องทางเดิม')}  ¥ ${formatCents(count * n('unitPriceCents'))}',
+                  '${funding == null ? l('原路退回', 'Original payment refund', '原路退回', 'คืนผ่านช่องทางเดิม') : l('退货商品金额', 'Returned goods value', '退貨商品金額', 'มูลค่าสินค้าคืน')}  ¥ ${formatCents(count * n('unitPriceCents'))}',
                   style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
