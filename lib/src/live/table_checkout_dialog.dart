@@ -4,6 +4,9 @@ import '../hardware/receipt_document_renderer.dart';
 import '../hardware/receipt_print_identity.dart';
 
 import 'dart:async';
+
+import 'payment_availability.dart';
+
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -106,14 +109,15 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
           ]
           .where(
             (value) =>
+                (value != 'alipay' || alipayDirectEnabled) &&
                 widget.auth.session?.permissions.contains(
-                  'payment.${['platform_cash', 'store_balance'].contains(value)
-                      ? 'balance'
-                      : ['pos', 'bank_code'].contains(value)
-                      ? 'cash'
-                      : value}',
-                ) ==
-                true,
+                      'payment.${['platform_cash', 'store_balance'].contains(value)
+                          ? 'balance'
+                          : ['pos', 'bank_code'].contains(value)
+                          ? 'cash'
+                          : value}',
+                    ) ==
+                    true,
           )
           .toList();
   String label(String value) => value == 'bank_code'
@@ -219,10 +223,21 @@ class _TableCheckoutDialogState extends State<TableCheckoutDialog>
     if (detected == null) {
       setState(
         () => message = text(
-          '请出示微信、支付宝或本店会员卡付款码；会员身份码不能扣款',
-          'Show a WeChat, Alipay or store card payment code. Identity codes cannot debit funds.',
-          '請出示微信、支付寶或本店會員卡付款碼；會員身分碼不能扣款',
+          '请出示微信或会员付款码；会员身份码不能扣款',
+          'Show a WeChat or member payment code. Identity codes cannot debit funds.',
+          '請出示微信或會員付款碼；會員身分碼不能扣款',
           'กรุณาแสดงรหัสชำระเงิน รหัสประจำตัวสมาชิกใช้หักเงินไม่ได้',
+        ),
+      );
+      return;
+    }
+    if (detected == 'alipay' && !alipayDirectEnabled) {
+      setState(
+        () => message = text(
+          '支付宝请使用银行码收款',
+          'Use Bank QR receipt for Alipay',
+          '支付寶請使用銀行碼收款',
+          'สำหรับ Alipay กรุณาใช้การรับเงินผ่าน QR ธนาคาร',
         ),
       );
       return;

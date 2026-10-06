@@ -566,6 +566,13 @@ void main() {
         expect(find.byType(TextField), findsNothing);
         events.add(entry.key);
         await tester.pumpAndSettle();
+        if (entry.value == 'alipay' && !const bool.fromEnvironment('CASHIER_ALIPAY_DIRECT')) {
+          expect(auth.preparations, 0);
+          expect(auth.collections, 0);
+          expect(find.byType(TableCheckoutDialog), findsOneWidget);
+          await tester.pumpWidget(const SizedBox.shrink());
+          return;
+        }
         expect(auth.preparations, 1);
         expect(auth.collections, 1);
         expect(auth.collectedChannel, entry.value);

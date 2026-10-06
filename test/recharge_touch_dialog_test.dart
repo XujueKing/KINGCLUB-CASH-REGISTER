@@ -369,6 +369,15 @@ void main() {
         );
         await t.testTextInput.receiveAction(TextInputAction.done);
         await t.pumpAndSettle();
+          if (channel == 'alipay' && !const bool.fromEnvironment('CASHIER_ALIPAY_DIRECT')) {
+            expect(a.collectedChannel, isNull);
+            expect(a.calls, isEmpty);
+            expect(find.byType(RechargeTouchDialog), findsOneWidget);
+            await t.pumpWidget(const SizedBox());
+            a.dispose();
+            debugDefaultTargetPlatformOverride = null;
+            return;
+          }
         expect(a.collectedChannel, channel);
         expect(a.calls.single['campaignRef'], 'TEST_CAMPAIGN');
         expect(s.data, isEmpty);

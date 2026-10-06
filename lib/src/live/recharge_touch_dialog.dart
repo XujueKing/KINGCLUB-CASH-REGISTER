@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import 'payment_availability.dart';
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -553,7 +556,7 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
                                   pendingCash != null ||
                                   ![
                                     'payment.wechat',
-                                    'payment.alipay',
+                                    if (alipayDirectEnabled) 'payment.alipay',
                                   ].any(original.permissions.contains)
                               ? null
                               : scan,
@@ -561,10 +564,14 @@ class _RechargeTouchDialogState extends State<RechargeTouchDialog> {
                           label: Text(
                             rechargeText(
                               l,
-                              '微信支付宝付款',
-                              'WeChat / Alipay',
-                              '微信支付寶付款',
-                              'WeChat / Alipay',
+                              alipayDirectEnabled ? '微信支付宝付款' : '微信付款',
+                              alipayDirectEnabled
+                                  ? 'WeChat / Alipay'
+                                  : 'WeChat Pay',
+                              alipayDirectEnabled ? '微信支付寶付款' : '微信付款',
+                              alipayDirectEnabled
+                                  ? 'WeChat / Alipay'
+                                  : 'WeChat Pay',
                             ),
                             style: const TextStyle(
                               fontSize: 19,
@@ -1029,6 +1036,17 @@ class _RechargeScanDialogState extends State<RechargeScanDialog>
         ? 'alipay'
         : null;
     if (channel == null) return;
+    if (channel == 'alipay' && !alipayDirectEnabled) {
+      setState(
+        () => error = t(
+          '支付宝请使用银行码收款',
+          'Use Bank QR receipt for Alipay',
+          '支付寶請使用銀行碼收款',
+          'สำหรับ Alipay กรุณาใช้การรับเงินผ่าน QR ธนาคาร',
+        ),
+      );
+      return;
+    }
     input.clear();
     if (!original.permissions.contains('payment.$channel')) {
       setState(
@@ -1105,7 +1123,12 @@ class _RechargeScanDialogState extends State<RechargeScanDialog>
     canPop: !busy,
     child: AlertDialog(
       title: Text(
-        t('微信支付宝付款', 'WeChat / Alipay', '微信支付寶付款', 'WeChat / Alipay'),
+        t(
+          alipayDirectEnabled ? '微信支付宝付款' : '微信付款',
+          alipayDirectEnabled ? 'WeChat / Alipay' : 'WeChat Pay',
+          alipayDirectEnabled ? '微信支付寶付款' : '微信付款',
+          alipayDirectEnabled ? 'WeChat / Alipay' : 'WeChat Pay',
+        ),
       ),
       content: SizedBox(
         width: 520,
