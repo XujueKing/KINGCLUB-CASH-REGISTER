@@ -10,4 +10,4 @@ Validation: 1084 Flutter tests passed, 5 skipped, with the shipping `CASHIER_USB
 
 Backend migrations 372–374 and coordinated runtime are deployed and passed live read-only context, table-detail, report and runtime checks. No real financial refund was submitted.
 
-Terminal installation is pending: ADB currently sees only the phone, not SUNMI. The APK is ready for a retain-data upgrade once the device is available. This document does not mark real refund acceptance or the entire product complete.
+Terminal follow-up: SUNMI reconnected and the signed APK was installed with `install -r`; session and business data were retained. Screenshot checks confirmed the table page and yesterday's paid-order detail, payment channel and receipt reprint entry. No real refund was submitted. This does not mark real financial acceptance or the entire product complete.
