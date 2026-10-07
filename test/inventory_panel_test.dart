@@ -168,7 +168,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('采购').first);
+      await tester.tap(find.text('采购申请').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('新增采购申请'));
       await tester.pumpAndSettle();
@@ -259,7 +259,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('采购').first);
+      await tester.tap(find.text('采购申请').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('新增采购申请'));
       await tester.pumpAndSettle();
@@ -324,7 +324,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(auth.calls.length, 1);
-      for (var i = 0; i < 6; i++) {
+      for (var i = 0; i < 7; i++) {
         await tester.tap(find.byKey(ValueKey('inventory-tab-$i')));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);

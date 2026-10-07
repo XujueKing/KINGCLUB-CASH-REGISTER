@@ -35,7 +35,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
       paper = Color(0xFFF5F4EF),
       muted = Color(0xFF748078);
   final search = TextEditingController();
-  String category = '', stockFilter = 'all';
+  String category = '', stockFilter = 'all', movementFilter = 'all';
   List<Map<String, dynamic>> get visibleProducts => rows('products')
       .where(
         (p) =>
@@ -980,6 +980,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
   Future<void> openBatch(
     Map<String, dynamic> batch, {
     Map<String, dynamic>? initialProduct,
+    bool receiving = false,
   }) async {
     try {
       final detail = batch['items'] is List
@@ -999,9 +1000,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
           locations: locations,
           l: l,
           canWrite: canWrite,
-          canReview:
-              widget.auth.session?.permissions.contains('cashbook.review') ==
-              true,
+          receiving: receiving,
           initialProduct: initialProduct,
           command: batchCommand,
           number: number,
@@ -1028,7 +1027,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
       message(
         l('请先登记供应商', 'Add a supplier first', '請先登記供應商', 'เพิ่มผู้ขายก่อน'),
       );
-      setState(() => tab = 5);
+      setState(() => tab = 6);
       return;
     }
     final now = DateTime.now();
@@ -1870,7 +1869,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                             '${b['location'] ?? l('未分配柜格', 'Unassigned', '未分配櫃格', 'ยังไม่กำหนดช่อง')} · ${b['quantity']}',
                           ),
                           subtitle: label(
-                            '${time(b['createdAt'])}\n${money(b['unitCostCents'])}',
+                            '${b['batchNumber'] ?? b['batchRef']} · ${b['supplierName'] ?? ''}\n${time(b['createdAt'])} · ${money(b['unitCostCents'])}',
                             size: 12,
                             color: muted,
                           ),
@@ -2085,38 +2084,60 @@ class _InventoryPanelState extends State<InventoryPanel> {
     'received' => l('已收齐', 'Received', '已收齊', 'รับครบ'),
     _ => l('已取消', 'Cancelled', '已取消', 'ยกเลิก'),
   };
-  Widget purchases() => box(
+  Widget purchases({bool receiving = false}) => box(
     ListView(
       children: [
         Row(
           children: [
             Expanded(
               child: label(
-                l('采购申请批次', 'Purchase applications', '採購申請批次', 'คำขอซื้อ'),
+                receiving
+                    ? l('收货入库', 'Receive stock', '收貨入庫', 'รับสินค้า')
+                    : l(
+                        '采购申请批次',
+                        'Purchase applications',
+                        '採購申請批次',
+                        'คำขอซื้อ',
+                      ),
                 size: 20,
                 weight: FontWeight.bold,
               ),
             ),
-            button(
-              l('新增采购申请', 'New purchase request', '新增採購申請', 'คำขอซื้อใหม่'),
-              canWrite ? () => manualPurchase() : null,
-              primary: true,
-            ),
+            if (!receiving)
+              button(
+                l('新增采购申请', 'New purchase request', '新增採購申請', 'คำขอซื้อใหม่'),
+                canWrite ? () => manualPurchase() : null,
+                primary: true,
+              ),
           ],
         ),
         label(
           l(
-            '新建批次 → 添加货物 → 提交批准 → 采购 → 确认收货；凭证可后补。',
-            'Create batch → add items → approve → order → receive. Documents may follow.',
-            '新建批次 → 添加貨物 → 提交批准 → 採購 → 確認收貨；憑證可後補。',
-            'สร้างชุด → เพิ่มสินค้า → อนุมัติ → ซื้อ → รับเข้า เอกสารเพิ่มภายหลังได้',
+            receiving
+                ? '选择已采购批次 → 逐项确认到货数量和柜格；凭证可后补。'
+                : '草稿可以跨天追加，确定后提交；老板在手机批准，授权人员在 APP 采购。',
+            receiving
+                ? 'Select an ordered batch and receive each item into a cabinet.'
+                : 'Keep adding to a saved draft. Submit to owner approval and purchase in APP.',
+            receiving
+                ? '選擇已採購批次 → 逐項確認到貨數量和櫃格；憑證可後補。'
+                : '草稿可以跨天追加，確定後提交；老闆在手機批准，授權人員在 APP 採購。',
+            receiving ? 'เลือกชุดที่ซื้อแล้ว รับแต่ละรายการเข้าช่องเก็บ' : 'เพิ่มสินค้าลงร่างข้ามวัน ส่งให้เจ้าของอนุมัติและซื้อผ่าน APP',
           ),
           color: muted,
         ),
         const SizedBox(height: 16),
-        for (final b in (rows(
-          'purchaseBatches',
-        )..sort((a, b) => '${b['createdAt']}'.compareTo('${a['createdAt']}'))))
+        for (final b
+            in (rows('purchaseBatches')
+                .where(
+                  (b) =>
+                      !receiving ||
+                      ['ordered', 'received'].contains(b['status']),
+                )
+                .toList()
+              ..sort(
+                (a, b) => '${b['createdAt']}'.compareTo('${a['createdAt']}'),
+              )))
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Material(
@@ -2131,7 +2152,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   weight: FontWeight.w600,
                 ),
                 subtitle: label(
-                  '${b['itemCount']} ${l('项商品', 'items', '項商品', 'รายการ')} · ${money(b['totalCostCents'])} · ${time(b['createdAt'])}',
+                  '${b['batchNumber'] ?? '—'} · ${b['itemCount']} ${l('项商品', 'items', '項商品', 'รายการ')} · ${money(b['totalCostCents'])} · ${time(b['createdAt'])}',
                   color: muted,
                 ),
                 trailing: Row(
@@ -2147,30 +2168,38 @@ class _InventoryPanelState extends State<InventoryPanel> {
                     const Icon(Icons.chevron_right),
                   ],
                 ),
-                onTap: () => openBatch(b),
+                onTap: () => openBatch(b, receiving: receiving),
               ),
             ),
           ),
-        const Divider(height: 32),
-        label(
-          l('自动补货建议', 'Replenishment suggestions', '自動補貨建議', 'แนะนำเติมสินค้า'),
-          size: 18,
-          weight: FontWeight.bold,
-        ),
-        for (final p in rows(
-          'products',
-        ).where((p) => (p['suggested'] as num? ?? 0) > 0))
-          ListTile(
-            title: label(productName('${p['productRef']}')),
-            subtitle: label(
-              '${l('建议补货', 'Suggested units', '建議補貨', 'จำนวนแนะนำ')} ${p['suggested']}',
+        if (!receiving) ...[
+          const Divider(height: 32),
+          label(
+            l(
+              '自动补货建议',
+              'Replenishment suggestions',
+              '自動補貨建議',
+              'แนะนำเติมสินค้า',
             ),
-            trailing: button(
-              l('加入批次', 'Add to batch', '加入批次', 'เพิ่มในชุด'),
-              canWrite ? () => purchase(p) : null,
-            ),
+            size: 18,
+            weight: FontWeight.bold,
           ),
-        if (rows('purchases').any((p) => p['applicationBatchRef'] == null)) ...[
+          for (final p in rows(
+            'products',
+          ).where((p) => (p['suggested'] as num? ?? 0) > 0))
+            ListTile(
+              title: label(productName('${p['productRef']}')),
+              subtitle: label(
+                '${l('建议补货', 'Suggested units', '建議補貨', 'จำนวนแนะนำ')} ${p['suggested']}',
+              ),
+              trailing: button(
+                l('加入批次', 'Add to batch', '加入批次', 'เพิ่มในชุด'),
+                canWrite ? () => purchase(p) : null,
+              ),
+            ),
+        ],
+        if (receiving &&
+            rows('purchases').any((p) => p['applicationBatchRef'] == null)) ...[
           const Divider(height: 32),
           label(
             l(
@@ -2209,6 +2238,28 @@ class _InventoryPanelState extends State<InventoryPanel> {
     'return' => l('还酒', 'Return', '還酒', 'คืน'),
     'damage' => l('破损', 'Damage', '破損', 'เสียหาย'),
     'loss' => l('遗失', 'Loss', '遺失', 'สูญหาย'),
+    'sale' => l('销售出库', 'Sale', '銷售出庫', 'ขาย'),
+    'refund' => l('退款退库', 'Refund return', '退款退庫', 'คืนสินค้าคืนเงิน'),
+    'purchase_receive' => l('采购入库', 'Purchase receipt', '採購入庫', 'รับซื้อเข้า'),
+    'purchase_batch_save' => l('采购申请', 'Purchase request', '採購申請', 'คำขอซื้อ'),
+    'purchase_batch_review' => l(
+      '申请审批',
+      'Application review',
+      '申請審批',
+      'อนุมัติคำขอ',
+    ),
+    'purchase_batch_order' => l(
+      '确认采购',
+      'Purchase confirmed',
+      '確認採購',
+      'ยืนยันซื้อ',
+    ),
+    'purchase_batch_document' => l(
+      '采购凭证',
+      'Purchase document',
+      '採購憑證',
+      'เอกสารซื้อ',
+    ),
     'purchase' => l('采购', 'Purchase', '採購', 'ซื้อ'),
     'receive' => l('入库', 'Receive', '入庫', 'รับเข้า'),
     'policy' => l('预警设置', 'Stock warning', '預警設定', 'การเตือน'),
@@ -2320,15 +2371,38 @@ class _InventoryPanelState extends State<InventoryPanel> {
           size: 18,
           weight: FontWeight.bold,
         ),
-        for (final m in rows('movements'))
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final f in [
+              ('all', l('全部', 'All', '全部', 'ทั้งหมด')),
+              ('in', l('进货 / 入库', 'Incoming', '進貨 / 入庫', 'รับเข้า')),
+              ('out', l('出货 / 去向', 'Outgoing', '出貨 / 去向', 'จ่ายออก')),
+            ])
+              ChoiceChip(
+                label: Text(f.$2),
+                selected: movementFilter == f.$1,
+                onSelected: (_) => setState(() => movementFilter = f.$1),
+              ),
+          ],
+        ),
+        for (final m in rows('movements').where(
+          (m) =>
+              movementFilter == 'all' ||
+              (movementFilter == 'in'
+                  ? (m['quantity'] as num) > 0
+                  : (m['quantity'] as num) < 0),
+        ))
           ListTile(
             title: label(productName('${m['productRef']}')),
             subtitle: label(
-              '${time(m['createdAt'])} · ${m['type']}',
+              '${time(m['createdAt'])} · ${actionName('${m['type']}')}\n${m['location'] ?? ''} · ${m['batchNumber'] ?? m['batchRef']} · ${m['supplierName'] ?? ''}\n${m['sourceRef'] ?? ''}',
               size: 12,
               color: muted,
             ),
-            trailing: label('${m['quantity']}'),
+            trailing: label(
+              '${(m['quantity'] as num) > 0 ? '+' : ''}${m['quantity']}',
+            ),
           ),
       ],
     ),
@@ -2394,7 +2468,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
       l('库存', 'Stock', '庫存', 'สต็อก'),
       l('盘点', 'Count', '盤點', 'ตรวจนับ'),
       l('借还酒', 'Loans', '借還酒', 'ยืม / คืน'),
-      l('采购', 'Purchasing', '採購', 'จัดซื้อ'),
+      l('采购申请', 'Purchase requests', '採購申請', 'คำขอซื้อ'),
+      l('收货入库', 'Receive stock', '收貨入庫', 'รับสินค้า'),
       l('流水', 'History', '流水', 'ประวัติ'),
       l('供应商', 'Suppliers', '供應商', 'ผู้ขาย'),
     ];
@@ -2530,7 +2605,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       ),
                       2 => loans(),
                       3 => purchases(),
-                      4 => history(),
+                      4 => purchases(receiving: true),
+                      5 => history(),
                       _ => suppliers(),
                     },
             ),

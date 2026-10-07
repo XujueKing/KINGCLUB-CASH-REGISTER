@@ -12,7 +12,7 @@ class PurchaseBatchDialog extends StatefulWidget {
     required this.locations,
     required this.l,
     required this.canWrite,
-    required this.canReview,
+    this.receiving = false,
     required this.command,
     required this.number,
     this.initialProduct,
@@ -22,7 +22,7 @@ class PurchaseBatchDialog extends StatefulWidget {
   final List<Map<String, dynamic>> products, suppliers;
   final List<String> locations;
   final PurchaseText l;
-  final bool canWrite, canReview;
+  final bool canWrite, receiving;
   final Map<String, dynamic>? initialProduct;
   final Future<Map<String, dynamic>> Function(Map<String, dynamic>) command;
   final Future<int?> Function(String, int, {bool cents}) number;
@@ -43,7 +43,8 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   String t(String zh, String en, String tw, String th) =>
       widget.l(zh, en, tw, th);
   String get status => '${batch['status']}';
-  bool get editable => status == 'draft' && widget.canWrite;
+  bool get editable =>
+      !widget.receiving && status == 'draft' && widget.canWrite;
   String name(dynamic map) => map is Map
       ? t(
           '${map['zh-CN'] ?? map.values.firstOrNull ?? ''}',
@@ -341,7 +342,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
     int quantity =
         (line['quantity'] as num).toInt() -
         (line['received'] as num? ?? 0).toInt();
-    String location = widget.locations.firstOrNull ?? '';
+    String location = '';
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -527,6 +528,14 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                       '申請 → 批准 → 採購 → 收貨入庫',
                       'คำขอ → อนุมัติ → ซื้อ → รับเข้า',
                     ),
+                    style: const TextStyle(color: muted),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${t('批次号', 'Batch number', '批次號', 'เลขชุด')}: ${batch['batchNumber'] ?? '—'}'
+                    '${batch['applicationNumber'] == null ? '' : '  ·  ${batch['applicationNumber']}'}',
                     style: const TextStyle(color: muted),
                   ),
                 ),
@@ -732,7 +741,8 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                                                             .remove_circle_outline,
                                                       ),
                                                     ),
-                                                  if (status == 'ordered' &&
+                                                  if (widget.receiving &&
+                                                      status == 'ordered' &&
                                                       (i['received'] as num? ??
                                                               0) <
                                                           (i['quantity']
@@ -815,44 +825,25 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                         primary: true,
                       ),
                     ],
-                    if (status == 'pending' && widget.canReview) ...[
-                      touch(
-                        t('退回修改', 'Return to draft', '退回修改', 'แก้ไข'),
-                        () => run({
-                          'action': 'purchase_batch_review',
-                          'approved': false,
-                        }),
-                      ),
-                      const SizedBox(width: 12),
-                      touch(
-                        t('批准采购', 'Approve', '批准採購', 'อนุมัติ'),
-                        () => run({
-                          'action': 'purchase_batch_review',
-                          'approved': true,
-                        }),
-                        primary: true,
-                      ),
-                    ],
-                    if (status == 'pending' && !widget.canReview)
+                    if (status == 'pending')
                       Text(
                         t(
-                          '等待管理员批准',
-                          'Awaiting administrator approval',
-                          '等待管理員批准',
-                          'รอผู้ดูแลอนุมัติ',
+                          '已提交申请，等待老板在手机 APP 批准',
+                          'Submitted. Awaiting owner approval in APP.',
+                          '已提交申請，等待老闆在手機 APP 批准',
+                          'ส่งแล้ว รอเจ้าของอนุมัติใน APP',
                         ),
                         style: const TextStyle(color: muted),
                       ),
-                    if (status == 'approved' && widget.canWrite)
-                      touch(
+                    if (status == 'approved')
+                      Text(
                         t(
-                          '确认已采购',
-                          'Confirm ordered',
-                          '確認已採購',
-                          'ยืนยันสั่งซื้อ',
+                          '已批准，老板或授权员工在 APP 查看清单并采购',
+                          'Approved. Owner or authorized buyer purchases in APP.',
+                          '已批准，老闆或授權員工在 APP 查看清單並採購',
+                          'อนุมัติแล้ว ผู้มีสิทธิ์ซื้อผ่าน APP',
                         ),
-                        () => run({'action': 'purchase_batch_order'}),
-                        primary: true,
+                        style: const TextStyle(color: muted),
                       ),
                     if (status == 'ordered')
                       Text(
