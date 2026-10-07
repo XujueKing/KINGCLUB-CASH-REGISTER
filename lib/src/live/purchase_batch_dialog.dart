@@ -58,24 +58,38 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   String money(dynamic cents) => cents == null
       ? t('待询价', 'Ask for quote', '待詢價', 'สอบถามราคา')
       : '¥ ${((cents as num) / 100).toStringAsFixed(2)}';
-  List<Map<String, dynamic>> quotes(Map p) => (p['quotes'] as List? ?? [])
-      .map((x) => Map<String, dynamic>.from(x as Map))
-      .toList();
+  List<Map<String, dynamic>> quotes(Map p) =>
+      (p['quotes'] as List? ?? [])
+          .map((x) => Map<String, dynamic>.from(x as Map))
+          .toList()
+        ..sort((a, b) {
+          final ac = a['unitCostCents'] as num? ?? 0;
+          final bc = b['unitCostCents'] as num? ?? 0;
+          return (ac > 0 ? ac : double.infinity).compareTo(
+            bc > 0 ? bc : double.infinity,
+          );
+        });
   List<Map<String, dynamic>> get activeSuppliers => widget.suppliers
       .where((s) => s['active'] == 1 || s['active'] == true)
       .toList();
   String? defaultSupplier(Map product) {
-    final available = quotes(product)
-        .where(
-          (q) =>
-              (q['unitCostCents'] as num? ?? 0) > 0 &&
-              activeSuppliers.any((s) => s['supplierRef'] == q['supplierRef']),
-        )
-        .toList();
+    final available =
+        quotes(product)
+            .where(
+              (q) =>
+                  (q['unitCostCents'] as num? ?? 0) > 0 &&
+                  activeSuppliers.any(
+                    (s) => s['supplierRef'] == q['supplierRef'],
+                  ),
+            )
+            .toList()
+          ..sort(
+            (a, b) => (a['unitCostCents'] as num).compareTo(
+              b['unitCostCents'] as num,
+            ),
+          );
     final preferred = (product['policy'] as Map?)?['supplierRef'];
-    return (available.where((q) => q['supplierRef'] == preferred).firstOrNull ??
-                available.firstOrNull)?['supplierRef']
-            as String? ??
+    return available.firstOrNull?['supplierRef'] as String? ??
         activeSuppliers
                 .where((s) => s['supplierRef'] == preferred)
                 .firstOrNull?['supplierRef']
@@ -104,13 +118,9 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   }
 
   void priceFor(Map<String, dynamic> line, Map product, String supplier) {
-    final candidates =
-        quotes(product).where((q) => q['supplierRef'] == supplier).toList()
-          ..sort(
-            (a, b) => (a['unitCostCents'] as num? ?? double.infinity).compareTo(
-              b['unitCostCents'] as num? ?? double.infinity,
-            ),
-          );
+    final candidates = quotes(product)
+        .where((q) => q['supplierRef'] == supplier)
+        .toList();
     final quote = candidates.firstOrNull;
     line['supplierRef'] = supplier;
     line['supplierName'] =
@@ -118,7 +128,8 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
             .where((s) => s['supplierRef'] == supplier)
             .firstOrNull?['name'] ??
         supplier;
-    line['unitCostCents'] = quote?['unitCostCents'];
+    final cost = quote?['unitCostCents'] as num?;
+    line['unitCostCents'] = cost != null && cost > 0 ? cost : null;
     line['quoteKey'] = quote?['key'];
     line['quote'] = quote;
     line['manualCost'] = false;

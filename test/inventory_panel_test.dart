@@ -7,9 +7,12 @@ import 'package:kingclub_cash_register/src/strings.dart';
 import 'live_tables_panel_test.dart' show TableAuth;
 
 class InventoryAuth extends TableAuth {
-  InventoryAuth({this.preferUnquotedSupplier = false})
-    : super(permissions: ['workbench.read', 'report.read', 'shift.manage']);
+  InventoryAuth({
+    this.preferUnquotedSupplier = false,
+    this.preferExpensiveSupplier = false,
+  }) : super(permissions: ['workbench.read', 'report.read', 'shift.manage']);
   final bool preferUnquotedSupplier;
+  final bool preferExpensiveSupplier;
   final calls = <Map<String, dynamic>>[];
   Map<String, dynamic>? batch;
   @override
@@ -63,6 +66,8 @@ class InventoryAuth extends TableAuth {
           'available': 8,
           'policy': preferUnquotedSupplier
               ? {'supplierRef': 'unquoted-supplier'}
+              : preferExpensiveSupplier
+              ? {'supplierRef': 'other-supplier'}
               : null,
           'quotes': [
             {
@@ -83,7 +88,7 @@ class InventoryAuth extends TableAuth {
               'unitCostCents': 4000,
               'specification': '12*500ml',
             },
-          ],
+          ].reversed.toList(),
           'onOrder': 0,
           'suggested': 0,
         },
@@ -165,60 +170,65 @@ class InventoryAuth extends TableAuth {
 
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
-  testWidgets(
-    'uses an available supplier quotation instead of requesting an unquoted preferred price',
-    (tester) async {
-      tester.view.physicalSize = const Size(1274, 710);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final auth = InventoryAuth(preferUnquotedSupplier: true);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: InventoryPanel(
-              auth: auth,
-              language: UiLanguage.zh,
-              enableRealtime: false,
+  for (final expensive in [false, true]) {
+    testWidgets(
+      'uses the cheapest valid quotation despite ${expensive ? 'a priced expensive' : 'an unquoted'} preferred supplier',
+      (tester) async {
+        tester.view.physicalSize = const Size(1274, 710);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final auth = InventoryAuth(
+          preferUnquotedSupplier: !expensive,
+          preferExpensiveSupplier: expensive,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: InventoryPanel(
+                auth: auth,
+                language: UiLanguage.zh,
+                enableRealtime: false,
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('采购申请').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('新增采购申请'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('purchase-product-wine')));
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Test supplier · ¥ 35.00 × 1'),
-        findsOneWidget,
-      );
-      await tester.tap(
-        find.byKey(const ValueKey('purchase-line-wine-test-supplier')),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('已按供应商报价自动带入'), findsOneWidget);
-      expect(find.text('调整实际进货价'), findsOneWidget);
-      expect(find.text('录入实际进货价'), findsNothing);
-      expect(auth.calls, hasLength(1));
-      await tester.tap(find.text('取消').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.close).last);
-      await tester.pumpAndSettle();
-      expect(
-        (auth.calls.last['items'] as List).single,
-        containsPair('unitCostCents', 3500),
-      );
-      expect(
-        (auth.calls.last['items'] as List).single,
-        containsPair('manualCost', false),
-      );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('采购申请').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('新增采购申请'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('purchase-product-wine')));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Test supplier · ¥ 35.00 × 1'),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('purchase-line-wine-test-supplier')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('已按供应商报价自动带入'), findsOneWidget);
+        expect(find.text('调整实际进货价'), findsOneWidget);
+        expect(find.text('录入实际进货价'), findsNothing);
+        expect(auth.calls, hasLength(1));
+        await tester.tap(find.text('取消').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.close).last);
+        await tester.pumpAndSettle();
+        expect(
+          (auth.calls.last['items'] as List).single,
+          containsPair('unitCostCents', 3500),
+        );
+        expect(
+          (auth.calls.last['items'] as List).single,
+          containsPair('manualCost', false),
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
   testWidgets(
     'closing untouched or emptied new applications never creates server drafts',
     (tester) async {
