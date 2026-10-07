@@ -64,6 +64,25 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   List<Map<String, dynamic>> get activeSuppliers => widget.suppliers
       .where((s) => s['active'] == 1 || s['active'] == true)
       .toList();
+  String? defaultSupplier(Map product) {
+    final available = quotes(product)
+        .where(
+          (q) =>
+              (q['unitCostCents'] as num? ?? 0) > 0 &&
+              activeSuppliers.any((s) => s['supplierRef'] == q['supplierRef']),
+        )
+        .toList();
+    final preferred = (product['policy'] as Map?)?['supplierRef'];
+    return (available.where((q) => q['supplierRef'] == preferred).firstOrNull ??
+                available.firstOrNull)?['supplierRef']
+            as String? ??
+        activeSuppliers
+                .where((s) => s['supplierRef'] == preferred)
+                .firstOrNull?['supplierRef']
+            as String? ??
+        activeSuppliers.firstOrNull?['supplierRef'] as String?;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -108,13 +127,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   void add(Map<String, dynamic> product, {bool notify = true}) {
     if (busy) return;
     void update() {
-      final preferred = (product['policy'] as Map?)?['supplierRef'];
-      final supplier =
-          activeSuppliers
-              .where((s) => s['supplierRef'] == preferred)
-              .firstOrNull?['supplierRef'] ??
-          quotes(product).firstOrNull?['supplierRef'] ??
-          activeSuppliers.firstOrNull?['supplierRef'];
+      final supplier = defaultSupplier(product);
       if (supplier == null) {
         error = t(
           '请先登记供应商',
@@ -140,7 +153,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
           'names': product['names'],
           'specifications': product['specifications'],
         };
-        priceFor(line, product, '$supplier');
+        priceFor(line, product, supplier);
         items.add(line);
       }
       dirty = true;
@@ -274,21 +287,68 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: touch(
-                        '${t('进货单价', 'Unit cost', '進貨單價', 'ต้นทุน')}\n${money(copy['unitCostCents'])}',
-                        () async {
-                          final v = await widget.number(
+                      child: Column(
+                        children: [
+                          Text(
                             t('进货单价', 'Unit cost', '進貨單價', 'ต้นทุน'),
-                            (copy['unitCostCents'] as num? ?? 0).toInt(),
-                            cents: true,
-                          );
-                          if (v != null) {
-                            set(() {
-                              copy['unitCostCents'] = v;
-                              copy['manualCost'] = true;
-                            });
-                          }
-                        },
+                            style: const TextStyle(color: muted),
+                          ),
+                          Text(
+                            money(copy['unitCostCents']),
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              color: green,
+                            ),
+                          ),
+                          if (copy['quote'] is Map &&
+                              copy['manualCost'] != true)
+                            Text(
+                              t(
+                                '已按供应商报价自动带入',
+                                'Supplier quote applied automatically',
+                                '已按供應商報價自動帶入',
+                                'ใช้ราคาผู้ขายอัตโนมัติ',
+                              ),
+                              style: const TextStyle(
+                                color: muted,
+                                fontSize: 13,
+                              ),
+                            ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(160, 48),
+                            ),
+                            onPressed: () async {
+                              final v = await widget.number(
+                                t('进货单价', 'Unit cost', '進貨單價', 'ต้นทุน'),
+                                (copy['unitCostCents'] as num? ?? 0).toInt(),
+                                cents: true,
+                              );
+                              if (v != null) {
+                                set(() {
+                                  copy['unitCostCents'] = v;
+                                  copy['manualCost'] = true;
+                                });
+                              }
+                            },
+                            child: Text(
+                              copy['unitCostCents'] == null
+                                  ? t(
+                                      '录入实际进货价',
+                                      'Enter actual cost',
+                                      '錄入實際進貨價',
+                                      'กรอกต้นทุนจริง',
+                                    )
+                                  : t(
+                                      '调整实际进货价',
+                                      'Adjust actual cost',
+                                      '調整實際進貨價',
+                                      'แก้ต้นทุนจริง',
+                                    ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -296,10 +356,10 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                 const SizedBox(height: 12),
                 Text(
                   t(
-                    '按瓶／支等库存单位采购；价格不明时先询价。',
-                    'Buy in stock units; confirm an unknown cost first.',
-                    '按瓶／支等庫存單位採購；價格不明時先詢價。',
-                    'ซื้อเป็นหน่วยสต็อก ตรวจราคาก่อน',
+                    '同一规格的供应商报价自动带入；切换供应商即切换价格。',
+                    'Matching quotes fill automatically. Switching supplier switches price.',
+                    '同一規格的供應商報價自動帶入；切換供應商即切換價格。',
+                    'ใช้ราคาสเปกตรงกันอัตโนมัติ เปลี่ยนผู้ขายแล้วราคาเปลี่ยนตาม',
                   ),
                   style: const TextStyle(color: muted),
                 ),
@@ -601,7 +661,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                                       subtitle: Text(
                                         quotes(p).isEmpty
                                             ? t(
-                                                '暂无对应报价',
+                                                '暂无此规格报价',
                                                 'No matching quote',
                                                 '暫無對應報價',
                                                 'ไม่มีราคา',
