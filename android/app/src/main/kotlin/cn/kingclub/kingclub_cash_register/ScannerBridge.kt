@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.input.InputManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +21,15 @@ class ScannerBridge(private val activity: Activity, messenger: BinaryMessenger) 
     private var foreground = false
     private var registered = false
     private val handler = Handler(Looper.getMainLooper())
+    private val inputManager = activity.getSystemService(Context.INPUT_SERVICE) as? InputManager
+    private val deviceListener = object : InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) { clearBuffer(); lastCode = null }
+        override fun onInputDeviceChanged(deviceId: Int) { clearBuffer(); lastCode = null }
+        override fun onInputDeviceRemoved(deviceId: Int) {
+            if (lastDevice == deviceId) clearBuffer()
+            lastCode = null
+        }
+    }
     private val buffer = StringBuilder()
     private var lastKeyAt = 0L
     private var lastDevice = -1
@@ -62,7 +72,7 @@ class ScannerBridge(private val activity: Activity, messenger: BinaryMessenger) 
         }
     }
 
-    init { channel.setStreamHandler(this) }
+    init { channel.setStreamHandler(this); inputManager?.registerInputDeviceListener(deviceListener, handler) }
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) { sink = events; update() }
     override fun onCancel(arguments: Any?) { sink = null; clearBuffer(); lastCode = null; update() }
     fun setForeground(value: Boolean) { foreground = value; if (!value) { clearBuffer(); lastCode = null }; update() }
@@ -80,6 +90,6 @@ class ScannerBridge(private val activity: Activity, messenger: BinaryMessenger) 
             registered = false
         }
     }
-    fun dispose() { sink = null; clearBuffer(); handler.removeCallbacksAndMessages(null); update(); channel.setStreamHandler(null) }
+    fun dispose() { inputManager?.unregisterInputDeviceListener(deviceListener); sink = null; clearBuffer(); handler.removeCallbacksAndMessages(null); update(); channel.setStreamHandler(null) }
     private companion object { const val ACTION = "com.sunmi.scanner.ACTION_DATA_CODE_RECEIVED" }
 }

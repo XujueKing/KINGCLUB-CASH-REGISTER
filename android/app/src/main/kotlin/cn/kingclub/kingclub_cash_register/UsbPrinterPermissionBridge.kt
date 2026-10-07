@@ -23,6 +23,11 @@ class UsbPrinterPermissionBridge(private val activity: Activity, messenger: Bina
     private val channel = MethodChannel(messenger, "cn.kingclub.cashier/usb-printer-permission")
     private var pending: Request? = null
     private var closed = false
+    private var resumeReply: (() -> Unit)? = null
+
+    fun onWindowFocusChanged(hasFocus: Boolean) {
+        if (hasFocus) { val reply = resumeReply; resumeReply = null; reply?.invoke() }
+    }
 
     init {
         channel.setMethodCallHandler { call, result ->
@@ -142,14 +147,25 @@ class UsbPrinterPermissionBridge(private val activity: Activity, messenger: Bina
             registered = false
             if (pending === this) pending = null
             if (!closed) {
-                if (error != null) result.error(error, null, null)
-                else result.success(mapOf("requestId" to requestId, "granted" to granted))
+                val reply: () -> Unit = {
+                    if (!closed) {
+                        if (error != null) result.error(error, null, null)
+                        else result.success(mapOf("requestId" to requestId, "granted" to granted))
+                    }
+                }
+                // The permission broadcast may precede restoration of window
+                // focus. Resume printing after the OS dialog has actually closed.
+                if (error == null && granted == true && !activity.hasWindowFocus()) {
+                    resumeReply = reply
+                    main.postDelayed({ if (resumeReply === reply) { resumeReply = null; reply() } }, 2000)
+                } else reply()
             }
         }
     }
 
     fun dispose() {
         closed = true
+        resumeReply = null
         channel.setMethodCallHandler(null)
         pending?.finish(null, "USB_PERMISSION_CLOSED")
     }

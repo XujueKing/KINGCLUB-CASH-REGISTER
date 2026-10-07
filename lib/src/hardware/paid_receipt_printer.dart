@@ -33,7 +33,7 @@ Future<ReceiptCaption> readReceiptCaption(
         );
         if (!identical(identity, auth.session)) break;
         for (final table in snapshot.tables) {
-          if (table.reference == tableRef)
+          if (table.reference == tableRef) {
             return ReceiptCaption(
               storeName: snapshot.storeName,
               tableName: table.name,
@@ -41,6 +41,7 @@ Future<ReceiptCaption> readReceiptCaption(
                   ? table.session?.partySize
                   : null,
             );
+          }
         }
         after = snapshot.nextAfterTable;
         if (after == null || !visited.add(after)) break;
@@ -78,8 +79,9 @@ Future<String> printPaidTableReceipt({
         document.storeRef != identity.storeRef ||
         document.tableRef != tableRef ||
         document.sessionRef != sessionRef ||
-        document.checkoutRef != checkoutRef)
+        document.checkoutRef != checkoutRef) {
       return 'checkoutPrintFailed';
+    }
     return await printReceiptPlan(
       plan: ReceiptRasterPlan.forTable(
         document,
@@ -128,12 +130,12 @@ Future<String> printRasterDocument({
   bool reprint = false,
 }) async {
   try {
-    final discovery = await const PrinterDiscoveryClient().inspect();
+    var discovery = await const PrinterDiscoveryClient().inspect();
     // Installed XP-80U USB printer. Never send raster bytes to a scanner,
     // an unknown printer, or an ambiguous collection of output interfaces.
-    final targets = <UsbPrinterSelection>[
-      for (final device in discovery.usbPrinters.where(
-        (d) => d.vendorId == 1155 && d.productId == 22339 && d.hasPermission,
+    List<UsbPrinterSelection> targetsFor(PrinterDiscovery snapshot) => [
+      for (final device in snapshot.usbPrinters.where(
+        (d) => d.vendorId == 1155 && d.productId == 22339,
       ))
         for (final interface in device.interfaces.where(
           (i) => i.alternate == 0 && i.hasBulkOutput,
@@ -143,7 +145,22 @@ Future<String> printRasterDocument({
           ))
             UsbPrinterSelection.choose(device, interface, endpoint),
     ];
+    var targets = targetsFor(discovery);
     if (targets.length != 1 || !current()) return 'checkoutPrintUnavailable';
+    if (!targets.single.device.hasPermission) {
+      final granted = await UsbPrinterPermissionRequest(targets.single)
+          .request(confirmed: true);
+      if (!granted || !current()) return 'checkoutPrintUnavailable';
+      // USB bus addresses can change after power cycling. Always use a fresh
+      // observation rather than a saved device ID or the old permission result.
+      discovery = await const PrinterDiscoveryClient().inspect();
+      targets = targetsFor(discovery);
+      if (targets.length != 1 ||
+          !targets.single.device.hasPermission ||
+          !current()) {
+        return 'checkoutPrintUnavailable';
+      }
+    }
     final rasters = await render();
     if (!current()) return 'checkoutPrintFailed';
     final result =
@@ -189,8 +206,9 @@ Future<String> printPaidOrderReceipt({
         document.storeRef != identity.storeRef ||
         document.orderRef != orderRef ||
         document.tableRef != tableRef ||
-        document.sessionRef != sessionRef)
+        document.sessionRef != sessionRef) {
       return 'checkoutPrintFailed';
+    }
     return await printReceiptPlan(
       plan: ReceiptRasterPlan.create(
         document,

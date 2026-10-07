@@ -50,11 +50,31 @@ void main() {
   var sends = 0;
   var available = true;
   var shortWrite = false;
+  var permitted = true;
+  var permissionGranted = true;
+  var permissionRequests = 0;
+  var deviceId = 1;
+  const permission = MethodChannel(
+    'cn.kingclub.cashier/usb-printer-permission',
+  );
   setUp(() {
     FlutterSecureStorage.setMockInitialValues({});
     sends = 0;
     available = true;
     shortWrite = false;
+    permitted = true;
+    permissionGranted = true;
+    permissionRequests = 0;
+    deviceId = 1;
+    messenger.setMockMethodCallHandler(permission, (call) async {
+      permissionRequests++;
+      permitted = permissionGranted;
+      deviceId = 2;
+      return {
+        'requestId': call.arguments['requestId'],
+        'granted': permissionGranted,
+      };
+    });
     messenger.setMockMethodCallHandler(
       discovery,
       (_) async => {
@@ -66,7 +86,8 @@ void main() {
                   ...descriptor(),
                   'vendorId': 1155,
                   'productId': 22339,
-                  'hasPermission': true,
+                  'hasPermission': permitted,
+                  'deviceId': deviceId,
                 },
               ]
             : [],
@@ -76,6 +97,7 @@ void main() {
       call,
     ) async {
       sends++;
+      expect(call.arguments['deviceId'], deviceId);
       final bytes = call.arguments['bytes'] as Uint8List;
       expect(bytes.sublist(bytes.length - 4), [29, 86, 66, 0]);
       return {
@@ -88,6 +110,7 @@ void main() {
   });
   tearDown(() {
     messenger.setMockMethodCallHandler(discovery, null);
+    messenger.setMockMethodCallHandler(permission, null);
     messenger.setMockMethodCallHandler(
       NativeRasterPrintTransport.channel,
       null,
@@ -152,6 +175,31 @@ void main() {
     expect(sends, 1);
     expect(await tester.runAsync(() => print(auth)), 'checkoutPrintFailed');
     expect(sends, 1);
+  });
+  testWidgets(
+    'power-cycle permission loss is reacquired and the new USB address is used',
+    (tester) async {
+      final auth = ReceiptAuth();
+      addTearDown(auth.dispose);
+      permitted = false;
+      expect(await tester.runAsync(() => print(auth)), 'checkoutPrintSent');
+      expect(permissionRequests, 1);
+      expect(sends, greaterThan(0));
+    },
+  );
+  testWidgets('denied USB authorization never writes a receipt', (
+    tester,
+  ) async {
+    final auth = ReceiptAuth();
+    addTearDown(auth.dispose);
+    permitted = false;
+    permissionGranted = false;
+    expect(
+      await tester.runAsync(() => print(auth)),
+      'checkoutPrintUnavailable',
+    );
+    expect(permissionRequests, 1);
+    expect(sends, 0);
   });
   testWidgets('explicit copy resolves its previous unknown output', (
     tester,

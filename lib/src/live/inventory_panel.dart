@@ -9,6 +9,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../auth/staff_auth_controller.dart';
 import '../hardware/scanner_input.dart';
 import '../network/cashier_realtime_client.dart';
+import '../network/ccsop_client.dart';
 import '../scan_icon.dart';
 import '../strings.dart';
 import 'supplier_catalog_dialog.dart';
@@ -319,7 +320,11 @@ class _InventoryPanelState extends State<InventoryPanel> {
         data = v;
         error = null;
       });
-    } catch (_) {
+    } catch (failure) {
+      debugPrint('cashier_inventory_read_failed: ${failure.runtimeType}');
+      if (failure is CcsopFailure) {
+        debugPrint('cashier_inventory_code: ${failure.code}');
+      }
       if (mounted && request == epoch) {
         setState(
           () => error = l(

@@ -31,6 +31,7 @@ class MainActivity : FlutterActivity() {
         super.onWindowFocusChanged(hasFocus)
         scanner?.setForeground(hasFocus)
         usbRasterOutput?.setForeground(hasFocus)
+        usbPrinterPermission?.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
     }
 
