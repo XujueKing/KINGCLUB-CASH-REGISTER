@@ -923,7 +923,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
   Future<void> purchase(Map<String, dynamic> p) async {
     var q = (p['suggested'] as num? ?? 1).toInt();
     if (q < 1) q = 1;
-    int cost = 0;
+    final quote = (p['policy'] as Map?)?['procurementQuote'] as Map?;
+    int cost = (quote?['unitCostCents'] as num? ?? 0).toInt();
     String? supplier = (p['policy'] as Map?)?['supplierRef'] as String?;
     String number = '';
     final options = rows('suppliers').where((s) => s['active'] == 1).toList();
@@ -935,6 +936,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
       return;
     }
     supplier ??= '${options.first['supplierRef']}';
+    if (supplier != quote?['supplierRef']) cost = 0;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -959,7 +961,12 @@ class _InventoryPanelState extends State<InventoryPanel> {
                         ),
                       )
                       .toList(),
-                  onChanged: (v) => supplier = v,
+                  onChanged: (v) => set(() {
+                    supplier = v;
+                    cost = v == quote?['supplierRef']
+                        ? (quote?['unitCostCents'] as num? ?? 0).toInt()
+                        : 0;
+                  }),
                   decoration: InputDecoration(
                     labelText: l('供应商', 'Supplier', '供應商', 'ผู้ขาย'),
                   ),
@@ -1223,6 +1230,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
         'productRef': p['productRef'],
         'supplierRef': ?supplier,
         'policy': {
+          if (old?['procurementQuote'] != null)
+            'procurementQuote': old!['procurementQuote'],
           'enabled': enabled,
           'warning': warning,
           'target': target,
@@ -1600,6 +1609,18 @@ class _InventoryPanelState extends State<InventoryPanel> {
                         size: 21,
                         weight: FontWeight.bold,
                       ),
+                      if ((current!['policy'] as Map?)?['procurementQuote']
+                          case final Map quote) ...[
+                        const SizedBox(height: 10),
+                        label(
+                          '${l('采购参考', 'Supplier quote', '採購參考', 'ราคาอ้างอิง')} · ${money(quote['quoteCents'])} / ${quote['quoteUnit']}',
+                          color: muted,
+                        ),
+                        label(
+                          '${quote['name']} · ${quote['specification']}',
+                          color: muted,
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       Wrap(
                         children: [
