@@ -2238,6 +2238,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
     'return' => l('还酒', 'Return', '還酒', 'คืน'),
     'damage' => l('破损', 'Damage', '破損', 'เสียหาย'),
     'loss' => l('遗失', 'Loss', '遺失', 'สูญหาย'),
+    'order_paid' => l('销售扣库', 'Sale stock deduction', '銷售扣庫', 'ตัดสต็อกขาย'),
+    'test_stock' => l('测试库存', 'Test stock', '測試庫存', 'สต็อกทดสอบ'),
     'sale' => l('销售出库', 'Sale', '銷售出庫', 'ขาย'),
     'refund' => l('退款退库', 'Refund return', '退款退庫', 'คืนสินค้าคืนเงิน'),
     'purchase_receive' => l('采购入库', 'Purchase receipt', '採購入庫', 'รับซื้อเข้า'),
