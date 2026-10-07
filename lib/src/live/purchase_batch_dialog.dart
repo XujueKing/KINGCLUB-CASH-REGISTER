@@ -11,6 +11,7 @@ class PurchaseBatchDialog extends StatefulWidget {
     super.key,
     required this.batch,
     required this.products,
+    this.categories = const [],
     required this.suppliers,
     required this.locations,
     required this.l,
@@ -24,6 +25,7 @@ class PurchaseBatchDialog extends StatefulWidget {
   });
   final Map<String, dynamic> batch;
   final List<Map<String, dynamic>> products, suppliers;
+  final List<Map<String, dynamic>> categories;
   final List<String> locations;
   final PurchaseText l;
   final UiLanguage language;
@@ -43,6 +45,13 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   late final TextEditingController title;
   final search = TextEditingController();
   String query = '';
+  String category = '';
+  late final List<Map<String, dynamic>> browseProducts;
+  late final Map<String, String> browseCategories;
+  String categoryKey(Map p) =>
+      '${p['categoryKey'] ?? p['categoryRef'] ?? '_other'}';
+  bool hasQuote(Map p) =>
+      quotes(p).any((q) => (q['unitCostCents'] as num? ?? 0) > 0);
   bool busy = false, dirty = false;
   String? error;
   String t(String zh, String en, String tw, String th) =>
@@ -113,6 +122,25 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   @override
   void initState() {
     super.initState();
+    final priced = widget.products
+        .where(hasQuote)
+        .map((p) => p['productRef'])
+        .toSet();
+    browseProducts = [
+      ...widget.products.where((p) => priced.contains(p['productRef'])),
+      ...widget.products.where((p) => !priced.contains(p['productRef'])),
+    ];
+    browseCategories = {};
+    for (final p in browseProducts) {
+      final key = categoryKey(p);
+      final original = widget.categories
+          .where((c) => c['categoryRef'] == p['categoryRef'])
+          .firstOrNull;
+      browseCategories[key] = name(p['categoryNames'] ?? original?['names']);
+      if (browseCategories[key]!.isEmpty) {
+        browseCategories[key] = t('其它', 'Other', '其它', 'อื่น ๆ');
+      }
+    }
     batch = {...widget.batch};
     items = (batch['items'] as List? ?? [])
         .map((x) => Map<String, dynamic>.from(x as Map))
@@ -564,8 +592,15 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   };
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.products
-        .where((p) => productTitle(p).toLowerCase().contains(query))
+    final filtered = browseProducts
+        .where(
+          (p) =>
+              (category.isEmpty ||
+                  (category == '_unpriced'
+                      ? !hasQuote(p)
+                      : categoryKey(p) == category)) &&
+              productTitle(p).toLowerCase().contains(query),
+        )
         .toList();
     final total = items.fold<num>(
       0,
@@ -658,7 +693,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                     children: [
                       if (editable) ...[
                         Expanded(
-                          flex: 4,
+                          flex: 5,
                           child: Column(
                             children: [
                               TextField(
@@ -669,10 +704,10 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                                 decoration: InputDecoration(
                                   prefixIcon: const Icon(Icons.search),
                                   hintText: t(
-                                    '选择商品添加到批次',
-                                    'Add products to this batch',
-                                    '選擇商品添加到批次',
-                                    'เพิ่มสินค้าในชุด',
+                                    '搜索商品 / 规格',
+                                    'Search products / sizes',
+                                    '搜尋商品 / 規格',
+                                    'ค้นหาสินค้า / ขนาด',
                                   ),
                                   border: const OutlineInputBorder(),
                                   isDense: true,
@@ -680,43 +715,163 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                               ),
                               const SizedBox(height: 8),
                               Expanded(
-                                child: ListView.builder(
-                                  itemCount: filtered.length,
-                                  itemBuilder: (ctx, index) {
-                                    final p = filtered[index];
-                                    return ListTile(
-                                      key: ValueKey(
-                                        'purchase-product-${p['productRef']}',
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 8,
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    SizedBox(
+                                      width: 104,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF3F5F2),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
                                           ),
-                                      title: Text(
-                                        productTitle(p),
-                                        style: const TextStyle(fontSize: 16),
-                                      ),
-                                      subtitle: Text(
-                                        quotes(p).isEmpty
-                                            ? t(
-                                                '暂无此规格报价',
-                                                'No matching quote',
-                                                '暫無對應報價',
-                                                'ไม่มีราคา',
-                                              )
-                                            : money(
-                                                quotes(p)
-                                                    .first['unitCostCents'],
+                                        ),
+                                        child: ListView(
+                                          key: const ValueKey(
+                                            'purchase-category-rail',
+                                          ),
+                                          children: [
+                                            for (final c in <(String, String)>[
+                                              (
+                                                '',
+                                                t('全部', 'All', '全部', 'ทั้งหมด'),
                                               ),
+                                              ...browseCategories.entries.map(
+                                                (e) => (e.key, e.value),
+                                              ),
+                                              if (browseProducts.any(
+                                                (p) => !hasQuote(p),
+                                              ))
+                                                (
+                                                  '_unpriced',
+                                                  t(
+                                                    '待报价',
+                                                    'Unquoted',
+                                                    '待報價',
+                                                    'รอราคา',
+                                                  ),
+                                                ),
+                                            ])
+                                              Material(
+                                                color: category == c.$1
+                                                    ? Colors.white
+                                                    : Colors.transparent,
+                                                child: InkWell(
+                                                  key: ValueKey(
+                                                    'purchase-category-${c.$1}',
+                                                  ),
+                                                  onTap: () => setState(
+                                                    () => category = c.$1,
+                                                  ),
+                                                  child: Container(
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                          minHeight: 54,
+                                                        ),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 10,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      border: Border(
+                                                        left: BorderSide(
+                                                          width: 3,
+                                                          color:
+                                                              category == c.$1
+                                                              ? green
+                                                              : Colors
+                                                                    .transparent,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    alignment: Alignment.center,
+                                                    child: Text(
+                                                      c.$2,
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      style: TextStyle(
+                                                        fontSize: 15,
+                                                        color: category == c.$1
+                                                            ? green
+                                                            : muted,
+                                                        fontWeight:
+                                                            category == c.$1
+                                                            ? FontWeight.bold
+                                                            : FontWeight.normal,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
                                       ),
-                                      trailing: const Icon(
-                                        Icons.add_circle_outline,
-                                        color: green,
-                                      ),
-                                      onTap: () => add(p),
-                                    );
-                                  },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: filtered.isEmpty
+                                          ? Center(
+                                              child: Text(
+                                                t(
+                                                  '没有匹配的商品',
+                                                  'No matching products',
+                                                  '沒有匹配的商品',
+                                                  'ไม่พบสินค้า',
+                                                ),
+                                                style: const TextStyle(
+                                                  color: muted,
+                                                ),
+                                              ),
+                                            )
+                                          : ListView.builder(
+                                              key: ValueKey(
+                                                'purchase-products-$category-$query',
+                                              ),
+                                              itemCount: filtered.length,
+                                              itemBuilder: (ctx, index) {
+                                                final p = filtered[index];
+                                                return ListTile(
+                                                  key: ValueKey(
+                                                    'purchase-product-${p['productRef']}',
+                                                  ),
+                                                  contentPadding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 8,
+                                                      ),
+                                                  title: Text(
+                                                    productTitle(p),
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                  subtitle: Text(
+                                                    quotes(p).isEmpty
+                                                        ? t(
+                                                            '暂无此规格报价',
+                                                            'No matching quote',
+                                                            '暫無對應報價',
+                                                            'ไม่มีราคา',
+                                                          )
+                                                        : money(
+                                                            quotes(
+                                                              p,
+                                                            ).first['unitCostCents'],
+                                                          ),
+                                                  ),
+                                                  trailing: const Icon(
+                                                    Icons.add_circle_outline,
+                                                    color: green,
+                                                  ),
+                                                  onTap: () => add(p),
+                                                );
+                                              },
+                                            ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],

@@ -994,6 +994,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
         context: context,
         barrierDismissible: false,
         builder: (_) => PurchaseBatchDialog(
+          categories: rows('categories'),
           language: widget.language,
           batch: detail,
           products: data?['procurementProducts'] is List
