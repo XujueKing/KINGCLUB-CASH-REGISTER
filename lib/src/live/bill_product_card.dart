@@ -26,6 +26,7 @@ class BillProductCard extends StatelessWidget {
     this.onMinus,
     this.productRef,
     this.specialPrice = false,
+    this.showThumbnail = true,
   });
   final UiLanguage language;
   final String name, specification;
@@ -41,6 +42,7 @@ class BillProductCard extends StatelessWidget {
   final VoidCallback? onPlus, onMinus;
   final String? productRef;
   final bool specialPrice;
+  final bool showThumbnail;
   Widget quantityButton(bool plus) => GestureDetector(
     behavior: HitTestBehavior.opaque,
     onTap: () {},
@@ -122,7 +124,8 @@ class BillProductCard extends StatelessWidget {
               ],
               Row(
                 children: [
-                  ProductThumbnail(path: thumbnailPath, base: base),
+                  if (showThumbnail)
+                    ProductThumbnail(path: thumbnailPath, base: base),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

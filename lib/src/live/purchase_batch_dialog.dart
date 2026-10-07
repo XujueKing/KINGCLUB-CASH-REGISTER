@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../strings.dart';
+import 'bill_product_card.dart';
+
 typedef PurchaseText = String Function(String, String, String, String);
 
 /// Local touch editing; one command saves/submits the whole application.
@@ -11,6 +14,7 @@ class PurchaseBatchDialog extends StatefulWidget {
     required this.suppliers,
     required this.locations,
     required this.l,
+    required this.language,
     required this.canWrite,
     this.receiving = false,
     required this.command,
@@ -22,6 +26,7 @@ class PurchaseBatchDialog extends StatefulWidget {
   final List<Map<String, dynamic>> products, suppliers;
   final List<String> locations;
   final PurchaseText l;
+  final UiLanguage language;
   final bool canWrite, receiving;
   final Map<String, dynamic>? initialProduct;
   final Future<Map<String, dynamic>> Function(Map<String, dynamic>) command;
@@ -90,6 +95,14 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
           );
     final preferred = (product['policy'] as Map?)?['supplierRef'];
     return available.firstOrNull?['supplierRef'] as String? ??
+        quotes(product)
+                .where(
+                  (q) => activeSuppliers.any(
+                    (s) => s['supplierRef'] == q['supplierRef'],
+                  ),
+                )
+                .firstOrNull?['supplierRef']
+            as String? ??
         activeSuppliers
                 .where((s) => s['supplierRef'] == preferred)
                 .firstOrNull?['supplierRef']
@@ -151,7 +164,10 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
       final existing = items
           .where(
             (i) =>
-                i['productRef'] == product['productRef'] &&
+                (i['productRef'] == product['productRef'] ||
+                    (product['sharedProductKey'] != null &&
+                        i['sharedProductKey'] ==
+                            product['sharedProductKey'])) &&
                 i['supplierRef'] == supplier,
           )
           .firstOrNull;
@@ -160,6 +176,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
       } else {
         final line = <String, dynamic>{
           'productRef': product['productRef'],
+          'sharedProductKey': product['sharedProductKey'],
           'quantity': 1,
           'names': product['names'],
           'specifications': product['specifications'],
@@ -209,6 +226,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
     'action': 'purchase_batch_save',
     'title': title.text.trim(),
     'submit': submit,
+    if (batch['document'] != null) 'document': batch['document'],
     'items': [
       for (final i in items)
         {
@@ -221,24 +239,34 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
         },
     ],
   });
+
+  void changeQuantity(Map<String, dynamic> line, int delta) {
+    if (!editable || busy) return;
+    setState(() {
+      final quantity = (line['quantity'] as num).toInt() + delta;
+      if (quantity <= 0) {
+        items.remove(line);
+      } else {
+        line['quantity'] = quantity;
+      }
+      dirty = true;
+      error = null;
+    });
+  }
+
   Future<void> close() async {
-    if (busy) return;
-    if (items.isEmpty && batch['revision'] == 0) {
-      setState(() => dirty = false);
-      Navigator.pop(context);
-      return;
-    }
-    if (dirty) {
-      await save(false);
-      if (dirty || !mounted) return;
-    }
-    if (mounted) Navigator.pop(context);
+    if (!busy && mounted) Navigator.pop(context);
   }
 
   Future<void> edit(Map<String, dynamic> line) async {
     if (busy) return;
     final product = widget.products
-        .where((p) => p['productRef'] == line['productRef'])
+        .where(
+          (p) =>
+              p['productRef'] == line['productRef'] ||
+              (line['sharedProductKey'] != null &&
+                  p['sharedProductKey'] == line['sharedProductKey']),
+        )
         .firstOrNull;
     if (product == null) return;
     final copy = {...line};
@@ -545,7 +573,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
           sum + (i['quantity'] as num) * (i['unitCostCents'] as num? ?? 0),
     );
     return PopScope(
-      canPop: !dirty && !busy,
+      canPop: !busy,
       child: Dialog(
         insetPadding: const EdgeInsets.all(24),
         child: SizedBox(
@@ -743,101 +771,73 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                                           const SizedBox(height: 8),
                                       itemBuilder: (ctx, index) {
                                         final i = items[index];
-                                        return Material(
-                                          color: const Color(0xFFF1F4EE),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
+                                        final quantity = (i['quantity'] as num)
+                                            .toInt();
+                                        final cost = i['unitCostCents'] as num?;
+                                        final controlRef =
+                                            'purchase-${i['productRef']}-${i['supplierRef']}';
+                                        return BillProductCard(
+                                          key: ValueKey(
+                                            'purchase-line-${i['productRef']}-${i['supplierRef']}',
                                           ),
-                                          child: InkWell(
-                                            key: ValueKey(
-                                              'purchase-line-${i['productRef']}-${i['supplierRef']}',
-                                            ),
-                                            onTap: editable && !busy
-                                                ? () => edit(i)
-                                                : null,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(14),
-                                              child: Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          productTitle(i),
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 17,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 7,
-                                                        ),
-                                                        Text(
-                                                          '${i['supplierName']} · ${money(i['unitCostCents'])} × ${i['quantity']}',
-                                                          style:
-                                                              const TextStyle(
-                                                                color: muted,
-                                                              ),
-                                                        ),
-                                                        if (status ==
-                                                                'ordered' ||
-                                                            status ==
-                                                                'received')
-                                                          Text(
-                                                            '${t('已收', 'Received', '已收', 'รับแล้ว')} ${i['received'] ?? 0} / ${i['quantity']}',
-                                                            style:
-                                                                const TextStyle(
-                                                                  color: green,
-                                                                ),
-                                                          ),
-                                                      ],
-                                                    ),
+                                          language: widget.language,
+                                          name: name(i['names']),
+                                          specification: name(
+                                            i['specifications'],
+                                          ),
+                                          quantity: quantity,
+                                          priceCents: cost?.toInt() ?? 0,
+                                          totalCents: ((cost ?? 0) * quantity)
+                                              .toInt(),
+                                          priceLabel:
+                                              '${t('采购单价', 'Unit cost', '採購單價', 'ราคาซื้อ')} ${money(cost)}',
+                                          totalLabel:
+                                              '${t('小计', 'Subtotal', '小計', 'รวม')} ${money(cost == null ? null : cost * quantity)}',
+                                          base: null,
+                                          showThumbnail: false,
+                                          productRef: controlRef,
+                                          quantityControls: editable,
+                                          onPlus: editable && !busy
+                                              ? () => changeQuantity(i, 1)
+                                              : null,
+                                          onMinus: editable && !busy
+                                              ? () => changeQuantity(i, -1)
+                                              : null,
+                                          onTap: editable && !busy
+                                              ? () => edit(i)
+                                              : null,
+                                          footer: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '${i['supplierName']}'
+                                                  '${status == 'ordered' || status == 'received' ? ' · ${t('已收', 'Received', '已收', 'รับแล้ว')} ${i['received'] ?? 0} / $quantity' : ''}',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    color: muted,
                                                   ),
-                                                  if (editable)
-                                                    IconButton(
-                                                      onPressed: busy
-                                                          ? null
-                                                          : () => setState(() {
-                                                              items.removeAt(
-                                                                index,
-                                                              );
-                                                              dirty = true;
-                                                            }),
-                                                      icon: const Icon(
-                                                        Icons
-                                                            .remove_circle_outline,
-                                                      ),
-                                                    ),
-                                                  if (widget.receiving &&
-                                                      status == 'ordered' &&
-                                                      (i['received'] as num? ??
-                                                              0) <
-                                                          (i['quantity']
-                                                              as num))
-                                                    touch(
-                                                      t(
-                                                        '确认收货',
-                                                        'Receive',
-                                                        '確認收貨',
-                                                        'รับสินค้า',
-                                                      ),
-                                                      widget.canWrite
-                                                          ? () => receive(i)
-                                                          : null,
-                                                      primary: true,
-                                                    ),
-                                                ],
+                                                ),
                                               ),
-                                            ),
+                                              if (widget.receiving &&
+                                                  status == 'ordered' &&
+                                                  (i['received'] as num? ?? 0) <
+                                                      quantity)
+                                                touch(
+                                                  t(
+                                                    '确认收货',
+                                                    'Receive',
+                                                    '確認收貨',
+                                                    'รับสินค้า',
+                                                  ),
+                                                  widget.canWrite
+                                                      ? () => receive(i)
+                                                      : null,
+                                                  primary: true,
+                                                ),
+                                            ],
                                           ),
                                         );
                                       },
@@ -863,20 +863,23 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                       touch(
                         t('补凭证', 'Add document', '補憑證', 'เพิ่มเอกสาร'),
                         () async {
-                          if (dirty) {
-                            await save(false);
-                            if (dirty || !mounted) return;
-                          }
                           final doc = await widget.attach(
                             Map<String, dynamic>.from(
                               batch['document'] as Map? ?? {},
                             ),
                           );
                           if (doc != null) {
-                            await run({
-                              'action': 'purchase_batch_document',
-                              'document': doc,
-                            });
+                            if (editable) {
+                              setState(() {
+                                batch['document'] = doc;
+                                dirty = true;
+                              });
+                            } else {
+                              await run({
+                                'action': 'purchase_batch_document',
+                                'document': doc,
+                              });
+                            }
                           }
                         },
                       ),

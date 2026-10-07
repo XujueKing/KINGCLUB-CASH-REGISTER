@@ -994,8 +994,11 @@ class _InventoryPanelState extends State<InventoryPanel> {
         context: context,
         barrierDismissible: false,
         builder: (_) => PurchaseBatchDialog(
+          language: widget.language,
           batch: detail,
-          products: rows('products'),
+          products: data?['procurementProducts'] is List
+              ? rows('procurementProducts')
+              : rows('products'),
           suppliers: rows('suppliers'),
           locations: locations,
           l: l,
@@ -2214,7 +2217,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
                           minWidth: 48,
                           minHeight: 48,
                         ),
-                        onPressed: working ? null : () => deletePurchaseDraft(b),
+                        onPressed: working
+                            ? null
+                            : () => deletePurchaseDraft(b),
                         icon: const Icon(Icons.delete_outline),
                       ),
                     const Icon(Icons.chevron_right),

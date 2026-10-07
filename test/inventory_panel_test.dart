@@ -10,9 +10,13 @@ class InventoryAuth extends TableAuth {
   InventoryAuth({
     this.preferUnquotedSupplier = false,
     this.preferExpensiveSupplier = false,
+    this.fullSupplierCatalog = false,
+    this.unknownSupplierUnitCost = false,
   }) : super(permissions: ['workbench.read', 'report.read', 'shift.manage']);
   final bool preferUnquotedSupplier;
   final bool preferExpensiveSupplier;
+  final bool fullSupplierCatalog;
+  final bool unknownSupplierUnitCost;
   final calls = <Map<String, dynamic>>[];
   Map<String, dynamic>? batch;
   @override
@@ -35,6 +39,10 @@ class InventoryAuth extends TableAuth {
           for (final i in command['items'] as List)
             {
               ...i as Map,
+              if (fullSupplierCatalog && i['productRef'] == 'c' * 64) ...{
+                'productRef': 'new-store-product',
+                'sharedProductKey': 'c' * 64,
+              },
               'names': {'zh-CN': '测试酒品', 'en': 'Test wine'},
               'specifications': {'zh-CN': '500ML'},
               'supplierName': i['supplierRef'] == 'test-supplier'
@@ -93,6 +101,26 @@ class InventoryAuth extends TableAuth {
           'suggested': 0,
         },
       ],
+      if (fullSupplierCatalog)
+        'procurementProducts': [
+          {
+            'productRef': 'c' * 64,
+            'sharedProductKey': 'c' * 64,
+            'names': {'zh-CN': '供应商专供酒'},
+            'specifications': {'zh-CN': '700ML'},
+            'quotes': [
+              {
+                'supplierRef': 'test-supplier',
+                'supplierName': 'Test supplier',
+                'key': 'd' * 64,
+                'unitCostCents': unknownSupplierUnitCost ? null : 2600,
+                'quoteCents': 2600,
+                'quoteUnit': '瓶',
+                'specification': '700ml',
+              },
+            ],
+          },
+        ],
       'batches': [
         {
           'productRef': 'wine',
@@ -200,10 +228,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('purchase-product-wine')));
         await tester.pumpAndSettle();
-        expect(
-          find.textContaining('Test supplier · ¥ 35.00 × 1'),
-          findsOneWidget,
-        );
+        expect(find.text('Test supplier'), findsOneWidget);
         await tester.tap(
           find.byKey(const ValueKey('purchase-line-wine-test-supplier')),
         );
@@ -213,6 +238,8 @@ void main() {
         expect(find.text('录入实际进货价'), findsNothing);
         expect(auth.calls, hasLength(1));
         await tester.tap(find.text('取消').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('保存草稿'));
         await tester.pumpAndSettle();
         await tester.tap(find.byIcon(Icons.close).last);
         await tester.pumpAndSettle();
@@ -230,7 +257,7 @@ void main() {
     );
   }
   testWidgets(
-    'closing untouched or emptied new applications never creates server drafts',
+    'closing empty, emptied or filled new applications never saves drafts',
     (tester) async {
       tester.view.physicalSize = const Size(1274, 710);
       tester.view.devicePixelRatio = 1;
@@ -251,14 +278,20 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('采购申请').first);
       await tester.pumpAndSettle();
-      for (var i = 0; i < 3; i++) {
+      for (var i = 0; i < 4; i++) {
         await tester.tap(find.text('新增采购申请'));
         await tester.pumpAndSettle();
-        if (i == 2) {
+        if (i >= 2) {
           await tester.tap(find.byKey(const ValueKey('purchase-product-wine')));
           await tester.pumpAndSettle();
-          await tester.tap(find.byIcon(Icons.remove_circle_outline));
-          await tester.pumpAndSettle();
+          if (i == 2) {
+            await tester.tap(
+              find.byKey(
+                const ValueKey('cart-minus-purchase-wine-test-supplier'),
+              ),
+            );
+            await tester.pumpAndSettle();
+          }
         }
         await tester.tap(find.byIcon(Icons.close).last);
         await tester.pumpAndSettle();
@@ -316,6 +349,173 @@ void main() {
     },
   );
   testWidgets(
+    'supplier-only goods can be ordered and edited after explicit save',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 710);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = InventoryAuth(fullSupplierCatalog: true);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InventoryPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('采购申请').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('新增采购申请'));
+      await tester.pumpAndSettle();
+      final choice = find.byKey(ValueKey('purchase-product-${'c' * 64}'));
+      expect(choice, findsOneWidget);
+      await tester.tap(choice);
+      await tester.pumpAndSettle();
+      expect(auth.calls, hasLength(1));
+      expect(find.text('采购单价 ¥ 26.00'), findsOneWidget);
+      await tester.tap(find.text('保存草稿'));
+      await tester.pumpAndSettle();
+      expect(auth.calls, hasLength(2));
+      final saved = find.byKey(
+        const ValueKey('purchase-line-new-store-product-test-supplier'),
+      );
+      await tester.tap(saved);
+      await tester.pumpAndSettle();
+      expect(find.text('已按供应商报价自动带入'), findsOneWidget);
+      await tester.tap(find.text('取消').last);
+      await tester.pumpAndSettle();
+      await tester.tap(choice);
+      await tester.pumpAndSettle();
+      expect(find.text('2'), findsOneWidget);
+      expect(saved, findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close).last);
+      await tester.pumpAndSettle();
+      expect(auth.calls, hasLength(2));
+      expect((auth.batch!['items'] as List).single['quantity'], 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets(
+    'unknown unit cost keeps the actual supplier and quote for a draft',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 710);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = InventoryAuth(
+        fullSupplierCatalog: true,
+        unknownSupplierUnitCost: true,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InventoryPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('采购申请').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('新增采购申请'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('purchase-product-${'c' * 64}')));
+      await tester.pumpAndSettle();
+      expect(find.text('Test supplier'), findsOneWidget);
+      await tester.tap(find.text('保存草稿'));
+      await tester.pumpAndSettle();
+      expect(
+        (auth.calls.last['items'] as List).single,
+        containsPair('supplierRef', 'test-supplier'),
+      );
+      expect(
+        (auth.calls.last['items'] as List).single,
+        containsPair('quoteKey', 'd' * 64),
+      );
+      expect(
+        (auth.calls.last['items'] as List).single,
+        containsPair('unitCostCents', null),
+      );
+      await tester.tap(find.byIcon(Icons.close).last);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  for (final back in [false, true]) {
+    testWidgets(
+      'editing saved draft then ${back ? 'Android back' : 'close'} cancels unsaved changes',
+      (tester) async {
+        tester.view.physicalSize = const Size(1274, 710);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        const ref = '00000000-0000-4000-8000-000000000021';
+        final auth = InventoryAuth()
+          ..batch = {
+            'batchRef': ref,
+            'title': 'Saved draft',
+            'status': 'draft',
+            'revision': 1,
+            'items': [
+              {
+                'productRef': 'wine',
+                'supplierRef': 'test-supplier',
+                'quantity': 2,
+                'unitCostCents': 3500,
+                'quoteKey': 'a' * 64,
+                'names': {'zh-CN': '测试酒品'},
+                'specifications': {'zh-CN': '500ML'},
+                'supplierName': 'Test supplier',
+              },
+            ],
+          };
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: InventoryPanel(
+                auth: auth,
+                language: UiLanguage.zh,
+                enableRealtime: false,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('采购申请').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('purchase-batch-$ref')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('cart-plus-purchase-wine-test-supplier')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('3'), findsOneWidget);
+        if (back) {
+          await tester.binding.handlePopRoute();
+        } else {
+          await tester.tap(find.byIcon(Icons.close).last);
+        }
+        await tester.pumpAndSettle();
+        expect(find.byIcon(Icons.close), findsNothing);
+        expect(auth.calls, hasLength(1));
+        expect(auth.batch!['revision'], 1);
+        expect((auth.batch!['items'] as List).single['quantity'], 2);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+  testWidgets(
     'creates a batch, adds locally and submits quoted goods together',
     (tester) async {
       tester.view.physicalSize = const Size(1274, 710);
@@ -341,14 +541,27 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('purchase-product-wine')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('purchase-product-wine')));
+      await tester.tap(
+        find.byKey(const ValueKey('cart-plus-purchase-wine-test-supplier')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('cart-minus-purchase-wine-test-supplier')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('cart-plus-purchase-wine-test-supplier')),
+      );
       await tester.pumpAndSettle();
       expect(
         auth.calls.length,
         1,
         reason: 'Adding products edits the batch locally',
       );
-      expect(find.textContaining('¥ 35.00 × 2'), findsOneWidget);
+      expect(find.text('采购单价 ¥ 35.00'), findsOneWidget);
+      expect(find.text('小计 ¥ 70.00'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('500ML'), findsOneWidget);
       await tester.tap(find.text('提交申请'));
       await tester.pumpAndSettle();
       final command = auth.calls.singleWhere(
@@ -407,7 +620,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
   testWidgets(
-    'switching supplier uses its quotation and closes by saving the batch draft',
+    'switching supplier uses its quotation and saves only on explicit save',
     (tester) async {
       tester.view.physicalSize = const Size(1274, 710);
       tester.view.devicePixelRatio = 1;
@@ -443,15 +656,14 @@ void main() {
       expect(find.textContaining('¥ 40.00'), findsWidgets);
       await tester.tap(find.text('确定').last);
       await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Other supplier · ¥ 40.00 × 1'),
-        findsOneWidget,
-      );
+      expect(find.text('Other supplier'), findsOneWidget);
       expect(
         auth.calls.length,
         1,
         reason: 'Price changes and supplier selection remain local',
       );
+      await tester.tap(find.text('保存草稿'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.close).last);
       await tester.pumpAndSettle();
       final saved = auth.calls.last;
