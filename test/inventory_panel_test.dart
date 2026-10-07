@@ -82,6 +82,31 @@ class InventoryAuth extends TableAuth {
 
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  testWidgets('manual purchase accepts stocked goods with one command', (tester) async {
+    tester.view.physicalSize = const Size(1274, 710);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final auth = InventoryAuth();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: InventoryPanel(auth: auth, language: UiLanguage.zh, enableRealtime: false))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('采购').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('新增采购申请'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('purchase-product-wine')));
+    await tester.pumpAndSettle();
+    expect(auth.calls.length, 1);
+    await tester.tap(find.text('确认采购').last);
+    await tester.pumpAndSettle();
+    final command = auth.calls.singleWhere((c) => c['action'] == 'purchase');
+    expect(command['productRef'], 'wine');
+    expect(command['supplierRef'], 'test-supplier');
+    expect(command['quantity'], 1);
+    expect(auth.calls.where((c) => c['action'] != 'context').length, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('category and stock filtering require no additional requests', (tester) async {
     tester.view.physicalSize = const Size(1274,710);
     tester.view.devicePixelRatio = 1;

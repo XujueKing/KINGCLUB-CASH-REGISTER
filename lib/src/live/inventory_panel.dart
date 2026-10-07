@@ -920,8 +920,77 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
   }
 
-  Future<void> purchase(Map<String, dynamic> p) async {
-    var q = (p['suggested'] as num? ?? 1).toInt();
+  Future<void> manualPurchase() async {
+    var query = '';
+    final product = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, set) => AlertDialog(
+          title: Text(
+            l('新增采购申请', 'New purchase request', '新增採購申請', 'คำขอซื้อใหม่'),
+          ),
+          content: SizedBox(
+            width: 640,
+            height: 420,
+            child: Column(
+              children: [
+                TextField(
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: l(
+                      '搜索商品名称或规格',
+                      'Search name or size',
+                      '搜尋商品名稱或規格',
+                      'ค้นหาชื่อหรือขนาด',
+                    ),
+                  ),
+                  onChanged: (value) =>
+                      set(() => query = value.trim().toLowerCase()),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (final p in rows('products').where(
+                        (p) =>
+                            productName('${p['productRef']}')
+                                .toLowerCase()
+                                .contains(query),
+                      ))
+                        ListTile(
+                          key: ValueKey('purchase-product-${p['productRef']}'),
+                          minVerticalPadding: 16,
+                          title: label(
+                            productName('${p['productRef']}'),
+                            size: 18,
+                          ),
+                          subtitle: label(
+                            '${l('当前可售', 'Available', '目前可售', 'ขายได้')} ${p['available'] ?? 0}',
+                            color: muted,
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.pop(context, p),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            button(
+              l('取消', 'Cancel', '取消', 'ยกเลิก'),
+              () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (product != null && mounted) await purchase(product, manual: true);
+  }
+
+  Future<void> purchase(Map<String, dynamic> p, {bool manual = false}) async {
+    var q = manual ? 1 : (p['suggested'] as num? ?? 1).toInt();
     if (q < 1) q = 1;
     final quote = (p['policy'] as Map?)?['procurementQuote'] as Map?;
     int cost = (quote?['unitCostCents'] as num? ?? 0).toInt();
@@ -1869,15 +1938,26 @@ class _InventoryPanelState extends State<InventoryPanel> {
   Widget purchases() => box(
     ListView(
       children: [
-        label(
-          l(
-            '预采购 · 自动建议',
-            'Suggested purchases',
-            '預採購 · 自動建議',
-            'รายการแนะนำซื้อ',
-          ),
-          size: 20,
-          weight: FontWeight.bold,
+        Row(
+          children: [
+            Expanded(
+              child: label(
+                l(
+                  '预采购 · 自动建议',
+                  'Suggested purchases',
+                  '預採購 · 自動建議',
+                  'รายการแนะนำซื้อ',
+                ),
+                size: 20,
+                weight: FontWeight.bold,
+              ),
+            ),
+            button(
+              l('新增采购申请', 'New purchase request', '新增採購申請', 'คำขอซื้อใหม่'),
+              canWrite ? manualPurchase : null,
+              primary: true,
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         label(
