@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -13,6 +14,7 @@ import '../network/ccsop_client.dart';
 import '../scan_icon.dart';
 import '../strings.dart';
 import 'supplier_catalog_dialog.dart';
+import 'purchase_batch_dialog.dart';
 
 class InventoryPanel extends StatefulWidget {
   const InventoryPanel({
@@ -377,7 +379,35 @@ class _InventoryPanelState extends State<InventoryPanel> {
         final raw = e.toString();
         final known = raw.contains('INVENTORY_') || raw.contains('CASHIER_');
         setState(() {
-          error = raw.contains('INVENTORY_CHANGED')
+          error = raw.contains('INVENTORY_COST_REQUIRED')
+              ? l(
+                  '请先补齐每项商品的进货价格',
+                  'Complete each unit cost before submitting',
+                  '請先補齊每項商品的進貨價格',
+                  'กรอกราคาทุกรายการ',
+                )
+              : raw.contains('INVENTORY_QUOTE_CHANGED')
+              ? l(
+                  '供应商报价已变化，请重新选择商品报价',
+                  'Supplier quote changed; select it again',
+                  '供應商報價已變化，請重新選擇商品報價',
+                  'ราคาเปลี่ยน โปรดเลือกใหม่',
+                )
+              : raw.contains('INVENTORY_PURCHASE_CHANGED')
+              ? l(
+                  '采购批次已变化，请重新打开批次',
+                  'Purchase batch changed; reopen it',
+                  '採購批次已變化，請重新打開批次',
+                  'ชุดเปลี่ยน โปรดเปิดใหม่',
+                )
+              : raw.contains('INVENTORY_APPROVAL_REQUIRED')
+              ? l(
+                  '该批次需要先批准，再采购',
+                  'Approval is required before ordering',
+                  '該批次需要先批准，再採購',
+                  'ต้องอนุมัติก่อนซื้อ',
+                )
+              : raw.contains('INVENTORY_CHANGED')
               ? l(
                   '库存已发生变化，请重新盘点受影响商品',
                   'Stock changed. Recount affected items.',
@@ -925,157 +955,261 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
   }
 
-  Future<void> manualPurchase() async {
-    var query = '';
-    final product = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, set) => AlertDialog(
-          title: Text(
-            l('新增采购申请', 'New purchase request', '新增採購申請', 'คำขอซื้อใหม่'),
-          ),
-          content: SizedBox(
-            width: 640,
-            height: 420,
-            child: Column(
-              children: [
-                TextField(
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: l(
-                      '搜索商品名称或规格',
-                      'Search name or size',
-                      '搜尋商品名稱或規格',
-                      'ค้นหาชื่อหรือขนาด',
-                    ),
-                  ),
-                  onChanged: (value) =>
-                      set(() => query = value.trim().toLowerCase()),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      for (final p in rows('products').where(
-                        (p) =>
-                            productName('${p['productRef']}')
-                                .toLowerCase()
-                                .contains(query),
-                      ))
-                        ListTile(
-                          key: ValueKey('purchase-product-${p['productRef']}'),
-                          minVerticalPadding: 16,
-                          title: label(
-                            productName('${p['productRef']}'),
-                            size: 18,
-                          ),
-                          subtitle: label(
-                            '${l('当前可售', 'Available', '目前可售', 'ขายได้')} ${p['available'] ?? 0}',
-                            color: muted,
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.pop(context, p),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            button(
-              l('取消', 'Cancel', '取消', 'ยกเลิก'),
-              () => Navigator.pop(context),
-            ),
-          ],
+  Future<Map<String, dynamic>> batchCommand(
+    Map<String, dynamic> command,
+  ) async {
+    if (!await submit(command)) {
+      throw StateError(
+        error ?? l('未保存，请重试', 'Not saved. Retry.', '未儲存，請重試', 'ยังไม่บันทึก'),
+      );
+    }
+    final batch = (data?['receipt'] as Map?)?['batch'];
+    if (batch is! Map) {
+      throw StateError(
+        l(
+          '批次未返回，请刷新',
+          'Batch unavailable. Refresh.',
+          '批次未返回，請重新整理',
+          'รีเฟรชชุดสินค้า',
         ),
-      ),
-    );
-    if (product != null && mounted) await purchase(product, manual: true);
+      );
+    }
+    return Map<String, dynamic>.from(batch);
   }
 
-  Future<void> purchase(Map<String, dynamic> p, {bool manual = false}) async {
-    var q = manual ? 1 : (p['suggested'] as num? ?? 1).toInt();
-    if (q < 1) q = 1;
-    final quote = (p['policy'] as Map?)?['procurementQuote'] as Map?;
-    int cost = (quote?['unitCostCents'] as num? ?? 0).toInt();
-    String? supplier = (p['policy'] as Map?)?['supplierRef'] as String?;
-    String number = '';
-    final options = rows('suppliers').where((s) => s['active'] == 1).toList();
-    if (options.isEmpty) {
+  Future<void> openBatch(
+    Map<String, dynamic> batch, {
+    Map<String, dynamic>? initialProduct,
+  }) async {
+    try {
+      final detail = batch['items'] is List
+          ? batch
+          : await widget.auth.inventory({
+              'action': 'purchase_batch',
+              'batchRef': batch['batchRef'],
+            });
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PurchaseBatchDialog(
+          batch: detail,
+          products: rows('products'),
+          suppliers: rows('suppliers'),
+          locations: locations,
+          l: l,
+          canWrite: canWrite,
+          canReview:
+              widget.auth.session?.permissions.contains('cashbook.review') ==
+              true,
+          initialProduct: initialProduct,
+          command: batchCommand,
+          number: number,
+          attach: batchDocument,
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        message(
+          error ??
+              l(
+                '无法读取采购批次，请重试',
+                'Cannot read purchase batch',
+                '無法讀取採購批次，請重試',
+                'อ่านชุดสินค้าไม่ได้',
+              ),
+        );
+      }
+    }
+  }
+
+  Future<void> manualPurchase({Map<String, dynamic>? initialProduct}) async {
+    if (rows('suppliers').where((s) => s['active'] == 1).isEmpty) {
       message(
         l('请先登记供应商', 'Add a supplier first', '請先登記供應商', 'เพิ่มผู้ขายก่อน'),
       );
       setState(() => tab = 5);
       return;
     }
-    supplier ??= '${options.first['supplierRef']}';
-    if (supplier != quote?['supplierRef']) cost = 0;
-    final ok = await showDialog<bool>(
+    final now = DateTime.now();
+    try {
+      final batch = await batchCommand({
+        'action': 'purchase_batch_save',
+        'batchRef': uid(),
+        'revision': 0,
+        'title': l(
+          '${now.month}月${now.day}日进货申请',
+          'Purchase request ${now.month}/${now.day}',
+          '${now.month}月${now.day}日進貨申請',
+          'คำขอซื้อ ${now.month}/${now.day}',
+        ),
+        'items': <Map<String, dynamic>>[],
+        'submit': false,
+      });
+      if (mounted) await openBatch(batch, initialProduct: initialProduct);
+    } catch (_) {
+      if (mounted) {
+        message(
+          error ??
+              l(
+                '申请未创建，请重试',
+                'Application not created',
+                '申請未建立，請重試',
+                'ยังไม่สร้างคำขอ',
+              ),
+        );
+      }
+    }
+  }
+
+  Future<void> purchase(Map<String, dynamic> product) async {
+    final drafts = rows('purchaseBatches')
+        .where((b) => b['status'] == 'draft')
+        .toList();
+    if (drafts.isEmpty) {
+      await manualPurchase(initialProduct: product);
+      return;
+    }
+    final choice = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, set) => AlertDialog(
-          title: Text(l('确认采购', 'Confirm purchase', '確認採購', 'ยืนยันซื้อ')),
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          l(
+            '添加到采购批次',
+            'Add to a purchase batch',
+            '添加到採購批次',
+            'เพิ่มในชุดสินค้า',
+          ),
+        ),
+        content: SizedBox(
+          width: 520,
+          height: 320,
+          child: ListView(
+            children: [
+              for (final b in drafts)
+                ListTile(
+                  minVerticalPadding: 16,
+                  title: Text('${b['title']}'),
+                  subtitle: Text(
+                    '${b['itemCount']} ${l('项商品', 'items', '項商品', 'รายการ')}',
+                  ),
+                  onTap: () => Navigator.pop(ctx, b),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          button(
+            l('新建批次', 'New batch', '新建批次', 'ชุดใหม่'),
+            () => Navigator.pop(ctx, <String, dynamic>{}),
+          ),
+          button(l('取消', 'Cancel', '取消', 'ยกเลิก'), () => Navigator.pop(ctx)),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice.isEmpty) {
+      await manualPurchase(initialProduct: product);
+    } else {
+      await openBatch(choice, initialProduct: product);
+    }
+  }
+
+  Future<Map<String, dynamic>?> batchDocument(Map<String, dynamic> old) async {
+    var number = '${old['number'] ?? ''}';
+    final ids = (old['fileIds'] as List? ?? []).map((i) => '$i').toList();
+    bool uploading = false;
+    String? failure;
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: Text(
+            l(
+              '采购凭证 · 可后补',
+              'Purchase documents · optional',
+              '採購憑證 · 可後補',
+              'เอกสารการซื้อ',
+            ),
+          ),
           content: SizedBox(
-            width: 480,
+            width: 520,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                label(productName('${p['productRef']}'), size: 18),
-                const SizedBox(height: 18),
-                DropdownButtonFormField<String>(
-                  initialValue: options.any((s) => s['supplierRef'] == supplier)
-                      ? supplier
-                      : null,
-                  items: options
-                      .map(
-                        (s) => DropdownMenuItem(
-                          value: '${s['supplierRef']}',
-                          child: Text('${s['name']}'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => set(() {
-                    supplier = v;
-                    cost = v == quote?['supplierRef']
-                        ? (quote?['unitCostCents'] as num? ?? 0).toInt()
-                        : 0;
-                  }),
-                  decoration: InputDecoration(
-                    labelText: l('供应商', 'Supplier', '供應商', 'ผู้ขาย'),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: numberField(
-                        l('采购数量', 'Units', '採購數量', 'จำนวนซื้อ'),
-                        q,
-                        (v) => set(() => q = v),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: numberField(
-                        l('进货单价', 'Unit cost', '進貨單價', 'ต้นทุนต่อหน่วย'),
-                        cost,
-                        (v) => set(() => cost = v),
-                        cents: true,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                TextField(
+                TextFormField(
+                  initialValue: number,
                   onChanged: (v) => number = v,
                   decoration: InputDecoration(
                     labelText: l(
                       '底单号（选填）',
                       'Document number (optional)',
                       '底單號（選填）',
-                      'เลขเอกสาร (ถ้ามี)',
+                      'เลขเอกสาร',
                     ),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  l(
+                    '选择照片或 PDF，也可由手机或接口上传后关联到此批次。',
+                    'Choose a photo or PDF; API uploads may also be attached to this batch.',
+                    '選擇照片或 PDF，也可由手機或介面上傳後關聯到此批次。',
+                    'เลือกรูปหรือ PDF หรืออัปโหลดผ่าน API',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                for (final id in ids)
+                  TextButton.icon(
+                    onPressed: () => document(id),
+                    icon: const Icon(Icons.description_outlined),
+                    label: Text(l('查看凭证', 'View document', '查看憑證', 'ดูเอกสาร')),
+                  ),
+                if (failure != null)
+                  Text(failure!, style: const TextStyle(color: Colors.red)),
+                FilledButton.tonal(
+                  onPressed: uploading || ids.length >= 8
+                      ? null
+                      : () async {
+                          set(() => uploading = true);
+                          try {
+                            final file = await const MethodChannel(
+                              'cn.kingclub.cashier/inventory-document',
+                            ).invokeMapMethod<String, dynamic>('choose');
+                            if (file != null) {
+                              final result = await widget.auth.inventory({
+                                'action': 'upload_document',
+                                ...file,
+                              });
+                              if (ctx.mounted) {
+                                set(() => ids.add('${result['fileId']}'));
+                              }
+                            }
+                          } catch (_) {
+                            if (ctx.mounted) {
+                              set(
+                                () => failure = l(
+                                  '请选择 1MB 内的 JPG、PNG 或 PDF',
+                                  'Choose a JPG, PNG or PDF up to 1MB',
+                                  '請選擇 1MB 內的 JPG、PNG 或 PDF',
+                                  'เลือกไฟล์ไม่เกิน 1MB',
+                                ),
+                              );
+                            }
+                          } finally {
+                            if (ctx.mounted) set(() => uploading = false);
+                          }
+                        },
+                  child: Text(
+                    uploading
+                        ? l('正在上传', 'Uploading', '正在上傳', 'อัปโหลด')
+                        : l(
+                            '选择并上传凭证',
+                            'Select and upload',
+                            '選擇並上傳憑證',
+                            'เลือกและอัปโหลด',
+                          ),
                   ),
                 ),
               ],
@@ -1084,27 +1218,20 @@ class _InventoryPanelState extends State<InventoryPanel> {
           actions: [
             button(
               l('取消', 'Cancel', '取消', 'ยกเลิก'),
-              () => Navigator.pop(context),
+              uploading ? null : () => Navigator.pop(ctx),
             ),
             button(
-              l('确认采购', 'Confirm purchase', '確認採購', 'ยืนยันซื้อ'),
-              () => Navigator.pop(context, true),
+              l('保存凭证', 'Save documents', '儲存憑證', 'บันทึกเอกสาร'),
+              uploading
+                  ? null
+                  : () =>
+                        Navigator.pop(ctx, {'number': number, 'fileIds': ids}),
               primary: true,
             ),
           ],
         ),
       ),
     );
-    if (ok == true && supplier != null) {
-      await submit({
-        'action': 'purchase',
-        'supplierRef': supplier,
-        'productRef': p['productRef'],
-        'quantity': q,
-        'unitCostCents': cost,
-        'document': {'number': number, 'fileIds': <String>[]},
-      });
-    }
   }
 
   Future<void> supplier([Map<String, dynamic>? saved]) async {
@@ -1940,6 +2067,24 @@ class _InventoryPanelState extends State<InventoryPanel> {
     ];
   }
 
+  String purchaseState(String status) => switch (status) {
+    'draft' => l('草稿', 'Draft', '草稿', 'ร่าง'),
+    'pending' => l('待批准', 'Awaiting approval', '待批准', 'รออนุมัติ'),
+    'approved' => l(
+      '已批准 · 待采购',
+      'Approved · awaiting purchase',
+      '已批准 · 待採購',
+      'รอซื้อ',
+    ),
+    'ordered' => l(
+      '已采购 · 待入库',
+      'Ordered · awaiting receipt',
+      '已採購 · 待入庫',
+      'รอรับ',
+    ),
+    'received' => l('已收齐', 'Received', '已收齊', 'รับครบ'),
+    _ => l('已取消', 'Cancelled', '已取消', 'ยกเลิก'),
+  };
   Widget purchases() => box(
     ListView(
       children: [
@@ -1947,32 +2092,70 @@ class _InventoryPanelState extends State<InventoryPanel> {
           children: [
             Expanded(
               child: label(
-                l(
-                  '预采购 · 自动建议',
-                  'Suggested purchases',
-                  '預採購 · 自動建議',
-                  'รายการแนะนำซื้อ',
-                ),
+                l('采购申请批次', 'Purchase applications', '採購申請批次', 'คำขอซื้อ'),
                 size: 20,
                 weight: FontWeight.bold,
               ),
             ),
             button(
               l('新增采购申请', 'New purchase request', '新增採購申請', 'คำขอซื้อใหม่'),
-              canWrite ? manualPurchase : null,
+              canWrite ? () => manualPurchase() : null,
               primary: true,
             ),
           ],
         ),
-        const SizedBox(height: 12),
         label(
           l(
-            '根据可售库存、预警值与已订未到数量实时生成；确认后才成为采购单。',
-            'Generated from availability, thresholds and outstanding purchases. Confirm to order.',
-            '根據可售庫存、預警值與已訂未到數量即時生成；確認後才成為採購單。',
-            'สร้างจากสต็อกที่ขายได้ เกณฑ์เตือนและที่สั่งแล้ว ยืนยันจึงเป็นใบซื้อ',
+            '新建批次 → 添加货物 → 提交批准 → 采购 → 确认收货；凭证可后补。',
+            'Create batch → add items → approve → order → receive. Documents may follow.',
+            '新建批次 → 添加貨物 → 提交批准 → 採購 → 確認收貨；憑證可後補。',
+            'สร้างชุด → เพิ่มสินค้า → อนุมัติ → ซื้อ → รับเข้า เอกสารเพิ่มภายหลังได้',
           ),
           color: muted,
+        ),
+        const SizedBox(height: 16),
+        for (final b in (rows(
+          'purchaseBatches',
+        )..sort((a, b) => '${b['createdAt']}'.compareTo('${a['createdAt']}'))))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: const Color(0xFFF1F4EE),
+              borderRadius: BorderRadius.circular(12),
+              child: ListTile(
+                key: ValueKey('purchase-batch-${b['batchRef']}'),
+                minVerticalPadding: 16,
+                title: label(
+                  '${b['title']}',
+                  size: 18,
+                  weight: FontWeight.w600,
+                ),
+                subtitle: label(
+                  '${b['itemCount']} ${l('项商品', 'items', '項商品', 'รายการ')} · ${money(b['totalCostCents'])} · ${time(b['createdAt'])}',
+                  color: muted,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    label(
+                      purchaseState('${b['status']}'),
+                      color: b['status'] == 'pending'
+                          ? Colors.orange.shade800
+                          : green,
+                    ),
+                    const SizedBox(width: 10),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+                onTap: () => openBatch(b),
+              ),
+            ),
+          ),
+        const Divider(height: 32),
+        label(
+          l('自动补货建议', 'Replenishment suggestions', '自動補貨建議', 'แนะนำเติมสินค้า'),
+          size: 18,
+          weight: FontWeight.bold,
         ),
         for (final p in rows(
           'products',
@@ -1980,65 +2163,41 @@ class _InventoryPanelState extends State<InventoryPanel> {
           ListTile(
             title: label(productName('${p['productRef']}')),
             subtitle: label(
-              '${l('建议补货', 'Suggested units', '建議補貨', 'แนะนำเติม')} ${p['suggested']}',
+              '${l('建议补货', 'Suggested units', '建議補貨', 'จำนวนแนะนำ')} ${p['suggested']}',
             ),
             trailing: button(
-              l('调整采购', 'Review & order', '調整採購', 'ปรับแล้วสั่ง'),
+              l('加入批次', 'Add to batch', '加入批次', 'เพิ่มในชุด'),
               canWrite ? () => purchase(p) : null,
             ),
           ),
-        const Divider(height: 32),
-        label(
-          l(
-            '已采购 · 待入库',
-            'Ordered · awaiting receipt',
-            '已採購 · 待入庫',
-            'สั่งแล้ว · รอรับ',
-          ),
-          size: 20,
-          weight: FontWeight.bold,
-        ),
-        for (final p in rows('purchases'))
-          ListTile(
-            title: label(productName('${p['productRef']}')),
-            subtitle: label(
-              '${p['received']} / ${p['quantity']} · ${money(p['unitCostCents'])} · ${time(p['createdAt'])}',
-              color: muted,
+        if (rows('purchases').any((p) => p['applicationBatchRef'] == null)) ...[
+          const Divider(height: 32),
+          label(
+            l(
+              '之前采购 · 待入库',
+              'Legacy purchases · awaiting receipt',
+              '之前採購 · 待入庫',
+              'รายการเดิมรอรับ',
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (p['received'] == 0)
-                  button(
-                    l('取消', 'Cancel', '取消', 'ยกเลิก'),
-                    canWrite
-                        ? () async {
-                            if (await confirm(
-                                  l(
-                                    '取消采购',
-                                    'Cancel purchase',
-                                    '取消採購',
-                                    'ยกเลิกซื้อ',
-                                  ),
-                                  productName('${p['productRef']}'),
-                                ) ==
-                                true) {
-                              await submit({
-                                'action': 'cancel_purchase',
-                                'relatedRef': p['purchaseRef'],
-                              });
-                            }
-                          }
-                        : null,
-                  ),
-                button(
-                  l('入库', 'Receive', '入庫', 'รับเข้า'),
-                  canWrite ? () => receive(p) : null,
-                  primary: true,
-                ),
-              ],
-            ),
+            size: 18,
+            weight: FontWeight.bold,
           ),
+          for (final p in rows(
+            'purchases',
+          ).where((p) => p['applicationBatchRef'] == null))
+            ListTile(
+              title: label(productName('${p['productRef']}')),
+              subtitle: label(
+                '${p['received']} / ${p['quantity']} · ${money(p['unitCostCents'])}',
+                color: muted,
+              ),
+              trailing: button(
+                l('入库', 'Receive', '入庫', 'รับเข้า'),
+                canWrite ? () => receive(p) : null,
+                primary: true,
+              ),
+            ),
+        ],
       ],
     ),
   );

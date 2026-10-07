@@ -14,6 +14,12 @@ class MainActivity : FlutterActivity() {
     private var printerStatus: PrinterStatusBridge? = null
     private var usbPrinterPermission: UsbPrinterPermissionBridge? = null
     private var usbRasterOutput: UsbRasterOutputBridge? = null
+    private var inventoryDocument: InventoryDocumentBridge? = null
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        if (inventoryDocument?.onActivityResult(requestCode, resultCode, data) == true) return
+        super.onActivityResult(requestCode, resultCode, data)
+    }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (scanner?.onKeyEvent(event) == true) return true
@@ -80,6 +86,8 @@ class MainActivity : FlutterActivity() {
         usbPrinterPermission = UsbPrinterPermissionBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         usbRasterOutput?.dispose()
         usbRasterOutput = UsbRasterOutputBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        inventoryDocument?.dispose()
+        inventoryDocument = InventoryDocumentBridge(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -93,6 +101,8 @@ class MainActivity : FlutterActivity() {
         usbPrinterPermission = null
         usbRasterOutput?.dispose()
         usbRasterOutput = null
+        inventoryDocument?.dispose()
+        inventoryDocument = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }
