@@ -84,6 +84,8 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
                     }
                     final catalog =
                         snapshot.data!['catalog'] as Map<String, dynamic>?;
+                    final sharedProducts =
+                        snapshot.data!['sharedProducts'] as Map?;
                     final items = (catalog?['items'] as List? ?? [])
                         .whereType<Map>()
                         .map((e) => Map<String, dynamic>.from(e))
@@ -192,6 +194,19 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
                                   itemBuilder: (context, index) {
                                     final item = filtered[index];
                                     final quote = item['quoteCents'] as num?;
+                                    final shared =
+                                        sharedProducts?[item['sharedProductKey']]
+                                            as Map?;
+                                    final names = shared?['names'] as Map?;
+                                    final fallback = '${item['name']}';
+                                    final displayName = names == null
+                                        ? fallback
+                                        : l(
+                                            '${names['zh-CN'] ?? fallback}',
+                                            '${names['en'] ?? names['zh-CN'] ?? fallback}',
+                                            '${names['zh-TW'] ?? names['zh-CN'] ?? fallback}',
+                                            '${names['th'] ?? names['zh-CN'] ?? fallback}',
+                                          );
                                     return Container(
                                       padding: const EdgeInsets.all(16),
                                       decoration: BoxDecoration(
@@ -206,7 +221,7 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  '${item['name']}',
+                                                  displayName,
                                                   style: const TextStyle(
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.w600,
@@ -214,7 +229,7 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
                                                 ),
                                                 const SizedBox(height: 6),
                                                 Text(
-                                                  '${item['specification']}',
+                                                  '${displayName == fallback ? '' : '$fallback · '}${item['specification']}',
                                                   style: const TextStyle(
                                                     color: Color(0xFF748078),
                                                   ),
