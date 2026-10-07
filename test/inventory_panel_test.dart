@@ -15,6 +15,13 @@ class InventoryAuth extends TableAuth {
   Future<Map<String, dynamic>> inventory(Map<String, dynamic> command) async {
     calls.add(command);
     if (command['action'] == 'purchase_batch') return batch!;
+    if (command['action'] == 'purchase_batch_delete') {
+      batch = {
+        ...batch!,
+        'status': 'cancelled',
+        'revision': (batch!['revision'] as int) + 1,
+      };
+    }
     if (command['action'] == 'purchase_batch_save') {
       batch = {
         ...command,
@@ -149,6 +156,92 @@ class InventoryAuth extends TableAuth {
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
+    'closing untouched or emptied new applications never creates server drafts',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 710);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = InventoryAuth();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InventoryPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('采购申请').first);
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.text('新增采购申请'));
+        await tester.pumpAndSettle();
+        if (i == 2) {
+          await tester.tap(find.byKey(const ValueKey('purchase-product-wine')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byIcon(Icons.remove_circle_outline));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.byIcon(Icons.close).last);
+        await tester.pumpAndSettle();
+      }
+      expect(auth.calls, hasLength(1));
+      expect(auth.batch, isNull);
+      expect(find.byIcon(Icons.delete_outline), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets(
+    'deletes an existing empty draft with one action and removes it from the list',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 710);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const batchRef = '00000000-0000-4000-8000-000000000020';
+      final auth = InventoryAuth()
+        ..batch = {
+          'batchRef': batchRef,
+          'title': 'Empty draft',
+          'revision': 1,
+          'status': 'draft',
+          'items': <Map<String, dynamic>>[],
+        };
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InventoryPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('采购申请').first);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('delete-purchase-draft-$batchRef')),
+      );
+      await tester.pumpAndSettle();
+      expect(auth.calls, hasLength(2));
+      expect(auth.calls.last, containsPair('action', 'purchase_batch_delete'));
+      expect(auth.calls.last, containsPair('revision', 1));
+      expect(
+        find.byKey(const ValueKey('purchase-batch-$batchRef')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets(
     'creates a batch, adds locally and submits quoted goods together',
     (tester) async {
       tester.view.physicalSize = const Size(1274, 710);
@@ -178,7 +271,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         auth.calls.length,
-        2,
+        1,
         reason: 'Adding products edits the batch locally',
       );
       expect(find.textContaining('¥ 35.00 × 2'), findsOneWidget);
@@ -282,7 +375,7 @@ void main() {
       );
       expect(
         auth.calls.length,
-        2,
+        1,
         reason: 'Price changes and supplier selection remain local',
       );
       await tester.tap(find.byIcon(Icons.close).last);

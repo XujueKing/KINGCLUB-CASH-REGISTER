@@ -199,6 +199,11 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   });
   Future<void> close() async {
     if (busy) return;
+    if (items.isEmpty && batch['revision'] == 0) {
+      setState(() => dirty = false);
+      Navigator.pop(context);
+      return;
+    }
     if (dirty) {
       await save(false);
       if (dirty || !mounted) return;
@@ -782,7 +787,8 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    if (widget.canWrite)
+                    if (widget.canWrite &&
+                        (batch['revision'] != 0 || items.isNotEmpty))
                       touch(
                         t('补凭证', 'Add document', '補憑證', 'เพิ่มเอกสาร'),
                         () async {
@@ -816,7 +822,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                     if (editable) ...[
                       touch(
                         t('保存草稿', 'Save draft', '儲存草稿', 'บันทึกร่าง'),
-                        () => save(false),
+                        items.isEmpty ? null : () => save(false),
                       ),
                       const SizedBox(width: 12),
                       touch(

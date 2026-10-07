@@ -1022,6 +1022,43 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
   }
 
+  Future<void> deletePurchaseDraft(Map<String, dynamic> batch) async {
+    if (working || !canWrite) return;
+    if ((batch['itemCount'] as num? ?? 0) > 0) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(
+            l(
+              '删除采购草稿？',
+              'Delete purchase draft?',
+              '刪除採購草稿？',
+              'ลบร่างคำขอซื้อ?',
+            ),
+          ),
+          content: Text('${batch['title']}'),
+          actions: [
+            button(
+              l('取消', 'Cancel', '取消', 'ยกเลิก'),
+              () => Navigator.pop(context, false),
+            ),
+            button(
+              l('删除', 'Delete', '刪除', 'ลบ'),
+              () => Navigator.pop(context, true),
+              primary: true,
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    await submit({
+      'action': 'purchase_batch_delete',
+      'batchRef': batch['batchRef'],
+      'revision': batch['revision'],
+    });
+  }
+
   Future<void> manualPurchase({Map<String, dynamic>? initialProduct}) async {
     if (rows('suppliers').where((s) => s['active'] == 1).isEmpty) {
       message(
@@ -1032,10 +1069,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
     final now = DateTime.now();
     try {
-      final batch = await batchCommand({
-        'action': 'purchase_batch_save',
+      final batch = <String, dynamic>{
         'batchRef': uid(),
         'revision': 0,
+        'status': 'draft',
         'title': l(
           '${now.month}月${now.day}日进货申请',
           'Purchase request ${now.month}/${now.day}',
@@ -1043,8 +1080,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
           'คำขอซื้อ ${now.month}/${now.day}',
         ),
         'items': <Map<String, dynamic>>[],
-        'submit': false,
-      });
+      };
       if (mounted) await openBatch(batch, initialProduct: initialProduct);
     } catch (_) {
       if (mounted) {
@@ -2131,8 +2167,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
             in (rows('purchaseBatches')
                 .where(
                   (b) =>
-                      !receiving ||
-                      ['ordered', 'received'].contains(b['status']),
+                      !(b['status'] == 'cancelled' &&
+                          b['applicationNumber'] == null) &&
+                      (!receiving ||
+                          ['ordered', 'received'].contains(b['status'])),
                 )
                 .toList()
               ..sort(
@@ -2165,6 +2203,20 @@ class _InventoryPanelState extends State<InventoryPanel> {
                           : green,
                     ),
                     const SizedBox(width: 10),
+                    if (!receiving &&
+                        b['status'] == 'draft' &&
+                        b['applicationNumber'] == null &&
+                        canWrite)
+                      IconButton(
+                        key: ValueKey('delete-purchase-draft-${b['batchRef']}'),
+                        tooltip: l('删除草稿', 'Delete draft', '刪除草稿', 'ลบร่าง'),
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 48,
+                        ),
+                        onPressed: working ? null : () => deletePurchaseDraft(b),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
                     const Icon(Icons.chevron_right),
                   ],
                 ),
@@ -2244,6 +2296,12 @@ class _InventoryPanelState extends State<InventoryPanel> {
     'refund' => l('退款退库', 'Refund return', '退款退庫', 'คืนสินค้าคืนเงิน'),
     'purchase_receive' => l('采购入库', 'Purchase receipt', '採購入庫', 'รับซื้อเข้า'),
     'purchase_batch_save' => l('采购申请', 'Purchase request', '採購申請', 'คำขอซื้อ'),
+    'purchase_batch_delete' => l(
+      '删除采购草稿',
+      'Delete purchase draft',
+      '刪除採購草稿',
+      'ลบร่างคำขอซื้อ',
+    ),
     'purchase_batch_review' => l(
       '申请审批',
       'Application review',
