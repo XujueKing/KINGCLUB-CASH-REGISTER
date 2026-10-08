@@ -154,6 +154,22 @@ class _ReservationsPanelState extends State<ReservationsPanel> {
     'cancelled' => l('已取消', 'Cancelled', '已取消', 'ยกเลิกแล้ว'),
     _ => l('已结束', 'Ended', '已結束', 'สิ้นสุด'),
   };
+
+  bool isReservation(Map<String, dynamic> row) =>
+      row['kind'] == 'reservation' ||
+      (row['kind'] == null && row['source'] != 'app');
+  bool allowed(Map<String, dynamic> row, String key) =>
+      !row.containsKey(key) || row[key] == true || row[key] == 1;
+  String depositMoney(dynamic value) {
+    final cents = int.tryParse('$value');
+    if (cents == null || cents < 0) return '—';
+    final whole = (cents ~/ 100).toString().replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+$)'),
+      (m) => '${m[1]},',
+    );
+    return '$whole.${(cents % 100).toString().padLeft(2, '0')}';
+  }
+
   Widget button(
     String title,
     VoidCallback? tap, {
@@ -784,12 +800,42 @@ class _ReservationsPanelState extends State<ReservationsPanel> {
                                         ),
                                         const SizedBox(height: 18),
                                         Text(
-                                          detail['source'] == 'app'
+                                          !isReservation(detail)
                                               ? l(
                                                   '已付款 ${detail['paidCount']} 人 / 容量 ${detail['partySize']} 人',
                                                   'Paid ${detail['paidCount']} / capacity ${detail['partySize']}',
                                                   '已付款 ${detail['paidCount']} 人 / 容量 ${detail['partySize']} 人',
                                                   'ชำระแล้ว ${detail['paidCount']} / ${detail['partySize']}',
+                                                )
+                                              : detail['payment'] ==
+                                                    'deposit_paid'
+                                              ? l(
+                                                  '已付定金 CNY ${depositMoney(detail['depositCents'])}',
+                                                  'Deposit paid CNY ${depositMoney(detail['depositCents'])}',
+                                                  '已付定金 CNY ${depositMoney(detail['depositCents'])}',
+                                                  'ชำระมัดจำ CNY ${depositMoney(detail['depositCents'])}',
+                                                )
+                                              : detail['payment'] == 'free'
+                                              ? l(
+                                                  '免费预约',
+                                                  'Free reservation',
+                                                  '免費預約',
+                                                  'จองฟรี',
+                                                )
+                                              : detail['payment'] ==
+                                                    'refund_pending'
+                                              ? l(
+                                                  '定金原渠道退款处理中',
+                                                  'Original deposit refund pending',
+                                                  '定金原渠道退款處理中',
+                                                  'กำลังคืนมัดจำช่องทางเดิม',
+                                                )
+                                              : detail['payment'] == 'refunded'
+                                              ? l(
+                                                  '定金已退回',
+                                                  'Deposit refunded',
+                                                  '定金已退回',
+                                                  'คืนมัดจำแล้ว',
                                                 )
                                               : l(
                                                   '未付款 · 报名不等于买单',
@@ -804,6 +850,20 @@ class _ReservationsPanelState extends State<ReservationsPanel> {
                                           ),
                                         ),
                                         const SizedBox(height: 18),
+                                        if (detail['payment'] ==
+                                                'deposit_paid' &&
+                                            detail['status'] == 'reserved' &&
+                                            !allowed(detail, 'canArrive')) ...[
+                                          Text(
+                                            l(
+                                              '先开台并关联原付款会员，再确认到店。',
+                                              'Open the table and link the original paying member before confirming arrival.',
+                                              '先開台並關聯原付款會員，再確認到店。',
+                                              'เปิดโต๊ะและผูกสมาชิกผู้ชำระเดิมก่อนยืนยันมาถึง',
+                                            ),
+                                          ),
+                                          const SizedBox(height: 18),
+                                        ],
                                         if (detail['phone'] != null)
                                           SelectableText(
                                             '${detail['phone']}',
@@ -888,32 +948,37 @@ class _ReservationsPanelState extends State<ReservationsPanel> {
                                         '安排位置',
                                         'จัดที่นั่ง',
                                       ),
-                                      busy || !canEdit
+                                      busy ||
+                                              !canEdit ||
+                                              !allowed(detail, 'canArrange')
                                           ? null
                                           : () => assign(detail),
                                       primary: true,
                                     ),
                                   ),
-                                  if (detail['source'] != 'app') ...[
-                                    const SizedBox(height: 10),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: button(
-                                        l(
-                                          '已电话通知付款加入',
-                                          'Called guest to pay and join',
-                                          '已電話通知付款加入',
-                                          'โทรแจ้งให้ชำระและเข้าร่วมแล้ว',
+                                  if (isReservation(detail)) ...[
+                                    if (detail['source'] != 'app') ...[
+                                      const SizedBox(height: 10),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: button(
+                                          l(
+                                            '已电话通知付款加入',
+                                            'Called guest to pay and join',
+                                            '已電話通知付款加入',
+                                            'โทรแจ้งให้ชำระและเข้าร่วมแล้ว',
+                                          ),
+                                          busy || !canEdit
+                                              ? null
+                                              : () => load({
+                                                  'action': 'notified',
+                                                  'reservationRef':
+                                                      detail['ref'],
+                                                }),
                                         ),
-                                        busy || !canEdit
-                                            ? null
-                                            : () => load({
-                                                'action': 'notified',
-                                                'reservationRef': detail['ref'],
-                                              }),
                                       ),
-                                    ),
-                                    const SizedBox(height: 10),
+                                      const SizedBox(height: 10),
+                                    ],
                                     Row(
                                       children: [
                                         Expanded(
@@ -938,36 +1003,46 @@ class _ReservationsPanelState extends State<ReservationsPanel> {
                                                             'ยกเลิกการจองนี้?',
                                                           ),
                                                         ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                  c,
-                                                                  false,
+                                                        content:
+                                                            detail['payment'] ==
+                                                                'deposit_paid'
+                                                            ? Text(
+                                                                l(
+                                                                  '取消后释放位置，定金按原渠道退回，到账前显示退款处理中。',
+                                                                  'Release the position and refund the original deposit channel. The refund remains pending until verified.',
+                                                                  '取消後釋放位置，定金按原渠道退回，到帳前顯示退款處理中。',
+                                                                  'คืนที่นั่งและคืนมัดจำช่องทางเดิม สถานะรอดำเนินการจนกว่าจะยืนยัน',
                                                                 ),
-                                                            child: Text(
-                                                              l(
-                                                                '返回',
-                                                                'Back',
-                                                                '返回',
-                                                                'กลับ',
-                                                              ),
+                                                              )
+                                                            : null,
+                                                        actions: [
+                                                          button(
+                                                            l(
+                                                              '返回',
+                                                              'Back',
+                                                              '返回',
+                                                              'กลับ',
+                                                            ),
+                                                            () => Navigator.pop(
+                                                              c,
+                                                              false,
                                                             ),
                                                           ),
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                  c,
-                                                                  true,
-                                                                ),
-                                                            child: Text(
-                                                              l(
-                                                                '取消预约',
-                                                                'Cancel booking',
-                                                                '取消預約',
-                                                                'ยกเลิกการจอง',
-                                                              ),
+                                                          const SizedBox(
+                                                            height: 12,
+                                                          ),
+                                                          button(
+                                                            l(
+                                                              '取消预约',
+                                                              'Cancel booking',
+                                                              '取消預約',
+                                                              'ยกเลิกการจอง',
                                                             ),
+                                                            () => Navigator.pop(
+                                                              c,
+                                                              true,
+                                                            ),
+                                                            primary: true,
                                                           ),
                                                         ],
                                                       ),
@@ -993,12 +1068,21 @@ class _ReservationsPanelState extends State<ReservationsPanel> {
                                             ),
                                             busy ||
                                                     !canEdit ||
-                                                    detail['tableRef'] == null
+                                                    detail['tableRef'] ==
+                                                        null ||
+                                                    !allowed(
+                                                      detail,
+                                                      'canArrive',
+                                                    )
                                                 ? null
                                                 : () => load({
                                                     'action': 'arrived',
                                                     'reservationRef':
                                                         detail['ref'],
+                                                    if (detail['activeSessionRef'] !=
+                                                        null)
+                                                      'sessionRef':
+                                                          detail['activeSessionRef'],
                                                   }),
                                           ),
                                         ),
