@@ -1198,6 +1198,62 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                         ],
                       );
                     }
+                    if (focused?.aaParty != null && focused?.session == null) {
+                      final table = focused!;
+                      return Row(
+                        children: [
+                          Expanded(flex: 2, child: grid),
+                          const VerticalDivider(width: 1),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: TableBillPanel(
+                                key: ValueKey('aa-bill-${table.reference}'),
+                                auth: widget.auth,
+                                language: widget.language,
+                                tableRef: table.reference,
+                                sessionRef: '',
+                                revision: realtimeRevision,
+                                emptySeat: true,
+                                checkoutAllowed: false,
+                                changesAllowed: false,
+                                fillHeight: true,
+                                headerBuilder: (filter) => Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            barText(
+                                              '消费明细',
+                                              'Bill',
+                                              '消費明細',
+                                              'รายการ',
+                                            ),
+                                          ),
+                                        ),
+                                        filter,
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '${table.name} · ${t('tableKind_aa')}',
+                                          ),
+                                        ),
+                                        aaSeatsButton(table),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
                     if (focused?.session != null &&
                         widget.auth.session?.permissions.contains(
                               'orders.read',
@@ -1207,6 +1263,7 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                       final actions = Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (table.aaParty != null) aaSeatsButton(table),
                           IconButton(
                             tooltip: t('orderOperations'),
                             icon: const Icon(Icons.more_horiz),
@@ -1831,6 +1888,32 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
     await selectTable(table);
   }
 
+  Widget aaSeatsButton(LiveTable table) => TextButton.icon(
+    key: const ValueKey('aa-seats-button'),
+    onPressed: () => showAaSeats(table),
+    icon: const Icon(Icons.people_outline),
+    label: Text(
+      barText('席位', 'Seats', '席位', 'ที่นั่ง') +
+          ' ${table.aaParty!.confirmedCount}/${table.aaParty!.capacity}',
+    ),
+  );
+
+  Future<void> showAaSeats(LiveTable table) async {
+    aaDetail.value = table;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => ValueListenableBuilder<LiveTable?>(
+        valueListenable: aaDetail,
+        builder: (_, current, _) => AaSeatsDialog(
+          table: current ?? table,
+          language: widget.language,
+          onRefresh: () => load(),
+        ),
+      ),
+    );
+    if (mounted) aaDetail.value = null;
+  }
+
   Future<void> selectTable(LiveTable table) async {
     debugPrint('cashier_table_select');
     if (historyMode) {
@@ -1842,22 +1925,6 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
       return;
     }
     widget.orderAlerts?.viewed(table);
-    if (table.aaParty != null && table.session == null) {
-      aaDetail.value = table;
-      await showDialog<void>(
-        context: context,
-        builder: (_) => ValueListenableBuilder<LiveTable?>(
-          valueListenable: aaDetail,
-          builder: (_, current, _) => AaSeatsDialog(
-            table: current ?? table,
-            language: widget.language,
-            onRefresh: () => load(),
-          ),
-        ),
-      );
-      if (mounted) aaDetail.value = null;
-      return;
-    }
     if (table.isBarCounter || table.isBarSeat) {
       if (table.status != 'active') return;
       setState(() {
@@ -1868,6 +1935,7 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
       return;
     }
     if (table.status == 'active' &&
+        table.aaParty == null &&
         table.session == null &&
         widget.auth.session?.permissions.contains('table.open') == true) {
       final opened = await showDialog<bool>(
