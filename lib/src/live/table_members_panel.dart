@@ -276,11 +276,13 @@ class TableMembersButton extends StatefulWidget {
     required this.sessionRef,
     this.revision = 0,
     this.detailRead,
+    this.onTapOverride,
   });
   final StaffAuthController auth;
   final UiLanguage language;
   final String tableRef, sessionRef;
   final int revision;
+  final VoidCallback? onTapOverride;
   final Future<TableDetailSnapshot>? detailRead;
   @override
   State<TableMembersButton> createState() => _TableMembersButtonState();
@@ -407,40 +409,44 @@ class _TableMembersButtonState extends State<TableMembersButton> {
       '關聯會員',
       'สมาชิกที่เชื่อมโยง',
     ][widget.language.index],
-    onPressed: () async {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(
-            [
-              '关联会员',
-              'Linked members',
-              '關聯會員',
-              'สมาชิกที่เชื่อมโยง',
-            ][widget.language.index],
-          ),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: TableMembersPanel(
-                auth: widget.auth,
-                language: widget.language,
-                tableRef: widget.tableRef,
-                sessionRef: widget.sessionRef,
-                onLinked: () => Navigator.pop(dialogContext),
+    onPressed:
+        widget.onTapOverride ??
+        () async {
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: Text(
+                [
+                  '关联会员',
+                  'Linked members',
+                  '關聯會員',
+                  'สมาชิกที่เชื่อมโยง',
+                ][widget.language.index],
               ),
+              content: SizedBox(
+                width: 440,
+                child: SingleChildScrollView(
+                  child: TableMembersPanel(
+                    auth: widget.auth,
+                    language: widget.language,
+                    tableRef: widget.tableRef,
+                    sessionRef: widget.sessionRef,
+                    onLinked: () => Navigator.pop(dialogContext),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text(
+                    ['关闭', 'Close', '關閉', 'ปิด'][widget.language.index],
+                  ),
+                ),
+              ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(['关闭', 'Close', '關閉', 'ปิด'][widget.language.index]),
-            ),
-          ],
-        ),
-      );
-      if (mounted) await load(refresh: true);
-    },
+          );
+          if (mounted) await load(refresh: true);
+        },
     icon: Badge(
       isLabelVisible: members.length > 1,
       label: Text('${members.length}'),

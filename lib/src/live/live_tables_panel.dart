@@ -1,3 +1,4 @@
+import 'table_bill_header.dart';
 import 'unserved_bell.dart';
 import 'aa_seats_dialog.dart';
 import 'paid_order_alerts.dart';
@@ -1218,35 +1219,10 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                                 checkoutAllowed: false,
                                 changesAllowed: false,
                                 fillHeight: true,
-                                headerBuilder: (filter) => Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            barText(
-                                              '消费明细',
-                                              'Bill',
-                                              '消費明細',
-                                              'รายการ',
-                                            ),
-                                          ),
-                                        ),
-                                        filter,
-                                      ],
-                                    ),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            '${table.name} · ${t('tableKind_aa')}',
-                                          ),
-                                        ),
-                                        aaSeatsButton(table),
-                                      ],
-                                    ),
-                                  ],
+                                headerBuilder: (filter) => historyBillHeader(
+                                  table,
+                                  filter,
+                                  memberOverride: aaMemberButton(table),
                                 ),
                               ),
                             ),
@@ -1263,7 +1239,6 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                       final actions = Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (table.aaParty != null) aaSeatsButton(table),
                           IconButton(
                             tooltip: t('orderOperations'),
                             icon: const Icon(Icons.more_horiz),
@@ -1318,6 +1293,9 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                           onMenuChanged: widget.onMenuChanged,
                           tablePanel: grid,
                           liveTable: table,
+                          onMemberTap: table.aaParty == null
+                              ? null
+                              : () => showAaSeats(table),
                           initialProduct: initialBarProducts[table.reference],
                           onInitialProductConsumed: () =>
                               initialBarProducts.remove(table.reference),
@@ -1503,7 +1481,11 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
     ),
   );
 
-  Widget historyBillHeader(LiveTable table, Widget filter) {
+  Widget historyBillHeader(
+    LiveTable table,
+    Widget filter, {
+    Widget? memberOverride,
+  }) {
     const member = IconButton(
       onPressed: null,
       icon: CircleAvatar(
@@ -1527,84 +1509,16 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
         voucherAction: voucher,
       );
     }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          key: const ValueKey('bill-table-badge'),
-          constraints: const BoxConstraints(
-            minWidth: 52,
-            maxWidth: 82,
-            minHeight: 48,
-          ),
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            gradient: tableStatusGradient(color),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            table.name,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            style: TextStyle(
-              color: color == Colors.white
-                  ? const Color(0xff263c30)
-                  : Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      t('ordersDetails'),
-                      key: const ValueKey('bill-heading'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: TextButton(
-                      onPressed: null,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        minimumSize: const Size(0, 20),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        t(table.stateLabel),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 10),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Text(
-                '${t('guests')}: ${table.session?.partySize ?? '—'}/${table.maximumSeats}',
-                style: const TextStyle(fontSize: 10, color: Color(0xff9e9e9e)),
-              ),
-            ],
-          ),
-        ),
-        filter,
-        voucher,
-        member,
-      ],
+    return TableBillHeader(
+      tableName: table.name,
+      color: color,
+      language: widget.language,
+      statusLabel: t(table.aaParty != null ? 'tableKind_aa' : table.stateLabel),
+      guestsLabel:
+          '${t('guests')}: ${table.aaParty?.confirmedCount ?? table.session?.partySize ?? '—'}/${table.aaParty?.capacity ?? table.maximumSeats}',
+      filter: filter,
+      voucher: voucher,
+      member: memberOverride ?? member,
     );
   }
 
@@ -1888,13 +1802,13 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
     await selectTable(table);
   }
 
-  Widget aaSeatsButton(LiveTable table) => TextButton.icon(
-    key: const ValueKey('aa-seats-button'),
+  Widget aaMemberButton(LiveTable table) => IconButton(
+    key: const ValueKey('table-members-open'),
     onPressed: () => showAaSeats(table),
-    icon: const Icon(Icons.people_outline),
-    label: Text(
-      barText('席位', 'Seats', '席位', 'ที่นั่ง') +
-          ' ${table.aaParty!.confirmedCount}/${table.aaParty!.capacity}',
+    icon: const CircleAvatar(
+      radius: 16,
+      backgroundColor: Color(0xffdedede),
+      child: Icon(Icons.person, color: Color(0xff9e9e9e), size: 23),
     ),
   );
 

@@ -1,3 +1,4 @@
+import 'table_bill_header.dart';
 import 'bar_bill_header.dart';
 import 'table_detail_snapshot.dart';
 import 'voucher_workspace_panel.dart';
@@ -36,6 +37,7 @@ class LiveCartPanel extends StatefulWidget {
     this.tablePanel,
     this.menuHeader,
     this.liveTable,
+    this.onMemberTap,
     this.contextVerified = true,
     this.tableActions,
     this.onMergePayment,
@@ -59,6 +61,7 @@ class LiveCartPanel extends StatefulWidget {
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
   final LiveTable? liveTable;
+  final VoidCallback? onMemberTap;
   final bool contextVerified;
   @override
   State<LiveCartPanel> createState() => _LiveCartPanelState();
@@ -756,161 +759,40 @@ class _LiveCartPanelState extends State<LiveCartPanel>
               ),
       );
     }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          key: const ValueKey('bill-table-badge'),
-          constraints: const BoxConstraints(
-            minWidth: 52,
-            maxWidth: 82,
-            minHeight: 48,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          decoration: BoxDecoration(
-            gradient: tableStatusGradient(color),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            table?.isBarSeat == true
-                ? 'B${table!.barSeatNumber}'
-                : widget.orderContext.tableName,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            style: TextStyle(
-              color: color == Colors.white
-                  ? const Color(0xff263c30)
-                  : Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return TableBillHeader(
+      tableName: widget.orderContext.tableName,
+      color: color,
+      language: widget.language,
+      statusLabel: t(table?.aaParty != null ? 'tableKind_aa' : 'tableOpen'),
+      guestsLabel:
+          '${t('guests')}: ${table?.aaParty?.confirmedCount ?? session?.partySize ?? currentContext.partySize ?? '—'}/${table?.aaParty?.capacity ?? table?.maximumSeats ?? '—'}',
+      onStatusTap: () => showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(t('billOpeningAttribute')),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      key: const ValueKey('bill-heading'),
-                      t('ordersDetails'),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (table?.isBarSeat != true) const SizedBox(width: 6),
-                  if (table?.isBarSeat != true)
-                    TextButton(
-                      key: const ValueKey('bill-opening-tag'),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        minimumSize: const Size(0, 20),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        backgroundColor: color.withValues(alpha: 0.10),
-                        foregroundColor: color,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          side: BorderSide(
-                            color: color.withValues(alpha: 0.25),
-                          ),
-                        ),
-                      ),
-                      onPressed: () => showDialog<void>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: Text(t('billOpeningAttribute')),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(t('billRuleUnavailable')),
-                              if (widget.tableActions != null)
-                                widget.tableActions!,
-                            ],
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: Text(t('staffCancelSelection')),
-                            ),
-                          ],
-                        ),
-                      ),
-                      child: Text(
-                        t('tableOpen'),
-                        style: const TextStyle(fontSize: 10),
-                      ),
-                    ),
-                ],
-              ),
-              if (widget.onMergePayment != null)
-                TextButton.icon(
-                  key: const ValueKey('bar-merge-payment'),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: const Size(0, 28),
-                  ),
-                  onPressed: items.isEmpty || attempted
-                      ? widget.onMergePayment
-                      : null,
-                  icon: const Icon(Icons.merge_type, size: 16),
-                  label: Text(
-                    [
-                      '合并支付',
-                      'Combine',
-                      '合併支付',
-                      'รวมจ่าย',
-                    ][widget.language.index],
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-              if (table?.isBarCounter != true && table?.isBarSeat != true)
-                Row(
-                  children: [
-                    InkWell(
-                      key: const ValueKey('bill-party-size'),
-                      onTap: () => showDialog<void>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: Text(t('guests')),
-                          content: Text(t('billPartyUnavailable')),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: Text(t('staffCancelSelection')),
-                            ),
-                          ],
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Text(
-                          '${t('guests')}: ${session?.partySize ?? currentContext.partySize ?? '—'}/${table?.maximumSeats ?? '—'}',
-                          style: const TextStyle(fontSize: 10),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
+            children: [Text(t('billRuleUnavailable')), ?widget.tableActions],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(t('staffCancelSelection')),
+            ),
+          ],
         ),
-        filter,
-        voucher,
-        TableMembersButton(
-          detailRead: widget.detailRead,
-          auth: widget.auth,
-          language: widget.language,
-          tableRef: currentContext.tableRef,
-          sessionRef: currentContext.sessionRef,
-          revision: widget.revision,
-        ),
-      ],
+      ),
+      filter: filter,
+      voucher: voucher,
+      member: TableMembersButton(
+        detailRead: widget.detailRead,
+        auth: widget.auth,
+        language: widget.language,
+        tableRef: currentContext.tableRef,
+        sessionRef: currentContext.sessionRef,
+        revision: widget.revision,
+        onTapOverride: widget.onMemberTap,
+      ),
     );
   }
 

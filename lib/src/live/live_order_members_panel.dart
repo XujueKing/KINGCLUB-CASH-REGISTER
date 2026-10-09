@@ -30,6 +30,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
     this.tablePanel,
     this.menuHeader,
     this.liveTable,
+    this.onMemberTap,
     this.tableActions,
     this.onMergePayment,
     this.initialProduct,
@@ -49,6 +50,7 @@ class LiveOrderMembersPanel extends StatefulWidget {
   final int revision;
   final Widget? tablePanel, tableActions, menuHeader;
   final LiveTable? liveTable;
+  final VoidCallback? onMemberTap;
   @override
   State<LiveOrderMembersPanel> createState() => _LiveOrderMembersPanelState();
 }
@@ -256,6 +258,7 @@ class _LiveOrderMembersPanelState extends State<LiveOrderMembersPanel>
         tablePanel: widget.tablePanel,
         menuHeader: widget.menuHeader,
         liveTable: widget.liveTable,
+        onMemberTap: widget.onMemberTap,
         tableActions: widget.tableActions,
         onMergePayment: widget.onMergePayment,
         initialProduct: widget.initialProduct,

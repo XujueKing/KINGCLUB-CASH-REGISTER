@@ -136,7 +136,7 @@ void main() {
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('消费明细'), findsOneWidget);
     expect(auth.openingReads, 0);
-    await tester.tap(find.byKey(const ValueKey('aa-seats-button')));
+    await tester.tap(find.byKey(const ValueKey('table-members-open')));
     await tester.pumpAndSettle();
     expect(find.text('总席位 8 · 已占座 1 · 已入场 0'), findsOneWidget);
     expect(find.text('报名会员'), findsOneWidget);
