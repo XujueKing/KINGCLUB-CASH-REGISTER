@@ -73,6 +73,67 @@ class Clients extends HttpOverrides {
 
 void main() {
   final uri = Uri.parse('https://service.invalid/supper');
+  test('large inventory envelope is bounded separately from default replies and requests', () async {
+    final clients = Clients();
+    await HttpOverrides.runWithHttpOverrides(() async {
+      final transport = IoJsonTransport();
+      await transport.post(uri, {}, {});
+      clients.created.single.body = jsonEncode({
+        'data': 'a' * (IoJsonTransport.maxBytes + 20),
+      });
+      await expectLater(
+        transport.post(uri, {}, {}),
+        throwsA(
+          isA<CcsopFailure>().having(
+            (e) => e.code,
+            'code',
+            'RESPONSE_TOO_LARGE',
+          ),
+        ),
+      );
+      await transport.post(uri, {}, {});
+      clients.created.last.body = jsonEncode({
+        'data': 'a' * (IoJsonTransport.maxBytes + 20),
+      });
+      await transport.post(
+        uri,
+        {},
+        {},
+        responseLimit: 2 * IoJsonTransport.maxBytes,
+      );
+      clients.created.last.body = jsonEncode({
+        'data': 'a' * (2 * IoJsonTransport.maxBytes),
+      });
+      await expectLater(
+        transport.post(
+          uri,
+          {},
+          {},
+          responseLimit: 2 * IoJsonTransport.maxBytes,
+        ),
+        throwsA(
+          isA<CcsopFailure>().having(
+            (e) => e.code,
+            'code',
+            'RESPONSE_TOO_LARGE',
+          ),
+        ),
+      );
+      await expectLater(
+        transport.post(uri, {}, {
+          'data': 'a' * IoJsonTransport.maxBytes,
+        }, responseLimit: 2 * IoJsonTransport.maxBytes),
+        throwsA(
+          isA<CcsopFailure>().having(
+            (e) => e.code,
+            'code',
+            'REQUEST_TOO_LARGE',
+          ),
+        ),
+      );
+      transport.close();
+    }, clients);
+  });
   test(
     'completed reads reuse a client; logout closes it and forbids reuse',
     () async {

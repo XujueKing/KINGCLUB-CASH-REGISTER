@@ -40,8 +40,9 @@ class IoJsonTransport implements JsonTransport {
   Future<JsonReply> post(
     Uri uri,
     Map<String, String> headers,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, {
+    int responseLimit = maxBytes,
+  }) async {
     serviceBase(uri.toString());
     if (_closed) throw const CcsopFailure('CLIENT_CLOSED');
     final encoded = utf8.encode(jsonEncode(body));
@@ -72,7 +73,7 @@ class IoJsonTransport implements JsonTransport {
             deliveryUncertain: true,
           );
         }
-        if (response.contentLength > maxBytes) {
+        if (response.contentLength > responseLimit) {
           throw const CcsopFailure(
             'RESPONSE_TOO_LARGE',
             deliveryUncertain: true,
@@ -80,7 +81,7 @@ class IoJsonTransport implements JsonTransport {
         }
         final bytes = <int>[];
         await for (final chunk in response) {
-          if (bytes.length + chunk.length > maxBytes) {
+          if (bytes.length + chunk.length > responseLimit) {
             throw const CcsopFailure(
               'RESPONSE_TOO_LARGE',
               deliveryUncertain: true,
@@ -148,11 +149,18 @@ class CcsopClient implements SessionChannel {
       params: params,
     );
     if (_closed) throw const CcsopFailure('CLIENT_CLOSED');
-    final reply = await _transport.post(
-      base.replace(path: '${base.path}/supper-interface'),
-      sealed.headers,
-      sealed.body,
-    );
+    final uri = base.replace(path: '${base.path}/supper-interface');
+    // The complete supplier procurement catalogue is ~812 KB before encryption.
+    // Keep request limits and other interfaces unchanged; allow its base64 envelope.
+    final reply =
+        _transport is IoJsonTransport && interfaceId == 'K261006002017'
+        ? await _transport.post(
+            uri,
+            sealed.headers,
+            sealed.body,
+            responseLimit: 2 * IoJsonTransport.maxBytes,
+          )
+        : await _transport.post(uri, sealed.headers, sealed.body);
     if (_closed) {
       throw const CcsopFailure('SESSION_CHANGED', deliveryUncertain: true);
     }
