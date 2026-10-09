@@ -87,6 +87,62 @@ class TableAuth extends StaffAuthController {
 }
 
 void main() {
+  testWidgets(
+    'AA activity opens live seats without a manual headcount opening',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = TableAuth(permissions: ['workbench.read', 'table.open']);
+      final reply = tableFixture();
+      final table = reply['result']['tables'][0];
+      table['session'] = null;
+      table['tableName'] = '888';
+      table['tableMode'] = 'aa';
+      table['aaParty'] = {
+        'partyRef': 'party',
+        'capacity': 8,
+        'confirmedCount': 1,
+        'admittedCount': 0,
+        'participants': [
+          {
+            'name': '报名会员',
+            'seatIndex': 0,
+            'gender': 1,
+            'avatarBase64': null,
+            'admitted': false,
+          },
+        ],
+      };
+      auth.reply = reply;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveTablesPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('AA台'), findsOneWidget);
+      await tester.tap(find.text('888'));
+      await tester.pumpAndSettle();
+      expect(find.text('总席位 8 · 已占座 1 · 已入场 0'), findsOneWidget);
+      expect(find.text('报名会员'), findsOneWidget);
+      expect(auth.openingReads, 0);
+      table['aaParty']['admittedCount'] = 1;
+      table['aaParty']['participants'][0]['admitted'] = true;
+      await tester.tap(find.text('刷新'));
+      await tester.pumpAndSettle();
+      expect(find.text('总席位 8 · 已占座 1 · 已入场 1'), findsOneWidget);
+      expect(auth.openingReads, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('floor tabs separate dining and KTV rooms from ground tables', (
     tester,
   ) async {

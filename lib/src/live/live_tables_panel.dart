@@ -1,4 +1,5 @@
 import 'unserved_bell.dart';
+import 'aa_seats_dialog.dart';
 import 'paid_order_alerts.dart';
 import 'bar_bill_header.dart';
 import 'opening_snapshot.dart';
@@ -75,6 +76,7 @@ class LiveTablesPanel extends StatefulWidget {
 class LiveTablesPanelState extends State<LiveTablesPanel>
     with WidgetsBindingObserver {
   TableSnapshot? snapshot;
+  final aaDetail = ValueNotifier<LiveTable?>(null);
   String? focusedTableRef;
   int? selectedBarSeat;
   final Map<String, CatalogProduct> initialBarProducts = {};
@@ -512,6 +514,13 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
       }
       setState(() {
         snapshot = value;
+        if (aaDetail.value != null) {
+          final matching = value.tables.where(
+            (t) =>
+                t.reference == aaDetail.value!.reference && t.aaParty != null,
+          );
+          if (matching.isNotEmpty) aaDetail.value = matching.first;
+        }
         selectDefaultBarSeat();
         page = requestedPage;
         loading = false;
@@ -540,6 +549,7 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
 
   @override
   void dispose() {
+    aaDetail.dispose();
     widget.auth.removeListener(syncRealtimeSession);
     clockTimer?.cancel();
     ++epoch;
@@ -1832,6 +1842,22 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
       return;
     }
     widget.orderAlerts?.viewed(table);
+    if (table.aaParty != null && table.session == null) {
+      aaDetail.value = table;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => ValueListenableBuilder<LiveTable?>(
+          valueListenable: aaDetail,
+          builder: (_, current, _) => AaSeatsDialog(
+            table: current ?? table,
+            language: widget.language,
+            onRefresh: () => load(),
+          ),
+        ),
+      );
+      if (mounted) aaDetail.value = null;
+      return;
+    }
     if (table.isBarCounter || table.isBarSeat) {
       if (table.status != 'active') return;
       setState(() {
@@ -1973,7 +1999,9 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                               Expanded(
                                 child: LayoutBuilder(
                                   builder: (context, bounds) {
-                                    final visible = table.maximumSeats;
+                                    final visible =
+                                        table.aaParty?.capacity ??
+                                        table.maximumSeats;
                                     final columns = visible <= 12
                                         ? 3
                                         : visible <= 16
@@ -2010,7 +2038,11 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                                                 height: size,
                                                 color:
                                                     i <
-                                                        (session?.partySize ??
+                                                        (table
+                                                                .aaParty
+                                                                ?.confirmedCount ??
+                                                            session
+                                                                ?.partySize ??
                                                             0)
                                                     ? textColor.withValues(
                                                         alpha: 0.9,
@@ -2048,7 +2080,8 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                                 ),
                               ),
                             ),
-                            if (table.tableMode != null &&
+                            if (table.aaParty == null &&
+                                table.tableMode != null &&
                                 table.tableMode != 'manual')
                               Flexible(
                                 child: Text(

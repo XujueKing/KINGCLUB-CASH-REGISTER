@@ -120,6 +120,9 @@ class LiveTable {
           ? null
           : Map<String, dynamic>.from(_object(value['reservation'])),
       tableMode = value['tableMode'] == null ? null : _text(value['tableMode']),
+      aaParty = value['aaParty'] == null
+          ? null
+          : AaPartySnapshot(_object(value['aaParty'])),
       status = _text(value['tableStatus']),
       minimumSeats = value['minimumSeats'] == null
           ? null
@@ -149,13 +152,18 @@ class LiveTable {
   bool get isBarSeat => parentBarRef != null && barSeatNumber != null;
   final Map<String, dynamic>? reservation;
   final String? tableMode;
+  final AaPartySnapshot? aaParty;
   final int? minimumSeats;
   final int maximumSeats;
   final TableSessionSnapshot? session;
   String get stateLabel => status != 'active'
       ? 'tableDisabled'
       : session == null
-      ? (reservation == null ? 'free' : 'tableReserved')
+      ? (aaParty != null
+            ? 'tableKind_aa'
+            : reservation == null
+            ? 'free'
+            : 'tableReserved')
       : session!.status == 'clearing'
       ? 'cleaning'
       : session!.status == 'closed' && session!.pendingCents == 0
@@ -165,6 +173,27 @@ class LiveTable {
       : session!.pendingCents > 0
       ? 'tablePaymentPending'
       : 'tableOpen';
+}
+
+class AaPartySnapshot {
+  AaPartySnapshot(Map<String, dynamic> value)
+    : reference = _ref(value['partyRef']),
+      capacity = _number(value['capacity']),
+      confirmedCount = _number(value['confirmedCount']),
+      admittedCount = _number(value['admittedCount']),
+      participants = (value['participants'] as List)
+          .map((p) => Map<String, dynamic>.from(_object(p)))
+          .toList() {
+    if (capacity < 1 ||
+        confirmedCount > capacity ||
+        admittedCount > confirmedCount ||
+        participants.length != confirmedCount) {
+      throw const FormatException();
+    }
+  }
+  final String reference;
+  final int capacity, confirmedCount, admittedCount;
+  final List<Map<String, dynamic>> participants;
 }
 
 /// One server transaction/page, not a claim of an atomic all-store snapshot.

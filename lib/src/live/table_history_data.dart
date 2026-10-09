@@ -137,6 +137,9 @@ class TableHistoryData {
           'maximumSeats': definition['maximumSeats'],
           'parentBarRef': live?.parentBarRef,
           'barSeatNumber': live?.barSeatNumber,
+          'aaParty': reservations
+              .where((r) => r['tableRef'] == ref)
+              .firstOrNull?['aaParty'],
           'reservation': reservations
               .where((r) => r['tableRef'] == ref)
               .firstOrNull,
