@@ -95,7 +95,12 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final auth = TableAuth(
-      permissions: ['workbench.read', 'table.open', 'orders.read'],
+      permissions: [
+        'workbench.read',
+        'table.open',
+        'orders.read',
+        'orders.create',
+      ],
     );
     final reply = tableFixture();
     final table = reply['result']['tables'][0];
@@ -135,6 +140,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('消费明细'), findsOneWidget);
+    final orderButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, '点单'),
+    );
+    expect(orderButton.onPressed, isNotNull);
     expect(auth.openingReads, 0);
     await tester.tap(find.byKey(const ValueKey('table-members-open')));
     await tester.pumpAndSettle();

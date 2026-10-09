@@ -963,7 +963,8 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                         ],
                       );
                     }
-                    if (focused?.isBarSeat == true &&
+                    if ((focused?.isBarSeat == true ||
+                            focused?.aaParty != null) &&
                         focused?.session == null) {
                       final seat = focused!;
                       final menu = widget.menuVisible ?? emptyBarMenu;
@@ -1005,33 +1006,48 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                                 emptySeat: true,
                                 checkoutAllowed: false,
                                 fillHeight: true,
-                                headerBuilder: (filter) => BarBillHeader(
-                                  number: seat.barSeatNumber!,
-                                  color: Colors.white,
-                                  language: widget.language,
-                                  filter: filter,
-                                  voucherAction: VoucherScanButton(
-                                    auth: widget.auth,
-                                    language: widget.language,
-                                    tableName: seat.name,
-                                    tableRef: seat.reference,
-                                  ),
-                                  member: IconButton(
-                                    key: const ValueKey('empty-bar-member'),
-                                    onPressed: () => linkEmptyBarMember(seat),
-                                    icon: const CircleAvatar(
-                                      radius: 16,
-                                      backgroundColor: Color(0xffdedede),
-                                      child: Icon(
-                                        Icons.person,
-                                        color: Color(0xff9e9e9e),
-                                        size: 23,
+                                headerBuilder: (filter) => seat.aaParty != null
+                                    ? historyBillHeader(
+                                        seat,
+                                        filter,
+                                        memberOverride: aaMemberButton(seat),
+                                      )
+                                    : BarBillHeader(
+                                        number: seat.barSeatNumber!,
+                                        color: Colors.white,
+                                        language: widget.language,
+                                        filter: filter,
+                                        voucherAction: VoucherScanButton(
+                                          auth: widget.auth,
+                                          language: widget.language,
+                                          tableName: seat.name,
+                                          tableRef: seat.reference,
+                                        ),
+                                        member: IconButton(
+                                          key: const ValueKey(
+                                            'empty-bar-member',
+                                          ),
+                                          onPressed: () =>
+                                              linkEmptyBarMember(seat),
+                                          icon: const CircleAvatar(
+                                            radius: 16,
+                                            backgroundColor: Color(0xffdedede),
+                                            child: Icon(
+                                              Icons.person,
+                                              color: Color(0xff9e9e9e),
+                                              size: 23,
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                ),
                                 orderAction: OutlinedButton(
-                                  onPressed: () => showMenu(!menu),
+                                  onPressed:
+                                      widget.auth.session?.permissions.contains(
+                                            'orders.create',
+                                          ) ==
+                                          true
+                                      ? () => showMenu(!menu)
+                                      : null,
                                   child: Text(
                                     menu ? t('ordersBack') : t('ordering'),
                                   ),
@@ -1193,37 +1209,6 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                                     ][widget.language.index],
                                   ),
                                 ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-                    if (focused?.aaParty != null && focused?.session == null) {
-                      final table = focused!;
-                      return Row(
-                        children: [
-                          Expanded(flex: 2, child: grid),
-                          const VerticalDivider(width: 1),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: TableBillPanel(
-                                key: ValueKey('aa-bill-${table.reference}'),
-                                auth: widget.auth,
-                                language: widget.language,
-                                tableRef: table.reference,
-                                sessionRef: '',
-                                revision: realtimeRevision,
-                                emptySeat: true,
-                                checkoutAllowed: false,
-                                changesAllowed: false,
-                                fillHeight: true,
-                                headerBuilder: (filter) => historyBillHeader(
-                                  table,
-                                  filter,
-                                  memberOverride: aaMemberButton(table),
-                                ),
                               ),
                             ),
                           ),
@@ -1732,11 +1717,11 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
     if (opening.activeSessionRef == null) {
       final result = await widget.auth.submitOpening(
         context: opening,
-        partySize: 1,
+        partySize: table.aaParty?.capacity ?? 1,
         memberRefs: [],
         arrivalConfirmed: true,
         reservationChecked: true,
-        selectedRule: {'mode': 'manual'},
+        selectedRule: {'mode': table.aaParty == null ? 'manual' : 'aa'},
       );
       if (result.state != OpeningLookupState.confirmed)
         throw StateError('BAR_OPENING_PENDING');
