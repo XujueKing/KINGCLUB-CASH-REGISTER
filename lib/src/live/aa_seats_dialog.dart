@@ -50,8 +50,20 @@ class AaSeatsDialog extends StatelessWidget {
                       ? party.participants[i]
                       : null;
                   final photo = member?['avatarBase64'];
+                  final gender = member?['gender'];
+                  final placeholder = Icon(
+                    gender == 1
+                        ? Icons.male
+                        : gender == 2
+                        ? Icons.female
+                        : member != null
+                        ? Icons.person_outline
+                        : i < (party.capacity + 1) ~/ 2
+                        ? Icons.male
+                        : Icons.female,
+                  );
                   return SizedBox(
-                    width: 64,
+                    width: party.capacity <= 8 ? 112 : 88,
                     child: Column(
                       children: [
                         Container(
@@ -68,14 +80,9 @@ class AaSeatsDialog extends StatelessWidget {
                               ? Image.memory(
                                   base64Decode(photo),
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
-                                      const Icon(Icons.person),
+                                  errorBuilder: (_, _, _) => placeholder,
                                 )
-                              : Icon(
-                                  member == null
-                                      ? Icons.event_seat
-                                      : Icons.person,
-                                ),
+                              : placeholder,
                         ),
                         const SizedBox(height: 4),
                         Text(
