@@ -19,6 +19,44 @@ LiveOrder order(String ref, String status, int served, {int price = 600}) {
 }
 
 void main() {
+  test('pack cent allocation groups six bottles while retaining both serving lines', () {
+    LiveOrder pack(String ref, int quantity, int price, String offer) {
+      final data =
+          orderFixture()['result']['orders'][0] as Map<String, dynamic>;
+      data['orderRef'] = ref;
+      data['totalCents'] = quantity * price;
+      final item = data['items'][0] as Map<String, dynamic>;
+      item.addAll({
+        'quantity': quantity,
+        'priceCents': price,
+        'subtotalCents': quantity * price,
+        'servedQuantity': 0,
+        'remainingQuantity': quantity,
+      });
+      item['snapshot']['salePack'] = {
+        'productRef': offer,
+        'stockUnits': 6,
+        'packQuantity': 1,
+        'packPriceCents': 14000,
+        'originalPackPriceCents': 14000,
+        'specifications': item['snapshot']['specifications'],
+        'selectionRef': offer,
+        'specialPrice': 0,
+      };
+      return LiveOrder(data);
+    }
+
+    final groups = groupBillProducts([
+      pack('D00000000001', 2, 2334, 'beer_U06'),
+      pack('D00000000002', 4, 2333, 'beer_U06'),
+      pack('D00000000003', 2, 2334, 'beer_U12'),
+    ]);
+    expect(groups.length, 2);
+    final half = groups.singleWhere((g) => g.quantity == 6);
+    expect(half.totalCents, 14000);
+    expect(half.remaining, 6);
+    expect(half.mixedPrices, true);
+  });
   test(
     'special price identity keeps the same SKU separate from normal orders',
     () {

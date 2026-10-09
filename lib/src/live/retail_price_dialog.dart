@@ -11,10 +11,12 @@ class RetailPriceDialog extends StatefulWidget {
     required this.product,
     required this.language,
     required this.save,
+    this.savePack,
   });
   final Map<String, dynamic> product;
   final UiLanguage language;
   final Future<bool> Function(int cents) save;
+  final Future<bool> Function(String unitRef, int cents)? savePack;
   @override
   State<RetailPriceDialog> createState() => _RetailPriceDialogState();
 }
@@ -24,6 +26,15 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
   late String amount;
   bool fresh = true, busy = false;
   String? error;
+  Map<String, dynamic>? selectedUnit;
+  List<Map<String, dynamic>> get units =>
+      ((widget.product['saleUnits'] as Map?)?['units'] as List? ?? [])
+          .map((v) => Map<String, dynamic>.from(v as Map))
+          .toList();
+  dynamic get currentPrice =>
+      selectedUnit?['priceCents'] ?? widget.product['priceCents'];
+  int get stockUnits => (selectedUnit?['stockUnits'] as int?) ?? 1;
+  dynamic suggested(dynamic cents) => cents is num ? cents * stockUnits : null;
   String t(String zh, String en, String tw, String th) =>
       [zh, en, tw, th][widget.language.index];
   String name(dynamic value) => value is Map
@@ -35,8 +46,11 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
   @override
   void initState() {
     super.initState();
-    amount = ((widget.product['priceCents'] as num? ?? 0) / 100)
-        .toStringAsFixed(2);
+    if (widget.savePack != null &&
+        (widget.product['saleUnits'] as Map?)?['hideSingle'] == true) {
+      selectedUnit = units.firstOrNull;
+    }
+    amount = ((currentPrice as num? ?? 0) / 100).toStringAsFixed(2);
   }
 
   int? get cents {
@@ -69,7 +83,9 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
     setState(() => busy = true);
     bool saved = false;
     try {
-      saved = await widget.save(value);
+      saved = selectedUnit == null
+          ? await widget.save(value)
+          : await widget.savePack!(selectedUnit!['unitRef'] as String, value);
     } catch (_) {
       /* Never show credentials or raw server messages. */
     }
@@ -155,8 +171,58 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
                               ),
                             ),
                             const SizedBox(height: 16),
+                            if (widget.savePack != null && units.isNotEmpty)
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if ((widget.product['saleUnits']
+                                          as Map?)?['hideSingle'] !=
+                                      true)
+                                    ChoiceChip(
+                                      label: Text(
+                                        t('单瓶', 'Single bottle', '單瓶', '1 ขวด'),
+                                      ),
+                                      selected: selectedUnit == null,
+                                      onSelected: busy
+                                          ? null
+                                          : (_) => setState(() {
+                                              selectedUnit = null;
+                                              amount =
+                                                  ((currentPrice as num) / 100)
+                                                      .toStringAsFixed(2);
+                                              fresh = true;
+                                            }),
+                                    ),
+                                  for (final unit in units)
+                                    ChoiceChip(
+                                      key: ValueKey(
+                                        'retail-unit-${unit['unitRef']}',
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                        horizontal: 8,
+                                      ),
+                                      label: Text(name(unit['specifications'])),
+                                      selected:
+                                          selectedUnit?['unitRef'] ==
+                                          unit['unitRef'],
+                                      onSelected: busy
+                                          ? null
+                                          : (_) => setState(() {
+                                              selectedUnit = unit;
+                                              amount =
+                                                  ((currentPrice as num) / 100)
+                                                      .toStringAsFixed(2);
+                                              fresh = true;
+                                              error = null;
+                                            }),
+                                    ),
+                                ],
+                              ),
+                            if (units.isNotEmpty) const SizedBox(height: 16),
                             Text(
-                              '${t('当前本店售价', 'Current store price', '目前本店售價', 'ราคาขายปัจจุบัน')}  ${money(widget.product['priceCents'])}',
+                              '${t('当前本店售价', 'Current store price', '目前本店售價', 'ราคาขายปัจจุบัน')}  ${money(currentPrice)}',
                               style: const TextStyle(fontSize: 19),
                             ),
                             const SizedBox(height: 20),
@@ -220,7 +286,7 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
                                       children: [
                                         Expanded(
                                           child: Text(
-                                            '${t('建议零售价', 'Suggested retail', '建議零售價', 'ราคาขายแนะนำ')}  ${money(q['suggestedRetailCents'])}',
+                                            '${t('建议零售价', 'Suggested retail', '建議零售價', 'ราคาขายแนะนำ')}  ${money(suggested(q['suggestedRetailCents']))}',
                                           ),
                                         ),
                                         if (q['suggestedRetailCents'] is num &&
@@ -231,8 +297,9 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
                                                 ? null
                                                 : () => setState(() {
                                                     amount =
-                                                        ((q['suggestedRetailCents']
-                                                                    as num) /
+                                                        ((suggested(
+                                                                  q['suggestedRetailCents'],
+                                                                ) as num) /
                                                                 100)
                                                             .toStringAsFixed(2);
                                                     fresh = true;

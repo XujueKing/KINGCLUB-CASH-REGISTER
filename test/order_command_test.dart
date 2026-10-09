@@ -135,6 +135,75 @@ Future<OrderRequestResult> submit(
 );
 
 void main() {
+  test(
+    'pack receipt preserves the exact total across physical bottle orders',
+    () {
+      final product = CatalogProduct({
+        ...c.product(),
+        'productRef': 'product-000_U06',
+        'stockUnits': 6,
+        'priceCents': 14000,
+        'available': 3,
+        'inventoryKnown': true,
+        'soldOut': false,
+      });
+      final pending = PendingOrder.prepare(
+        identity: identity,
+        context: m.parse(m.contextData()),
+        memberRef: 'member-000',
+        items: [OrderSelection(product, 1)],
+        now: a.now,
+      );
+      expect((pending.params['items'] as List).single['expectedStockUnits'], 6);
+      final answer = {
+        ...receipt(pending.params),
+        'totalCents': 4668,
+        'packOrders': true,
+        'batchTotalCents': 14000,
+        'batchOrders': [
+          {'orderRef': 'D00000000001', 'totalCents': 4668},
+          {'orderRef': 'D00000000002', 'totalCents': 9332},
+        ],
+      };
+      expect(
+        OrderRequestResult.parse(
+          {'result': answer},
+          pending,
+          submission: true,
+        ).state,
+        OrderRequestState.confirmed,
+      );
+      expect(
+        () => OrderRequestResult.parse(
+          {
+            'result': {...answer, 'batchTotalCents': 14001},
+          },
+          pending,
+          submission: true,
+        ),
+        fails('ORDER_RECEIPT_MISMATCH'),
+      );
+      final wrong = {
+        ...answer,
+        'batchOrders': [
+          {'orderRef': 'D00000000001', 'totalCents': 4668},
+          {'orderRef': 'D00000000001', 'totalCents': 9332},
+        ],
+      };
+      expect(
+        () => OrderRequestResult.parse(
+          {'result': wrong},
+          pending,
+          submission: true,
+        ),
+        fails('ORDER_RECEIPT_MISMATCH'),
+      );
+      final restored = PendingOrder.decode(
+        jsonDecode(jsonEncode(pending.encode())),
+      );
+      expect(restored.params, pending.params);
+    },
+  );
   test('complimentary draft retains expense owner and confirms a zero-money receipt', () {
     final free = OrderSelection(
       selection().single.product,

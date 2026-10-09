@@ -37,6 +37,7 @@ class OrderSelection {
     if (!{'prepay', 'postpay'}.contains(paymentTiming) ||
         quantity < 1 ||
         quantity > 1000 ||
+        quantity * product.stockUnits > 1000 ||
         (paymentTiming == 'postpay' &&
             (!product.inventoryKnown || quantity > product.available))) {
       throw const CcsopFailure('ORDERING_OUT_OF_STOCK');
@@ -140,6 +141,8 @@ class PendingOrder {
                 'quantity': line.quantity,
                 'expectedRevision': line.product.revision,
                 'expectedPriceCents': line.product.priceCents,
+                if (line.product.stockUnits > 1)
+                  'expectedStockUnits': line.product.stockUnits,
                 if (line.specialPrice) 'unitPriceCents': line.unitPriceCents,
                 if (line.specialPrice) 'selectionRef': line.selectionRef,
                 if (line.expenseOwnerUserAccount != null)
@@ -190,6 +193,7 @@ class PendingOrder {
         final item = _map(row);
         if (item.length !=
                 (item.containsKey('unitPriceCents') ? 6 : 4) +
+                    (item.containsKey('expectedStockUnits') ? 1 : 0) +
                     (item.containsKey('expenseOwnerUserAccount') ? 1 : 0) +
                     (item.containsKey('authorizationRef') ? 1 : 0) ||
             (item.containsKey('expenseOwnerUserAccount') &&
@@ -205,6 +209,13 @@ class PendingOrder {
             !_integer(item['expectedPriceCents'], 1, 100000000)) {
           throw const FormatException();
         }
+        if (item.containsKey('expectedStockUnits') &&
+            (!_integer(item['expectedStockUnits'], 2, 24) ||
+                (item['quantity'] as int) *
+                        (item['expectedStockUnits'] as int) >
+                    1000)) {
+          throw const FormatException();
+        }
         total +=
             (item['quantity'] as int) *
             ((item['unitPriceCents'] ?? item['expectedPriceCents']) as int);
@@ -214,6 +225,8 @@ class PendingOrder {
             'quantity': item['quantity'],
             'expectedRevision': item['expectedRevision'],
             'expectedPriceCents': item['expectedPriceCents'],
+            if (item.containsKey('expectedStockUnits'))
+              'expectedStockUnits': item['expectedStockUnits'],
             if (item.containsKey('unitPriceCents'))
               'unitPriceCents': item['unitPriceCents'],
             if (item.containsKey('unitPriceCents'))
@@ -345,6 +358,30 @@ class OrderRequestResult {
           (line['quantity'] as int) * (line['unitPriceCents'] as int),
       ];
       final batch = receipt['batchOrders'];
+      final packed = requestLines.any(
+        (line) => line.containsKey('expectedStockUnits'),
+      );
+      if (packed) {
+        if (receipt['packOrders'] != true) throw const FormatException();
+        expectedAmounts.clear();
+        if (batch == null) {
+          expectedAmounts.add(pending.totalCents);
+        } else {
+          if (batch is! List || batch.length < 2 || batch.length > 150)
+            throw const FormatException();
+          for (final row in batch) {
+            final amount = _map(row)['totalCents'];
+            if (!_integer(amount, 0, 100000000)) throw const FormatException();
+            expectedAmounts.add(amount as int);
+          }
+          if (expectedAmounts.fold<int>(0, (n, amount) => n + amount) !=
+              pending.totalCents) {
+            throw const FormatException();
+          }
+        }
+      } else if (receipt.containsKey('packOrders')) {
+        throw const FormatException();
+      }
       if (expectedAmounts.length > 1) {
         if (batch is! List ||
             batch.length != expectedAmounts.length ||
@@ -368,7 +405,8 @@ class OrderRequestResult {
       } else if (batch != null || receipt.containsKey('batchTotalCents')) {
         throw const FormatException();
       }
-      if (receipt.length != (expectedAmounts.length > 1 ? 13 : 11) ||
+      if (receipt.length !=
+              (expectedAmounts.length > 1 ? 13 : 11) + (packed ? 1 : 0) ||
           receipt['requestId'] != pending.requestId ||
           receipt['storeRef'] != pending.storeRef ||
           receipt['tableRef'] != pending.tableRef ||

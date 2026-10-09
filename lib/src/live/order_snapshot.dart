@@ -55,6 +55,9 @@ class OrderItem {
   OrderItem(Map<String, dynamic> value, {String? storeRef})
     : thumbnailPath = productThumbnail(value['bottleMaterial'], storeRef ?? ''),
       productRef = _ref(value['productRef']),
+      salePack = _map(value['snapshot'])['salePack'] == null
+          ? null
+          : _map(_map(value['snapshot'])['salePack']),
       expenseOwnerUserAccount =
           (_map(value['snapshot'])['pricing']
                   as Map?)?['expenseOwnerUserAccount']
@@ -88,6 +91,15 @@ class OrderItem {
       names = _localized(_map(value['snapshot'])['names']),
       specifications = _localized(_map(value['snapshot'])['specifications']) {
     _positive(_map(value['snapshot'])['revision']);
+    if (salePack != null) {
+      _ref(salePack!['productRef']);
+      _ref(salePack!['selectionRef']);
+      _positive(salePack!['stockUnits'], 24);
+      _positive(salePack!['packQuantity'], 1000);
+      _amount(salePack!['packPriceCents'], 100000000);
+      _positive(salePack!['originalPackPriceCents'], 100000000);
+      _localized(salePack!['specifications']);
+    }
     if (pricingRef != null) {
       final pricing = _map(_map(value['snapshot'])['pricing']);
       if (pricing.length !=
@@ -121,10 +133,14 @@ class OrderItem {
   }
   final String productRef;
   final String? pricingRef;
+  final Map<String, dynamic>? salePack;
   final String? expenseOwnerUserAccount;
   String? authorizationRef;
-  String get groupingRef =>
-      pricingRef == null ? productRef : '$productRef/$pricingRef';
+  String get groupingRef => pricingRef == null
+      ? (salePack == null
+            ? productRef
+            : '$productRef/${salePack!['productRef']}')
+      : '$productRef/$pricingRef';
   bool get specialPrice => pricingRef != null;
   final String? thumbnailPath;
   final int quantity, priceCents, originalPriceCents, subtotalCents;
@@ -140,7 +156,9 @@ class OrderItem {
   bool get servingKnown => servedQuantity != null;
   final List<String> names, specifications;
   String name(UiLanguage language) => names[language.index];
-  String specification(UiLanguage language) => specifications[language.index];
+  String specification(UiLanguage language) => salePack == null
+      ? specifications[language.index]
+      : _localized(salePack!['specifications'])[language.index];
 }
 
 int _epoch(Object? value) {

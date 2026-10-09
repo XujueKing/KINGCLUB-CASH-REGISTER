@@ -4,6 +4,82 @@ import 'package:kingclub_cash_register/src/live/retail_price_dialog.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 
 void main() {
+  testWidgets(
+    'pack selector edits only the chosen pack and retains supplier bottle cost',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      String? selected;
+      int? saved;
+      final product = {
+        'names': {'zh-CN': '测试啤酒'},
+        'specifications': {'zh-CN': '330ml'},
+        'priceCents': 2300,
+        'quotes': [
+          {
+            'supplierName': '测试供应商',
+            'specification': '330ml',
+            'quoteCents': 600,
+            'quoteUnit': '瓶',
+            'unitCostCents': 600,
+            'suggestedRetailCents': 2500,
+          },
+        ],
+        'saleUnits': {
+          'hideSingle': true,
+          'units': [
+            {
+              'unitRef': 'U06',
+              'stockUnits': 6,
+              'priceCents': 14000,
+              'specifications': {'zh-CN': '半打（6瓶）'},
+            },
+            {
+              'unitRef': 'U12',
+              'stockUnits': 12,
+              'priceCents': 25800,
+              'specifications': {'zh-CN': '一打（12瓶）'},
+            },
+          ],
+        },
+      };
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RetailPriceDialog(
+              product: product,
+              language: UiLanguage.zh,
+              save: (_) async => throw StateError('Must not edit bottle price'),
+              savePack: (ref, cents) async {
+                selected = ref;
+                saved = cents;
+                return false;
+              },
+            ),
+          ),
+        ),
+      );
+      expect(find.text('¥ 140.00'), findsOneWidget);
+      expect(find.textContaining('¥ 6.00'), findsNWidgets(2));
+      expect(find.textContaining('¥ 150.00'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('retail-unit-U12')));
+      await tester.pump();
+      expect(find.text('¥ 258.00'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('retail-key-3')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('retail-key-0')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('retail-key-0')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('retail-price-save')));
+      await tester.pumpAndSettle();
+      expect(selected, 'U12');
+      expect(saved, 30000);
+      expect(product['priceCents'], 2300);
+    },
+  );
   final product = <String, dynamic>{
     'productRef': 'test-wine',
     'revision': 2,

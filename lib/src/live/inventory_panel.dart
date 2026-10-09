@@ -381,7 +381,12 @@ class _InventoryPanelState extends State<InventoryPanel> {
         final known = raw.contains('INVENTORY_') || raw.contains('CASHIER_');
         setState(() {
           error = raw.contains('INVENTORY_PRICE_CHANGED')
-              ? l('售价已被更新，请刷新后重新修改', 'Price changed. Refresh before editing again.', '售價已更新，請重新整理後修改', 'ราคาเปลี่ยนแล้ว กรุณาโหลดใหม่ก่อนแก้ไข')
+              ? l(
+                  '售价已被更新，请刷新后重新修改',
+                  'Price changed. Refresh before editing again.',
+                  '售價已更新，請重新整理後修改',
+                  'ราคาเปลี่ยนแล้ว กรุณาโหลดใหม่ก่อนแก้ไข',
+                )
               : raw.contains('INVENTORY_COST_REQUIRED')
               ? l(
                   '请先补齐每项商品的进货价格',
@@ -1735,10 +1740,27 @@ class _InventoryPanelState extends State<InventoryPanel> {
 
   Future<void> retailPrice(Map<String, dynamic> product) async {
     final snapshot = Map<String, dynamic>.from(product);
-    await showDialog<void>(context: context, barrierDismissible: false,
-      builder: (_) => RetailPriceDialog(product: snapshot, language: widget.language,
-        save: (cents) => submit({'action':'retail_price','productRef':snapshot['productRef'],
-          'revision':snapshot['revision'],'priceCents':cents})));
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RetailPriceDialog(
+        product: snapshot,
+        language: widget.language,
+        savePack: (unitRef, cents) => submit({
+          'action': 'retail_price',
+          'productRef': snapshot['productRef'],
+          'revision': snapshot['revision'],
+          'priceCents': cents,
+          'saleUnitRef': unitRef,
+        }),
+        save: (cents) => submit({
+          'action': 'retail_price',
+          'productRef': snapshot['productRef'],
+          'revision': snapshot['revision'],
+          'priceCents': cents,
+        }),
+      ),
+    );
   }
 
   Widget stockList() => Row(
@@ -1874,11 +1896,28 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       ],
                       const SizedBox(height: 20),
                       if (current!['priceCents'] is num) ...[
-                        label('${l('本店零售价', 'Store retail price', '本店零售價', 'ราคาขายของร้าน')}  ${money(current!['priceCents'])}', size: 20, weight: FontWeight.bold),
+                        label(
+                          '${l('本店零售价', 'Store retail price', '本店零售價', 'ราคาขายของร้าน')}  ${money(current!['priceCents'])}',
+                          size: 20,
+                          weight: FontWeight.bold,
+                        ),
                         const SizedBox(height: 12),
-                        button(l('修改零售价', 'Edit retail price', '修改零售價', 'แก้ไขราคาขาย'),
-                          !working && pending == null && widget.auth.session?.permissions.contains('price.adjust') == true
-                          ? () => retailPrice(current!) : null),
+                        button(
+                          l(
+                            '修改零售价',
+                            'Edit retail price',
+                            '修改零售價',
+                            'แก้ไขราคาขาย',
+                          ),
+                          !working &&
+                                  pending == null &&
+                                  widget.auth.session?.permissions.contains(
+                                        'price.adjust',
+                                      ) ==
+                                      true
+                              ? () => retailPrice(current!)
+                              : null,
+                        ),
                         const SizedBox(height: 12),
                       ],
                       Wrap(
@@ -2308,7 +2347,12 @@ class _InventoryPanelState extends State<InventoryPanel> {
     ),
   );
   String actionName(String a) => switch (a) {
-    'retail_price' => l('零售价修改', 'Retail price change', '零售價修改', 'เปลี่ยนราคาขาย'),
+    'retail_price' => l(
+      '零售价修改',
+      'Retail price change',
+      '零售價修改',
+      'เปลี่ยนราคาขาย',
+    ),
     'opening' => l('首次清点', 'Opening count', '首次清點', 'นับเริ่มต้น'),
     'count' => l('盘点', 'Count', '盤點', 'ตรวจนับ'),
     'handover' => l('交接盘点', 'Handover', '交接盤點', 'ส่งมอบ'),

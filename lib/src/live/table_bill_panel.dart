@@ -1249,7 +1249,8 @@ class _TableBillPanelState extends State<TableBillPanel>
               : true,
         )
         .toList();
-    BillProductCard? draftFor(BillProductGroup group) => group.currency == 'CNY'
+    BillProductCard? draftFor(BillProductGroup group) =>
+        group.currency == 'CNY' && group.item.salePack == null
         ? drafts[group.item.pricingRef ?? group.productRef]
         : null;
     final canPay = [
@@ -1267,6 +1268,7 @@ class _TableBillPanelState extends State<TableBillPanel>
           if (!groups.any(
             (g) =>
                 g.currency == 'CNY' &&
+                g.item.salePack == null &&
                 (g.item.pricingRef ?? g.productRef) == entry.key,
           ))
             entry.value,
@@ -1387,10 +1389,12 @@ class _TableBillPanelState extends State<TableBillPanel>
               specification: group.item.specification(widget.language),
               quantity: group.quantity + (draftFor(group)?.quantity ?? 0),
               priceCents: group.item.priceCents,
-              priceLabel:
-                  group.mixedPrices ||
-                      (draftFor(group) != null &&
-                          group.item.priceCents != draftFor(group)!.priceCents)
+              priceLabel: group.item.salePack != null && !group.specialPrice
+                  ? '¥ ${formatCents(group.item.salePack!['packPriceCents'] as int)} / ${group.item.salePack!['stockUnits']}'
+                  : group.mixedPrices ||
+                        (draftFor(group) != null &&
+                            group.item.priceCents !=
+                                draftFor(group)!.priceCents)
                   ? t('billMixedPrices')
                   : null,
               totalCents: group.totalCents + (draftFor(group)?.totalCents ?? 0),
@@ -1413,22 +1417,30 @@ class _TableBillPanelState extends State<TableBillPanel>
                       (group.specialPrice
                           ? widget.onQuickAddSpecialProduct != null
                           : widget.onQuickAddProduct != null) &&
-                      (inventory[group.productRef]?.inventoryKnown ?? false) &&
+                      !(group.item.salePack != null && group.specialPrice) &&
+                      (inventory[group.item.salePack?['productRef'] ??
+                                  group.productRef]
+                              ?.inventoryKnown ??
+                          false) &&
                       (draftFor(group)?.quantity ?? 0) <
-                          inventory[group.productRef]!.available &&
+                          inventory[group.item.salePack?['productRef'] ??
+                                  group.productRef]!
+                              .available &&
                       (draftFor(group)?.quantity ?? 0) < 1000
                   ? (draftFor(group) != null
                         ? draftFor(group)!.onPlus
                         : group.specialPrice
                         ? () => widget.onQuickAddSpecialProduct!(
-                            inventory[group.productRef]!,
+                            inventory[group.item.salePack?['productRef'] ??
+                                group.productRef]!,
                             group.item.priceCents,
                             group.item.pricingRef!,
                             group.item.expenseOwnerUserAccount,
                             group.item.authorizationRef,
                           )
                         : () => widget.onQuickAddProduct!(
-                            inventory[group.productRef]!,
+                            inventory[group.item.salePack?['productRef'] ??
+                                group.productRef]!,
                           ))
                   : null,
               badges: status(
