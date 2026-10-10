@@ -47,7 +47,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
                     ? p['categoryRef'] == null
                     : p['categoryRef'] == category)) &&
             (stockFilter == 'all' ||
-                (stockFilter == 'empty'
+                (stockFilter == 'listed'
+                    ? isListed(p)
+                    : stockFilter == 'empty'
                     ? (p['available'] as num? ?? 0) <= 0
                     : p['lowStock'] == true || p['lowStock'] == 1)) &&
             '${name(p['names'])} ${name(p['specifications'])}'
@@ -146,6 +148,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
             children: [
               for (final s in [
                 ('all', l('所有库存', 'All stock', '所有庫存', 'สต็อกทั้งหมด')),
+                ('listed', l('已上架', 'Listed', '已上架', 'วางจำหน่าย')),
                 ('low', l('库存不足', 'Low stock', '庫存不足', 'สต็อกต่ำ')),
                 ('empty', l('无库存', 'Out of stock', '無庫存', 'สินค้าหมด')),
               ])
@@ -222,6 +225,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
       '${widget.auth.session?.base}|${widget.auth.session?.storeRef}|${widget.auth.session?.employeeRef}';
   bool get canWrite =>
       widget.auth.session?.permissions.contains('shift.manage') == true;
+  bool isListed(Map p) => p['listed'] == true || p['listed'] == 1;
+  bool get directListing =>
+      (data?['listingPermissions'] as Map?)?['direct'] == true ||
+      (data?['listingPermissions'] as Map?)?['direct'] == 1;
   String get draftKey => 'inventory-draft:$identity';
   String uid() {
     final r = Random.secure(), b = List.generate(16, (_) => r.nextInt(256));
@@ -474,7 +481,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
         }
       });
       await saveDraft();
-      message(l('已保存', 'Saved', '已儲存', 'บันทึกแล้ว'));
+      message(
+        command['action'] == 'set_listing' &&
+                (v['receipt'] as Map?)?['status'] == 'pending'
+            ? l(
+                '已提交，等待手机审批',
+                'Submitted for mobile approval',
+                '已提交，等待手機審批',
+                'ส่งแล้ว รออนุมัติบนมือถือ',
+              )
+            : l('已保存', 'Saved', '已儲存', 'บันทึกแล้ว'),
+      );
       return true;
     } catch (e) {
       if (mounted && request == epoch) {
@@ -1967,36 +1984,161 @@ class _InventoryPanelState extends State<InventoryPanel> {
     );
   }
 
+  Widget stockTableRow(Map<String, dynamic> p, {bool header = false}) {
+    Widget cell(String text, int flex, {Color? color, bool right = false}) =>
+        Expanded(
+          flex: flex,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Align(
+              alignment: right ? Alignment.centerRight : Alignment.centerLeft,
+              child: label(
+                text,
+                size: header ? 13 : 14,
+                color: color ?? (header ? muted : green),
+                weight: header ? FontWeight.normal : FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+    return Row(
+      children: [
+        cell(
+          header
+              ? l('商品 / 规格', 'Product / size', '商品 / 規格', 'สินค้า / ขนาด')
+              : productName('${p['productRef']}'),
+          8,
+        ),
+        for (final entry in [
+          ('onHand', l('账面', 'On hand', '帳面', 'คงเหลือ')),
+          ('reserved', l('预留', 'Reserved', '預留', 'จอง')),
+          ('available', l('可售', 'Available', '可售', 'พร้อมขาย')),
+        ])
+          cell(
+            header ? entry.$2 : '${p[entry.$1] ?? 0}',
+            2,
+            color:
+                !header &&
+                    entry.$1 == 'available' &&
+                    (p[entry.$1] as num? ?? 0) <= 0
+                ? Colors.red
+                : null,
+          ),
+        cell(
+          header ? l('零售价', 'Retail', '零售價', 'ราคาขาย') : retailSummary(p),
+          4,
+          right: true,
+        ),
+        cell(
+          header
+              ? l('上架', 'Listing', '上架', 'จำหน่าย')
+              : p['listed'] == null
+              ? '—'
+              : isListed(p)
+              ? l('已上架', 'Listed', '已上架', 'จำหน่าย')
+              : l('未上架', 'Unlisted', '未上架', 'ไม่จำหน่าย'),
+          3,
+          color: !header && !isListed(p) ? muted : null,
+        ),
+      ],
+    );
+  }
+
+  Future<void> changeListing(bool listed) async {
+    final ref = selected, identity = cacheIdentity;
+    if (!await resolvePending() ||
+        !mounted ||
+        !identical(identity, cacheIdentity)) {
+      return;
+    }
+    final product = rows('products')
+        .where((p) => p['productRef'] == ref)
+        .firstOrNull;
+    if (product == null) return;
+    await submit({
+      'action': 'set_listing',
+      'productRef': ref,
+      'revision': product['revision'],
+      'listed': listed,
+    });
+    if (mounted &&
+        stockFilter == 'listed' &&
+        !visibleProducts.any((p) => p['productRef'] == selected)) {
+      setState(() => selected = '');
+    }
+  }
+
+  Widget listingControl(Map<String, dynamic> product) {
+    final request = product['listingRequest'];
+    final awaiting = request is Map;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          key: const ValueKey('inventory-listing-switch'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            l('上架销售', 'Listed for sale', '上架銷售', 'เปิดจำหน่าย'),
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            awaiting
+                ? l(
+                    '申请已提交，等待手机审批',
+                    'Awaiting mobile approval',
+                    '申請已提交，等待手機審批',
+                    'รออนุมัติบนมือถือ',
+                  )
+                : directListing
+                ? l(
+                    '直接设置本店上架状态',
+                    'Apply store listing',
+                    '直接設定本店上架狀態',
+                    'ตั้งสถานะจำหน่าย',
+                  )
+                : l(
+                    '修改后提交超级管理员审批',
+                    'Submit for superadministrator approval',
+                    '修改後提交超級管理員審批',
+                    'ส่งให้ผู้ดูแลอนุมัติ',
+                  ),
+            style: const TextStyle(fontSize: 12, color: muted),
+          ),
+          value: isListed(product),
+          onChanged: canWrite && !working && !awaiting
+              ? (v) => unawaited(changeListing(v))
+              : null,
+        ),
+        if (awaiting)
+          label(
+            (request['listed'] == true || request['listed'] == 1)
+                ? l(
+                    '申请上架 · 待审批',
+                    'Listing request · pending',
+                    '申請上架 · 待審批',
+                    'รออนุมัติเปิดขาย',
+                  )
+                : l(
+                    '申请下架 · 待审批',
+                    'Delisting request · pending',
+                    '申請下架 · 待審批',
+                    'รออนุมัติปิดขาย',
+                  ),
+            color: Colors.orange.shade800,
+          ),
+      ],
+    );
+  }
+
   Widget stockList() => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
-        flex: 3,
+        flex: 4,
         child: box(
           Column(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: label(
-                      l(
-                        '商品 / 规格',
-                        'Product / size',
-                        '商品 / 規格',
-                        'สินค้า / ขนาด',
-                      ),
-                      color: muted,
-                    ),
-                  ),
-                  for (final s in [
-                    l('账面', 'On hand', '帳面', 'คงคลัง'),
-                    l('预留', 'Reserved', '預留', 'จอง'),
-                    l('可售', 'Available', '可售', 'ขายได้'),
-                  ])
-                    Expanded(child: label(s, color: muted)),
-                ],
-              ),
+              stockTableRow({}, header: true),
               const Divider(),
               Expanded(
                 child: ListView(
@@ -2009,7 +2151,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                             '没有符合条件的商品',
                             'No matching products',
                             '沒有符合條件的商品',
-                            'ไม่มีสินค้าที่ตรงกัน',
+                            'ไม่พบสินค้า',
                           ),
                         ),
                       ),
@@ -2024,34 +2166,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               vertical: 15,
-                              horizontal: 8,
+                              horizontal: 4,
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  flex: 4,
-                                  child: label(
-                                    productName('${p['productRef']}'),
-                                    weight: FontWeight.w600,
-                                  ),
-                                ),
-                                for (final key in [
-                                  'onHand',
-                                  'reserved',
-                                  'available',
-                                ])
-                                  Expanded(
-                                    child: label(
-                                      '${p[key]}',
-                                      color:
-                                          key == 'available' &&
-                                              (p[key] as num) <= 0
-                                          ? Colors.red
-                                          : green,
-                                    ),
-                                  ),
-                              ],
-                            ),
+                            child: stockTableRow(p),
                           ),
                         ),
                       ),
@@ -2064,7 +2181,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
       ),
       const SizedBox(width: 14),
       Expanded(
-        flex: 2,
+        flex: 3,
         child: box(
           current == null
               ? Center(
@@ -2086,6 +2203,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                         size: 21,
                         weight: FontWeight.bold,
                       ),
+                      listingControl(current!),
                       if ((current!['policy'] as Map?)?['procurementQuote']
                           case final Map quote) ...[
                         const SizedBox(height: 10),
