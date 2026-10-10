@@ -1846,8 +1846,8 @@ class StaffAuthController extends ChangeNotifier {
     final timer = Stopwatch()..start();
     final raw=await api.call('K261006002017',{...command,'storeRef':identity.storeRef});
     debugPrint('cashier_inventory elapsed_ms=${timer.elapsedMilliseconds}');
-    _check(epoch);
-    if(!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    if(!_current(epoch))throw const CcsopFailure('SESSION_CHANGED',deliveryUncertain:true);
+    if(!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED',deliveryUncertain:true);
     final result=raw is Map?raw['result']:null;
     if(result is! Map||result['storeRef']!=identity.storeRef) throw const FormatException();
     return Map<String,dynamic>.from(result);

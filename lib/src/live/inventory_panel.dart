@@ -17,6 +17,7 @@ import 'supplier_catalog_dialog.dart';
 import 'purchase_batch_dialog.dart';
 import 'retail_price_dialog.dart';
 import 'workspace_read_cache.dart';
+import 'inventory_page_cache.dart';
 
 class InventoryPanel extends StatefulWidget {
   const InventoryPanel({
@@ -179,6 +180,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
   Timer? refreshTimer;
   Object? cacheIdentity;
   Object? credentialsIdentity;
+  final pageCache = const InventoryPageCache();
+  Future<void>? cacheRestore;
+  Future<void>? draftRestore;
+  Future<Map<String, dynamic>>? procurementRead;
+  String get displayScope {
+    final session = widget.auth.session;
+    final permissions = session?.permissions.toList() ?? [];
+    permissions.sort();
+    return '$identity|${permissions.join(',')}';
+  }
+
   void connectRealtime() {
     if (!widget.enableRealtime || widget.auth.busy) return;
     final session = widget.auth.session;
@@ -194,6 +206,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
   void onRealtime() {
     if (revision == realtime?.revision) return;
     revision = realtime?.revision ?? 0;
+    procurementRead = null;
+    if (data?['procurementProducts'] is List) {
+      data = {...data!}..remove('procurementProducts');
+    }
     refreshTimer?.cancel();
     refreshTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted && !working && !loading) unawaited(load());
@@ -251,18 +267,37 @@ class _InventoryPanelState extends State<InventoryPanel> {
     cacheIdentity = widget.auth.workspaceIdentity;
     credentialsIdentity = widget.auth.session;
     data = WorkspaceReadCache.read<Map<String, dynamic>>(
-      cacheIdentity, 'inventory:0', maxAge: const Duration(minutes: 5),
+      cacheIdentity,
+      'inventory:0',
+      maxAge: const Duration(minutes: 5),
     );
     widget.auth.addListener(authChanged);
     connectRealtime();
-    unawaited(restore());
+    cacheRestore = restoreDisplay();
+    draftRestore = restore();
     unawaited(load());
+  }
+
+  Future<void> restoreDisplay() async {
+    final oldScope = displayScope, oldIdentity = cacheIdentity;
+    if (data != null) return;
+    final saved = await pageCache.read(oldScope);
+    if (!mounted ||
+        oldScope != displayScope ||
+        !identical(oldIdentity, cacheIdentity) ||
+        data != null ||
+        saved == null)
+      return;
+    if (saved['storeRef'] != widget.auth.session?.storeRef) return;
+    setState(() => data = saved);
+    WorkspaceReadCache.put(cacheIdentity, 'inventory:0', saved);
   }
 
   void authChanged() {
     if (widget.auth.busy) return;
     connectRealtime();
-    if (scope == identity && identical(cacheIdentity, widget.auth.workspaceIdentity)) {
+    if (scope == identity &&
+        identical(cacheIdentity, widget.auth.workspaceIdentity)) {
       if (!identical(credentialsIdentity, widget.auth.session)) {
         credentialsIdentity = widget.auth.session;
         unawaited(load());
@@ -280,7 +315,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
     search.clear();
     countDraft.clear();
     pending = null;
-    unawaited(restore());
+    procurementRead = null;
+    cacheRestore = restoreDisplay();
+    draftRestore = restore();
     unawaited(load());
   }
 
@@ -332,21 +369,48 @@ class _InventoryPanelState extends State<InventoryPanel> {
     final identity = cacheIdentity;
     setState(() => loading = true);
     try {
+      if (data == null) await cacheRestore;
+      await draftRestore;
+      if (!mounted || request != epoch) return;
       final command = {
         'action': 'context',
         'before': before,
+        'view': 'stock',
+        if (before == 0 &&
+            data?['view'] == 'stock' &&
+            data?['version'] is String)
+          'knownVersion': data!['version'],
+        if (pending?['requestId'] is String)
+          'pendingRequestId': pending!['requestId'],
       };
       final v = identity == null
           ? await widget.auth.inventory(command)
           : await WorkspaceReadCache.readOnce<Map<String, dynamic>>(
-              identity, 'inventory:$before', () => widget.auth.inventory(command),
+              identity,
+              'inventory:$before',
+              () => widget.auth.inventory(command),
             );
       if (!mounted || request != epoch) return;
-      WorkspaceReadCache.put(identity, 'inventory:$before', v);
+      final next = (v['notModified'] == true || v['notModified'] == 1)
+          ? {...?data, ...v}
+          : v;
+      if (v['notModified'] != true && v['notModified'] != 1)
+        procurementRead = null;
+      if (next['products'] is! List)
+        throw const FormatException('Inventory display missing');
+      final status = v['pendingStatus'];
+      final acknowledged =
+          status is Map &&
+          status['requestId'] == pending?['requestId'] &&
+          ['applied', 'cancelled'].contains(status['state']);
+      WorkspaceReadCache.put(identity, 'inventory:$before', next);
       setState(() {
-        data = v;
+        data = next;
         error = null;
+        if (acknowledged) pending = null;
       });
+      if (acknowledged) await saveDraft();
+      unawaited(pageCache.write(displayScope, next));
     } catch (failure) {
       debugPrint('cashier_inventory_read_failed: ${failure.runtimeType}');
       if (failure is CcsopFailure) {
@@ -389,6 +453,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final v = await widget.auth.inventory(pending!);
       if (!mounted || request != epoch) return false;
       WorkspaceReadCache.put(cacheIdentity, 'inventory:0', v);
+      unawaited(pageCache.write(displayScope, v));
       setState(() {
         data = v;
         pending = null;
@@ -403,7 +468,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
     } catch (e) {
       if (mounted && request == epoch) {
         final raw = e.toString();
-        final known = raw.contains('INVENTORY_') || raw.contains('CASHIER_');
+        final known =
+            raw.contains('INVENTORY_') ||
+            raw.contains('CASHIER_') ||
+            raw.contains('PROCUREMENT_') ||
+            (e is CcsopFailure &&
+                e.code == 'SESSION_REQUIRED' &&
+                !e.deliveryUncertain);
         setState(() {
           error = raw.contains('INVENTORY_PRICE_CHANGED')
               ? l(
@@ -475,6 +546,75 @@ class _InventoryPanelState extends State<InventoryPanel> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(value)));
     }
+  }
+
+  Future<bool> resolvePending() async {
+    final previous = pending;
+    if (previous == null) return true;
+    if (working) return false;
+    final request = epoch;
+    setState(() => working = true);
+    try {
+      final v = await widget.auth.inventory({
+        'action': 'resolve_pending',
+        'requestId': previous['requestId'],
+        'originalAction': previous['action'],
+        if (previous['productRef'] != null)
+          'productRef': previous['productRef'],
+        'cancelIfUnsent': true,
+      });
+      if (!mounted || request != epoch) return false;
+      final status = v['pendingStatus'];
+      if (status is! Map ||
+          status['requestId'] != previous['requestId'] ||
+          !['applied', 'cancelled'].contains(status['state']))
+        return false;
+      setState(() {
+        data = v;
+        pending = null;
+        error = null;
+      });
+      WorkspaceReadCache.put(cacheIdentity, 'inventory:0', v);
+      await saveDraft();
+      unawaited(pageCache.write(displayScope, v));
+      return true;
+    } catch (_) {
+      if (mounted)
+        message(
+          l(
+            '暂时无法核对，请稍后再试',
+            'Unable to check the previous operation',
+            '暫時無法核對，請稍後再試',
+            'ยังตรวจสอบไม่ได้ โปรดลองใหม่',
+          ),
+        );
+      return false;
+    } finally {
+      if (mounted && request == epoch) setState(() => working = false);
+    }
+  }
+
+  Future<void> ensureProcurementProducts() async {
+    if (data?['procurementProducts'] is List) return;
+    if (data?['view'] != 'stock') return;
+    final identity = cacheIdentity;
+    Map<String, dynamic> v;
+    try {
+      v = await (procurementRead ??= widget.auth.inventory({
+        'action': 'context',
+        'view': 'full',
+      }));
+    } catch (_) {
+      procurementRead = null;
+      rethrow;
+    }
+    if (!mounted || !identical(identity, cacheIdentity)) return;
+    setState(
+      () => data = {
+        ...?data,
+        'procurementProducts': v['procurementProducts'] ?? v['products'],
+      },
+    );
   }
 
   Widget label(
@@ -1016,6 +1156,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
     bool receiving = false,
   }) async {
     try {
+      await ensureProcurementProducts();
+      if (!mounted) return;
       final detail = batch['items'] is List
           ? batch
           : await widget.auth.inventory({
@@ -1935,12 +2077,16 @@ class _InventoryPanelState extends State<InventoryPanel> {
                             'แก้ไขราคาขาย',
                           ),
                           !working &&
-                                  pending == null &&
                                   widget.auth.session?.permissions.contains(
                                         'price.adjust',
                                       ) ==
                                       true
-                              ? () => retailPrice(current!)
+                              ? () async {
+                                  if (await resolvePending() &&
+                                      mounted &&
+                                      current != null)
+                                    await retailPrice(current!);
+                                }
                               : null,
                         ),
                         const SizedBox(height: 12),
@@ -2714,10 +2860,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   Expanded(
                     child: label(
                       l(
-                        '上次操作结果待确认，请重试原请求',
-                        'Last result unknown. Retry original request.',
-                        '上次操作結果待確認，請重試原請求',
-                        'ผลครั้งก่อนยังไม่ยืนยัน ลองคำขอเดิม',
+                        '上次操作未完成',
+                        'Previous operation needs checking',
+                        '上次操作未完成',
+                        'ต้องตรวจสอบรายการก่อนหน้า',
                       ),
                       color: Colors.orange.shade800,
                     ),
@@ -2733,6 +2879,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
                     }
                   }),
                 ],
+              ),
+            if (pending != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: button(
+                  l('重新编辑', 'Edit again', '重新編輯', 'แก้ไขใหม่'),
+                  working ? null : () => unawaited(resolvePending()),
+                ),
               ),
             Expanded(
               child: data == null
