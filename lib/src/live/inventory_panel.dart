@@ -18,6 +18,7 @@ import 'purchase_batch_dialog.dart';
 import 'retail_price_dialog.dart';
 import 'workspace_read_cache.dart';
 import 'inventory_page_cache.dart';
+import 'product_thumbnail.dart';
 
 class InventoryPanel extends StatefulWidget {
   const InventoryPanel({
@@ -38,36 +39,70 @@ class _InventoryPanelState extends State<InventoryPanel> {
       paper = Color(0xFFF5F4EF),
       muted = Color(0xFF748078);
   final search = TextEditingController();
+  int stockOffset = 0;
+  Map<String, dynamic>? stockIndexSource;
+  final stockIndex = <String, Map<String, dynamic>>{};
+  List<Map<String, dynamic>> indexedStockRows = [];
+  Map<String, dynamic> imageMaterials = {};
+  final imageReads = <String>{};
+  List<Map<String, dynamic>> get stockRows {
+    if (!identical(stockIndexSource, data)) {
+      stockIndexSource = data;
+      stockIndex.clear();
+      for (final p in [...rows('products'), ...rows('catalogProducts')]) {
+        stockIndex.putIfAbsent('${p['productRef']}', () => p);
+      }
+      indexedStockRows = stockIndex.values.toList();
+    }
+    return indexedStockRows;
+  }
+
+  bool isCandidate(Map p) => p['candidate'] == true || p['candidate'] == 1;
+  List<Map<String, dynamic>> get shownProducts {
+    final rows = visibleProducts;
+    if (stockOffset >= rows.length) stockOffset = 0;
+    return rows.skip(stockOffset).take(50).toList();
+  }
+
   String category = '', stockFilter = 'all', movementFilter = 'all';
-  List<Map<String, dynamic>> get visibleProducts => rows('products')
-      .where(
-        (p) =>
-            (category.isEmpty ||
-                (category == '_uncategorized'
-                    ? p['categoryRef'] == null
-                    : p['categoryRef'] == category)) &&
-            (stockFilter == 'all' ||
-                (stockFilter == 'listed'
-                    ? isListed(p)
-                    : stockFilter == 'empty'
-                    ? (p['available'] as num? ?? 0) <= 0
-                    : p['lowStock'] == true || p['lowStock'] == 1)) &&
-            '${name(p['names'])} ${name(p['specifications'])}'
-                .toLowerCase()
-                .contains(search.text.trim().toLowerCase()),
-      )
-      .toList();
-  void filterChanged(VoidCallback change) => setState(() {
-    change();
-    if (!visibleProducts.any((p) => p['productRef'] == selected)) selected = '';
-  });
+  List<Map<String, dynamic>> get visibleProducts =>
+      (tab == 0 ? stockRows : rows('products'))
+          .where(
+            (p) =>
+                (category.isEmpty ||
+                    (category == '_uncategorized'
+                        ? p['categoryRef'] == null
+                        : p['categoryRef'] == category)) &&
+                (stockFilter == 'all' ||
+                    (stockFilter == 'listed'
+                        ? isListed(p)
+                        : stockFilter == 'empty'
+                        ? (p['available'] as num? ?? 0) <= 0
+                        : p['lowStock'] == true || p['lowStock'] == 1)) &&
+                '${name(p['names'])} ${name(p['specifications'])}'
+                    .toLowerCase()
+                    .contains(search.text.trim().toLowerCase()),
+          )
+          .toList();
+  void filterChanged(VoidCallback change) {
+    setState(() {
+      change();
+      stockOffset = 0;
+      if (!visibleProducts.any((p) => p['productRef'] == selected)) {
+        selected = '';
+      }
+    });
+    unawaited(loadImages());
+  }
+
   Widget productFilters({bool categoryRail = false}) {
-    final categories = rows('categories')
-      ..sort(
-        (a, b) => (a['sortOrder'] as num? ?? 0).compareTo(
-          b['sortOrder'] as num? ?? 0,
-        ),
-      );
+    final categories =
+        [...rows('categories'), if (tab == 0) ...rows('catalogCategories')]
+          ..sort(
+            (a, b) => (a['sortOrder'] as num? ?? 0).compareTo(
+              b['sortOrder'] as num? ?? 0,
+            ),
+          );
     final options = <(String, String)>[
       ('', l('全部', 'All', '全部', 'ทั้งหมด')),
       for (final c in categories) ('${c['categoryRef']}', name(c['names'])),
@@ -247,7 +282,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
   }
 
   String productName(String ref) {
-    final p = rows('products').where((p) => p['productRef'] == ref).firstOrNull;
+    stockRows;
+    final p = stockIndex[ref];
     return p == null ? ref : '${name(p['names'])} ${name(p['specifications'])}';
   }
 
@@ -255,6 +291,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
       ? l('成本未知', 'Unknown cost', '成本未知', 'ไม่ทราบต้นทุน')
       : '¥ ${((c as num) / 100).toStringAsFixed(2)}';
   String retailSummary(Map<String, dynamic> product) {
+    if (isCandidate(product) || product['priceCents'] == 0) {
+      return l('未定价', 'Not priced', '未定價', 'ยังไม่ตั้งราคา');
+    }
     final config = product['saleUnits'] as Map?;
     final units = (config?['units'] as List? ?? []).whereType<Map>();
     if (config?['hideSingle'] == true && units.isNotEmpty) {
@@ -275,7 +314,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
   }
 
   Map<String, dynamic>? get current =>
-      rows('products').where((p) => p['productRef'] == selected).firstOrNull;
+      stockRows.where((p) => p['productRef'] == selected).firstOrNull;
   List<String> get locations =>
       (data?['locations'] as List? ?? []).cast<String>();
   @override
@@ -288,6 +327,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
       cacheIdentity,
       'inventory:0',
       maxAge: const Duration(minutes: 5),
+    );
+    imageMaterials = Map<String, dynamic>.from(
+      data?['imageMaterials'] as Map? ?? {},
     );
     widget.auth.addListener(authChanged);
     connectRealtime();
@@ -307,7 +349,12 @@ class _InventoryPanelState extends State<InventoryPanel> {
         saved == null)
       return;
     if (saved['storeRef'] != widget.auth.session?.storeRef) return;
-    setState(() => data = saved);
+    setState(() {
+      data = saved;
+      imageMaterials = Map<String, dynamic>.from(
+        saved['imageMaterials'] as Map? ?? {},
+      );
+    });
     WorkspaceReadCache.put(cacheIdentity, 'inventory:0', saved);
   }
 
@@ -330,6 +377,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
     selected = '';
     category = '';
     stockFilter = 'all';
+    stockOffset = 0;
+    imageMaterials.clear();
+    imageReads.clear();
     search.clear();
     countDraft.clear();
     pending = null;
@@ -428,7 +478,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
         if (acknowledged) pending = null;
       });
       if (acknowledged) await saveDraft();
-      unawaited(pageCache.write(displayScope, next));
+      unawaited(
+        pageCache.write(displayScope, {
+          ...next,
+          'imageMaterials': imageMaterials,
+        }),
+      );
+      unawaited(loadImages());
     } catch (failure) {
       debugPrint('cashier_inventory_read_failed: ${failure.runtimeType}');
       if (failure is CcsopFailure) {
@@ -471,7 +527,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final v = await widget.auth.inventory(pending!);
       if (!mounted || request != epoch) return false;
       WorkspaceReadCache.put(cacheIdentity, 'inventory:0', v);
-      unawaited(pageCache.write(displayScope, v));
+      unawaited(
+        pageCache.write(displayScope, {...v, 'imageMaterials': imageMaterials}),
+      );
       setState(() {
         data = v;
         pending = null;
@@ -608,7 +666,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
       });
       WorkspaceReadCache.put(cacheIdentity, 'inventory:0', v);
       await saveDraft();
-      unawaited(pageCache.write(displayScope, v));
+      unawaited(
+        pageCache.write(displayScope, {...v, 'imageMaterials': imageMaterials}),
+      );
       return true;
     } catch (_) {
       if (mounted)
@@ -646,6 +706,86 @@ class _InventoryPanelState extends State<InventoryPanel> {
         ...?data,
         'procurementProducts': v['procurementProducts'] ?? v['products'],
       },
+    );
+  }
+
+  Future<void> loadImages() async {
+    if (!mounted || data == null || widget.auth.busy) return;
+    final identity = cacheIdentity;
+    final ids =
+        shownProducts
+            .map((p) => p['materialFileId'])
+            .whereType<String>()
+            .toSet()
+          ..removeWhere((id) {
+            final material = imageMaterials[id];
+            final expires = material is Map
+                ? DateTime.tryParse('${material['expiresAt']}')
+                : null;
+            final valid =
+                imageMaterials.containsKey(id) &&
+                (material == null ||
+                    (expires?.isAfter(DateTime.now()) ?? false));
+            return valid || imageReads.contains(id);
+          });
+    if (ids.isEmpty) return;
+    imageReads.addAll(ids);
+    try {
+      final v = await widget.auth.inventory({
+        'action': 'product_images',
+        'materialFileIds': ids.toList(),
+      });
+      if (!mounted || !identical(identity, cacheIdentity)) return;
+      setState(() {
+        for (final id in ids) {
+          imageMaterials[id] = (v['materials'] as Map?)?[id];
+        }
+        data = {
+          ...?data,
+          'imageMaterials': {...imageMaterials},
+        };
+      });
+      WorkspaceReadCache.put(cacheIdentity, 'inventory:0', data!);
+      unawaited(pageCache.write(displayScope, data!));
+    } catch (failure) {
+      if (failure is CcsopFailure)
+        debugPrint('cashier_inventory_image_code: ${failure.code}');
+      // A failed image read must not block the stock list or mark an existing image as absent.
+    } finally {
+      imageReads.removeAll(ids);
+    }
+  }
+
+  Widget stockPreview(Map<String, dynamic> p) {
+    final id = p['materialFileId'];
+    final material = imageMaterials[id];
+    final path = productThumbnail(
+      material,
+      widget.auth.session?.storeRef ?? '',
+    );
+    final absent =
+        id == null || (imageMaterials.containsKey(id) && material == null);
+    return SizedBox(
+      width: 40,
+      height: 44,
+      child: absent
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.image_not_supported_outlined,
+                  size: 18,
+                  color: muted,
+                ),
+                Text(
+                  l('缺图', 'No image', '缺圖', 'ไม่มีภาพ'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10, color: muted),
+                ),
+              ],
+            )
+          : ProductThumbnail(path: path, base: widget.auth.session?.base),
     );
   }
 
@@ -2003,11 +2143,26 @@ class _InventoryPanelState extends State<InventoryPanel> {
         );
     return Row(
       children: [
-        cell(
-          header
-              ? l('商品 / 规格', 'Product / size', '商品 / 規格', 'สินค้า / ขนาด')
-              : productName('${p['productRef']}'),
-          8,
+        Expanded(
+          flex: 10,
+          child: header
+              ? label(
+                  l('商品 / 规格', 'Product / size', '商品 / 規格', 'สินค้า / ขนาด'),
+                  size: 13,
+                  color: muted,
+                )
+              : Row(
+                  children: [
+                    stockPreview(p),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: label(
+                        productName('${p['productRef']}'),
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
         ),
         for (final entry in [
           ('onHand', l('账面', 'On hand', '帳面', 'คงเหลือ')),
@@ -2155,7 +2310,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                           ),
                         ),
                       ),
-                    for (final p in visibleProducts)
+                    for (final p in shownProducts)
                       Material(
                         color: selected == p['productRef']
                             ? const Color(0xFFE4EEE8)
@@ -2165,7 +2320,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                               setState(() => selected = '${p['productRef']}'),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                              vertical: 15,
+                              vertical: 8,
                               horizontal: 4,
                             ),
                             child: stockTableRow(p),
@@ -2175,6 +2330,33 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   ],
                 ),
               ),
+              if (visibleProducts.length > 50)
+                Row(
+                  children: [
+                    IconButton(
+                      key: const ValueKey('inventory-stock-prev'),
+                      onPressed: stockOffset == 0
+                          ? null
+                          : () => filterPage(-50),
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: label(
+                          '${stockOffset + 1}–${min(stockOffset + 50, visibleProducts.length)} / ${visibleProducts.length}',
+                          color: muted,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      key: const ValueKey('inventory-stock-next'),
+                      onPressed: stockOffset + 50 >= visibleProducts.length
+                          ? null
+                          : () => filterPage(50),
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -2194,6 +2376,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
                     ),
                   ),
                 )
+              : isCandidate(current!)
+              ? candidateDetails(current!)
               : SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2304,6 +2488,51 @@ class _InventoryPanelState extends State<InventoryPanel> {
         ),
       ),
     ],
+  );
+
+  void filterPage(int delta) {
+    setState(() => stockOffset = max(0, stockOffset + delta));
+    unawaited(loadImages());
+  }
+
+  Widget candidateDetails(Map<String, dynamic> p) => SingleChildScrollView(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        label(
+          productName('${p['productRef']}'),
+          size: 21,
+          weight: FontWeight.bold,
+        ),
+        const SizedBox(height: 18),
+        label(
+          l(
+            '未上架 · 无库存',
+            'Unlisted · No stock',
+            '未上架 · 無庫存',
+            'ยังไม่ขาย · ไม่มีสต็อก',
+          ),
+          color: muted,
+        ),
+        const SizedBox(height: 18),
+        label(
+          l(
+            '采购备选商品，采购收货后计入库存；设置零售价并上架后可点单。',
+            'Procurement candidate. Receive stock, set a retail price and list to sell.',
+            '採購備選商品，採購收貨後計入庫存；設定零售價並上架後可點單。',
+            'สินค้าสำหรับจัดซื้อ รับสินค้า ตั้งราคาขายแล้วเปิดจำหน่าย',
+          ),
+          color: muted,
+          size: 15,
+        ),
+        const SizedBox(height: 24),
+        button(
+          l('采购', 'Purchase', '採購', 'ซื้อ'),
+          canWrite ? () => purchase(p) : null,
+          primary: true,
+        ),
+      ],
+    ),
   );
   Widget counts() => box(
     Column(
