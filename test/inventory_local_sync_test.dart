@@ -28,11 +28,15 @@ class SyncAuth extends InventoryAuth {
   final syncCalls = <Map<String, dynamic>>[];
   Completer<void>? gate;
   bool rejectPriceOnce = false;
+  bool failRecovery = false;
   static const version =
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   @override
   Future<Map<String, dynamic>> inventory(Map<String, dynamic> command) async {
     syncCalls.add(command);
+    if (command['action'] == 'resolve_pending' && failRecovery) {
+      throw const CcsopFailure('TRANSPORT_FAILED', deliveryUncertain: true);
+    }
     if (command['action'] == 'retail_price' && rejectPriceOnce) {
       rejectPriceOnce = false;
       throw const CcsopFailure(
@@ -92,6 +96,64 @@ Widget page(SyncAuth auth) => MaterialApp(
 );
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  for (final blocked in [false, true]) {
+    testWidgets(
+      'previous unknown save stays internal; new save recovery blocked=$blocked',
+      (tester) async {
+        tester.view.physicalSize = const Size(1274, 710);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final auth = SyncAuth()..failRecovery = blocked;
+        final identity =
+            '${auth.session.base}|${auth.session.storeRef}|${auth.session.employeeRef}';
+        const old = '00000000-0000-4000-8000-000000000042';
+        FlutterSecureStorage.setMockInitialValues({
+          'inventory-draft:$identity': jsonEncode({
+            'items': [],
+            'pending': {
+              'action': 'retail_price',
+              'requestId': old,
+              'productRef': 'wine',
+              'priceCents': 9900,
+              'revision': 1,
+            },
+          }),
+        });
+        await tester.pumpWidget(page(auth));
+        await tester.pumpAndSettle();
+        expect(find.text('上次操作未完成'), findsNothing);
+        expect(find.text('重新编辑'), findsNothing);
+        await tester.tap(find.textContaining('测试酒品').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('遗失'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('确定'));
+        await tester.pumpAndSettle();
+        final commands = auth.syncCalls;
+        expect(commands.where((c) => c['action'] == 'retail_price'), isEmpty);
+        expect(
+          commands.singleWhere(
+            (c) => c['action'] == 'resolve_pending',
+          )['requestId'],
+          old,
+        );
+        expect(
+          commands.where((c) => c['action'] == 'loss'),
+          hasLength(blocked ? 0 : 1),
+        );
+        if (!blocked) {
+          expect(
+            commands.indexWhere((c) => c['action'] == 'resolve_pending'),
+            lessThan(commands.indexWhere((c) => c['action'] == 'loss')),
+          );
+          expect(commands.last['requestId'], isNot(old));
+        }
+        await tester.pumpWidget(const SizedBox());
+        auth.dispose();
+      },
+    );
+  }
   testWidgets(
     'a rejected price can be saved again in the same touch dialog without a false pending lock',
     (tester) async {

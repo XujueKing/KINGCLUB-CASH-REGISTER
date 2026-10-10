@@ -509,15 +509,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
     if (working) return false;
     final request = epoch;
     if (pending != null && command['requestId'] != pending!['requestId']) {
-      message(
-        l(
-          '上一笔结果未确认，请先重试原操作',
-          'Retry the unresolved operation first',
-          '上一筆結果未確認，請先重試原操作',
-          'ลองรายการที่ยังไม่ยืนยันก่อน',
-        ),
-      );
-      return false;
+      // Resolve/fence the previous UUID before accepting a new save. Do not ask
+      // the operator to manage the internal recovery journal or replay a write.
+      if (!await resolvePending() || !mounted || request != epoch) return false;
     }
     setState(() => working = true);
     pending = {...command, 'requestId': command['requestId'] ?? uid()};
@@ -3248,40 +3242,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: label(error!, color: Colors.red),
-              ),
-            if (pending != null)
-              Row(
-                children: [
-                  Expanded(
-                    child: label(
-                      l(
-                        '上次操作未完成',
-                        'Previous operation needs checking',
-                        '上次操作未完成',
-                        'ต้องตรวจสอบรายการก่อนหน้า',
-                      ),
-                      color: Colors.orange.shade800,
-                    ),
-                  ),
-                  button(l('重试', 'Retry', '重試', 'ลองใหม่'), () {
-                    final p = {...pending!};
-                    if (p['action'] == 'borrow' || p['action'] == 'return') {
-                      unawaited(
-                        scan(l('重新扫码', 'Scan again', '重新掃碼', 'สแกนใหม่'), p),
-                      );
-                    } else {
-                      unawaited(submit(p));
-                    }
-                  }),
-                ],
-              ),
-            if (pending != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: button(
-                  l('重新编辑', 'Edit again', '重新編輯', 'แก้ไขใหม่'),
-                  working ? null : () => unawaited(resolvePending()),
-                ),
               ),
             Expanded(
               child: data == null
