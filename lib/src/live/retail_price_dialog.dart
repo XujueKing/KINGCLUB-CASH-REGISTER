@@ -12,11 +12,13 @@ class RetailPriceDialog extends StatefulWidget {
     required this.language,
     required this.save,
     this.savePack,
+    this.failureMessage,
   });
   final Map<String, dynamic> product;
   final UiLanguage language;
   final Future<bool> Function(int cents) save;
   final Future<bool> Function(String unitRef, int cents)? savePack;
+  final String? Function()? failureMessage;
   @override
   State<RetailPriceDialog> createState() => _RetailPriceDialogState();
 }
@@ -96,12 +98,14 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
     }
     setState(() {
       busy = false;
-      error = t(
-        '未保存，请关闭后查看操作提示',
-        'Not saved. Close to view the operation notice.',
-        '未儲存，請關閉後查看操作提示',
-        'ยังไม่บันทึก กรุณาปิดเพื่อดูรายละเอียด',
-      );
+      error =
+          widget.failureMessage?.call() ??
+          t(
+            '暂未保存，请重试',
+            'Not saved. Please try again.',
+            '暫未儲存，請重試',
+            'ยังไม่บันทึก กรุณาปิดเพื่อดูรายละเอียด',
+          );
     });
   }
 

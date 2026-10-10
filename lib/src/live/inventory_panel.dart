@@ -247,6 +247,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
   String money(dynamic c) => c == null
       ? l('成本未知', 'Unknown cost', '成本未知', 'ไม่ทราบต้นทุน')
       : '¥ ${((c as num) / 100).toStringAsFixed(2)}';
+  String retailSummary(Map<String, dynamic> product) {
+    final config = product['saleUnits'] as Map?;
+    final units = (config?['units'] as List? ?? []).whereType<Map>();
+    if (config?['hideSingle'] == true && units.isNotEmpty) {
+      return units
+          .map((u) => '${name(u['specifications'])} ${money(u['priceCents'])}')
+          .join(' · ');
+    }
+    return money(product['priceCents']);
+  }
+
   String time(dynamic value) {
     final d = DateTime.tryParse('$value')
         ?.toUtc()
@@ -472,9 +483,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
             raw.contains('INVENTORY_') ||
             raw.contains('CASHIER_') ||
             raw.contains('PROCUREMENT_') ||
+            (e is CcsopFailure && e.code == 'PARAM_SCHEMA_VALIDATION_FAILED') ||
             (e is CcsopFailure &&
                 e.code == 'SESSION_REQUIRED' &&
                 !e.deliveryUncertain);
+        if (e is CcsopFailure) {
+          debugPrint('cashier_inventory_write_code: ${e.code}');
+        }
         setState(() {
           error = raw.contains('INVENTORY_PRICE_CHANGED')
               ? l(
@@ -1907,25 +1922,47 @@ class _InventoryPanelState extends State<InventoryPanel> {
 
   Future<void> retailPrice(Map<String, dynamic> product) async {
     final snapshot = Map<String, dynamic>.from(product);
+    Future<bool> savePrice(int cents, [String? unitRef]) async {
+      final previous = pending;
+      if (previous != null) {
+        if (!await resolvePending()) return false;
+        final latest = rows('products')
+            .where((p) => p['productRef'] == snapshot['productRef'])
+            .firstOrNull;
+        final units = (latest?['saleUnits'] as Map?)?['units'] as List? ?? [];
+        final unit = units
+            .whereType<Map>()
+            .where((u) => u['unitRef'] == unitRef)
+            .firstOrNull;
+        final actual = unitRef == null
+            ? (latest?['priceCents'])
+            : (unit?['priceCents']);
+        if (previous['action'] == 'retail_price' &&
+            previous['productRef'] == snapshot['productRef'] &&
+            previous['priceCents'] == cents &&
+            previous['saleUnitRef'] == unitRef &&
+            actual == cents)
+          return true;
+      }
+      return submit({
+        'action': 'retail_price',
+        'view': 'stock',
+        'productRef': snapshot['productRef'],
+        'revision': snapshot['revision'],
+        'priceCents': cents,
+        if (unitRef != null) 'saleUnitRef': unitRef,
+      });
+    }
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => RetailPriceDialog(
         product: snapshot,
         language: widget.language,
-        savePack: (unitRef, cents) => submit({
-          'action': 'retail_price',
-          'productRef': snapshot['productRef'],
-          'revision': snapshot['revision'],
-          'priceCents': cents,
-          'saleUnitRef': unitRef,
-        }),
-        save: (cents) => submit({
-          'action': 'retail_price',
-          'productRef': snapshot['productRef'],
-          'revision': snapshot['revision'],
-          'priceCents': cents,
-        }),
+        failureMessage: () => error,
+        savePack: (unitRef, cents) => savePrice(cents, unitRef),
+        save: savePrice,
       ),
     );
   }
@@ -2064,7 +2101,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       const SizedBox(height: 20),
                       if (current!['priceCents'] is num) ...[
                         label(
-                          '${l('本店零售价', 'Store retail price', '本店零售價', 'ราคาขายของร้าน')}  ${money(current!['priceCents'])}',
+                          '${l('本店零售价', 'Store retail price', '本店零售價', 'ราคาขายของร้าน')}  ${retailSummary(current!)}',
                           size: 20,
                           weight: FontWeight.bold,
                         ),
@@ -2751,6 +2788,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       builder: (_) => SupplierCatalogDialog(
                         name: '${s['name']}',
                         l: l,
+                        cacheScope: '$displayScope|${s['supplierRef']}',
+                        loadPage: (offset, category, search, version) =>
+                            widget.auth.inventory({
+                              'action': 'supplier_catalog',
+                              'supplierRef': s['supplierRef'],
+                              'pageSize': 50,
+                              'offset': offset,
+                              'category': category,
+                              'search': search,
+                              if (version != null) 'knownVersion': version,
+                            }),
                         load: () => widget.auth.inventory({
                           'action': 'supplier_catalog',
                           'supplierRef': s['supplierRef'],

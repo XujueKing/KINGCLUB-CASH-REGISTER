@@ -8,6 +8,7 @@ import 'package:kingclub_cash_register/src/auth/staff_session.dart';
 import 'package:kingclub_cash_register/src/live/inventory_page_cache.dart';
 import 'package:kingclub_cash_register/src/live/inventory_panel.dart';
 import 'package:kingclub_cash_register/src/live/retail_price_dialog.dart';
+import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 
 import 'inventory_panel_test.dart' show InventoryAuth;
@@ -26,11 +27,19 @@ class SyncAuth extends InventoryAuth {
   StaffSession get session => identity;
   final syncCalls = <Map<String, dynamic>>[];
   Completer<void>? gate;
+  bool rejectPriceOnce = false;
   static const version =
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   @override
   Future<Map<String, dynamic>> inventory(Map<String, dynamic> command) async {
     syncCalls.add(command);
+    if (command['action'] == 'retail_price' && rejectPriceOnce) {
+      rejectPriceOnce = false;
+      throw const CcsopFailure(
+        'PARAM_SCHEMA_VALIDATION_FAILED',
+        deliveryUncertain: true,
+      );
+    }
     if (gate != null) await gate!.future;
     final v = await super.inventory(command);
     if (command['action'] == 'resolve_pending')
@@ -83,6 +92,39 @@ Widget page(SyncAuth auth) => MaterialApp(
 );
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  testWidgets(
+    'a rejected price can be saved again in the same touch dialog without a false pending lock',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 710);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = SyncAuth()..rejectPriceOnce = true;
+      await tester.pumpWidget(page(auth));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('测试酒品').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('修改零售价'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('retail-key-8')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('retail-price-save')));
+      await tester.pumpAndSettle();
+      expect(find.byType(RetailPriceDialog), findsOneWidget);
+      expect(find.text('上次操作未完成'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('retail-price-save')));
+      await tester.pumpAndSettle();
+      expect(find.byType(RetailPriceDialog), findsNothing);
+      final writes = auth.syncCalls
+          .where((c) => c['action'] == 'retail_price')
+          .toList();
+      expect(writes, hasLength(2));
+      expect(writes.last['priceCents'], 800);
+      expect(writes.first['requestId'], isNot(writes.last['requestId']));
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   testWidgets(
     'cold controller displays encrypted stock snapshot before version-only refresh finishes',
     (tester) async {

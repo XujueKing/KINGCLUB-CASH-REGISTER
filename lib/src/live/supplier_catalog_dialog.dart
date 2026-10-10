@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import 'supplier_catalog_page_cache.dart';
 
 class SupplierCatalogDialog extends StatefulWidget {
   const SupplierCatalogDialog({
@@ -6,17 +10,89 @@ class SupplierCatalogDialog extends StatefulWidget {
     required this.name,
     required this.load,
     required this.l,
+    this.loadPage,
+    this.cacheScope,
   });
   final String name;
   final Future<Map<String, dynamic>> Function() load;
+  final Future<Map<String, dynamic>> Function(
+    int offset,
+    String category,
+    String search,
+    String? version,
+  )?
+  loadPage;
+  final String? cacheScope;
   final String Function(String, String, String, String) l;
   @override
   State<SupplierCatalogDialog> createState() => _SupplierCatalogDialogState();
 }
 
 class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
-  late final future = widget.load();
+  late Future<Map<String, dynamic>> future;
+  Map<String, dynamic>? cached;
+  int offset = 0, epoch = 0;
+  Timer? searchTimer;
   String query = '', category = '';
+  bool get paged => widget.loadPage != null;
+  String get pageKey => SupplierCatalogPageCache.key(
+    widget.cacheScope ?? '',
+    offset,
+    category,
+    query,
+  );
+  @override
+  void initState() {
+    super.initState();
+    beginLoad();
+  }
+
+  void beginLoad() {
+    final request = ++epoch;
+    final key = pageKey, start = offset, filter = category, text = query;
+    cached = widget.cacheScope == null
+        ? null
+        : SupplierCatalogPageCache.peek(key);
+    future = () async {
+      if (!paged) return widget.load();
+      final saved = widget.cacheScope == null
+          ? null
+          : await SupplierCatalogPageCache.read(key);
+      if (!mounted || request != epoch) return <String, dynamic>{};
+      if (saved != null && cached == null) setState(() => cached = saved);
+      final response = await widget.loadPage!(
+        start,
+        filter,
+        text,
+        saved?['version'] as String?,
+      );
+      final page =
+          response['notModified'] == true || response['notModified'] == 1
+          ? {...?saved, ...response}
+          : response;
+      if (page['catalog'] is! Map)
+        throw const FormatException('Missing supplier page');
+      if (widget.cacheScope != null)
+        unawaited(SupplierCatalogPageCache.write(key, page));
+      return page;
+    }();
+  }
+
+  void changePage(void Function() change) {
+    searchTimer?.cancel();
+    setState(() {
+      change();
+      beginLoad();
+    });
+  }
+
+  @override
+  void dispose() {
+    epoch++;
+    searchTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = widget.l;
@@ -49,8 +125,20 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
               ),
               const SizedBox(height: 16),
               TextField(
-                onChanged: (v) =>
-                    setState(() => query = v.trim().toLowerCase()),
+                onChanged: (v) {
+                  searchTimer?.cancel();
+                  if (!paged) {
+                    setState(() => query = v.trim().toLowerCase());
+                    return;
+                  }
+                  searchTimer = Timer(
+                    const Duration(milliseconds: 250),
+                    () => changePage(() {
+                      query = v.trim().toLowerCase();
+                      offset = 0;
+                    }),
+                  );
+                },
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search),
                   hintText: l(
@@ -65,9 +153,11 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
               const SizedBox(height: 16),
               Expanded(
                 child: FutureBuilder<Map<String, dynamic>>(
+                  key: ValueKey(pageKey),
                   future: future,
                   builder: (context, snapshot) {
-                    if (snapshot.hasError) {
+                    final page = snapshot.data ?? cached;
+                    if (snapshot.hasError && page == null) {
                       return Center(
                         child: Text(
                           l(
@@ -79,18 +169,16 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
                         ),
                       );
                     }
-                    if (!snapshot.hasData) {
+                    if (page == null) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    final catalog =
-                        snapshot.data!['catalog'] as Map<String, dynamic>?;
-                    final sharedProducts =
-                        snapshot.data!['sharedProducts'] as Map?;
+                    final catalog = page['catalog'] as Map<String, dynamic>?;
+                    final sharedProducts = page['sharedProducts'] as Map?;
                     final items = (catalog?['items'] as List? ?? [])
                         .whereType<Map>()
                         .map((e) => Map<String, dynamic>.from(e))
                         .toList();
-                    if (items.isEmpty) {
+                    if (items.isEmpty && !paged) {
                       return Center(
                         child: Text(
                           l(
@@ -102,19 +190,23 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
                         ),
                       );
                     }
-                    final categories = items
-                        .map((e) => '${e['category']}')
-                        .toSet()
-                        .toList();
-                    final filtered = items
-                        .where(
-                          (e) =>
-                              (category.isEmpty || e['category'] == category) &&
-                              '${e['name']} ${e['specification']}'
-                                  .toLowerCase()
-                                  .contains(query),
-                        )
-                        .toList();
+                    final categories = paged
+                        ? (page['categories'] as List? ?? [])
+                              .map((c) => '${(c as Map)['name']}')
+                              .toList()
+                        : items.map((e) => '${e['category']}').toSet().toList();
+                    final filtered = paged
+                        ? items
+                        : items
+                              .where(
+                                (e) =>
+                                    (category.isEmpty ||
+                                        e['category'] == category) &&
+                                    '${e['name']} ${e['specification']}'
+                                        .toLowerCase()
+                                        .contains(query),
+                              )
+                              .toList();
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -155,8 +247,12 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
                                             10,
                                           ),
                                           child: InkWell(
-                                            onTap: () =>
-                                                setState(() => category = c),
+                                            onTap: () => paged
+                                                ? changePage(() {
+                                                    category = c;
+                                                    offset = 0;
+                                                  })
+                                                : setState(() => category = c),
                                             child: Padding(
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -262,6 +358,71 @@ class _SupplierCatalogDialogState extends State<SupplierCatalogDialog> {
                             ],
                           ),
                         ),
+                        if (paged)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '${page['total'] ?? 0} ${l('款', 'items', '款', 'รายการ')} · ${items.isEmpty ? 0 : offset + 1}–${offset + items.length}',
+                                ),
+                                if (snapshot.connectionState !=
+                                    ConnectionState.done)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 12),
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  ),
+                                if (snapshot.hasError)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 12),
+                                    child: Text(
+                                      l(
+                                        '暂未更新',
+                                        'Refresh unavailable',
+                                        '暫未更新',
+                                        'ยังไม่อัปเดต',
+                                      ),
+                                    ),
+                                  ),
+                                const Spacer(),
+                                OutlinedButton(
+                                  onPressed: offset == 0
+                                      ? null
+                                      : () => changePage(
+                                          () => offset = (offset - 50).clamp(
+                                            0,
+                                            offset,
+                                          ),
+                                        ),
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(100, 48),
+                                  ),
+                                  child: Text(
+                                    l('上一页', 'Previous', '上一頁', 'ก่อนหน้า'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                FilledButton(
+                                  onPressed:
+                                      page['hasMore'] == true ||
+                                          page['hasMore'] == 1
+                                      ? () => changePage(() => offset += 50)
+                                      : null,
+                                  style: FilledButton.styleFrom(
+                                    minimumSize: const Size(100, 48),
+                                    backgroundColor: const Color(0xFF183E35),
+                                  ),
+                                  child: Text(l('下一页', 'Next', '下一頁', 'ถัดไป')),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     );
                   },
