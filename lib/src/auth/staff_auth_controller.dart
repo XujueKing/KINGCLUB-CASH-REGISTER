@@ -1128,6 +1128,25 @@ class StaffAuthController extends ChangeNotifier {
   bool _canRetryRestore = false;
   bool get canRetryRestore => _canRetryRestore;
   StaffSession? get session => _session;
+  String? _workspaceScope;
+  Object? _workspaceIdentity;
+  /// Display-only identity survives credential rotation, never authorizes writes.
+  Object? get workspaceIdentity {
+    final current = session;
+    if (current == null) {
+      _workspaceScope = null;
+      _workspaceIdentity = null;
+      return null;
+    }
+    final permissions = current.permissions.toList()..sort();
+    final scope = '${current.base}|${current.storeRef}|${current.employeeRef}|'
+        '${current.sessionId}|${permissions.join(',')}';
+    if (scope != _workspaceScope) {
+      _workspaceScope = scope;
+      _workspaceIdentity = Object();
+    }
+    return _workspaceIdentity;
+  }
   bool get busy => _busy;
   String? get errorCode => _error;
   bool _current(int epoch) => !_disposed && epoch == _epoch;
@@ -1260,8 +1279,8 @@ class StaffAuthController extends ChangeNotifier {
     final prior = _session;
     StaffSession? saved;
     bool refreshAttempted = false;
-    _session = null;
-    _updateOperatorAvatar(null);
+    // Keep the same employee's display during renewal. _busy blocks interaction
+    // and the old API is closed; failed renewal still removes the identity.
     _api?.close();
     _api = null;
     _changed();
@@ -1824,7 +1843,9 @@ class StaffAuthController extends ChangeNotifier {
   Future<Map<String,dynamic>> inventory(Map<String,dynamic> command) async {
     final identity=_session,api=_api,epoch=_epoch;
     if(identity==null||api==null||!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
+    final timer = Stopwatch()..start();
     final raw=await api.call('K261006002017',{...command,'storeRef':identity.storeRef});
+    debugPrint('cashier_inventory elapsed_ms=${timer.elapsedMilliseconds}');
     _check(epoch);
     if(!identity.expiresAt.isAfter(_now())) throw const CcsopFailure('SESSION_REQUIRED');
     final result=raw is Map?raw['result']:null;

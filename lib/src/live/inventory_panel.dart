@@ -16,6 +16,7 @@ import '../strings.dart';
 import 'supplier_catalog_dialog.dart';
 import 'purchase_batch_dialog.dart';
 import 'retail_price_dialog.dart';
+import 'workspace_read_cache.dart';
 
 class InventoryPanel extends StatefulWidget {
   const InventoryPanel({
@@ -176,8 +177,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
   CashierRealtimeClient? realtime;
   int revision = 0;
   Timer? refreshTimer;
+  Object? cacheIdentity;
+  Object? credentialsIdentity;
   void connectRealtime() {
-    if (!widget.enableRealtime) return;
+    if (!widget.enableRealtime || widget.auth.busy) return;
     final session = widget.auth.session;
     if (identical(session, realtime?.session)) return;
     realtime?.removeListener(onRealtime);
@@ -245,6 +248,11 @@ class _InventoryPanelState extends State<InventoryPanel> {
   void initState() {
     super.initState();
     scope = identity;
+    cacheIdentity = widget.auth.workspaceIdentity;
+    credentialsIdentity = widget.auth.session;
+    data = WorkspaceReadCache.read<Map<String, dynamic>>(
+      cacheIdentity, 'inventory:0', maxAge: const Duration(minutes: 5),
+    );
     widget.auth.addListener(authChanged);
     connectRealtime();
     unawaited(restore());
@@ -252,9 +260,18 @@ class _InventoryPanelState extends State<InventoryPanel> {
   }
 
   void authChanged() {
+    if (widget.auth.busy) return;
     connectRealtime();
-    if (scope == identity) return;
+    if (scope == identity && identical(cacheIdentity, widget.auth.workspaceIdentity)) {
+      if (!identical(credentialsIdentity, widget.auth.session)) {
+        credentialsIdentity = widget.auth.session;
+        unawaited(load());
+      }
+      return;
+    }
     scope = identity;
+    cacheIdentity = widget.auth.workspaceIdentity;
+    credentialsIdentity = widget.auth.session;
     epoch++;
     data = null;
     selected = '';
@@ -310,15 +327,22 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }),
   );
   Future<void> load({int before = 0}) async {
-    if (working) return;
+    if (working || widget.auth.busy) return;
     final request = ++epoch;
+    final identity = cacheIdentity;
     setState(() => loading = true);
     try {
-      final v = await widget.auth.inventory({
+      final command = {
         'action': 'context',
         'before': before,
-      });
+      };
+      final v = identity == null
+          ? await widget.auth.inventory(command)
+          : await WorkspaceReadCache.readOnce<Map<String, dynamic>>(
+              identity, 'inventory:$before', () => widget.auth.inventory(command),
+            );
       if (!mounted || request != epoch) return;
+      WorkspaceReadCache.put(identity, 'inventory:$before', v);
       setState(() {
         data = v;
         error = null;
@@ -364,6 +388,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
       if (!mounted || request != epoch) return false;
       final v = await widget.auth.inventory(pending!);
       if (!mounted || request != epoch) return false;
+      WorkspaceReadCache.put(cacheIdentity, 'inventory:0', v);
       setState(() {
         data = v;
         pending = null;

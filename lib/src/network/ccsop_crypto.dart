@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
@@ -128,9 +129,19 @@ class SealedRequest {
     if (response['status'] != 1 || response['code'] != 'success') {
       throw const FormatException('Unsuccessful response envelope');
     }
-    return decrypt(_responseKey, response['data']);
+    final data = response['data'];
+    if (data is Map<String, dynamic> &&
+        data['ciphertext'] is String &&
+        (data['ciphertext'] as String).length > 128 * 1024) {
+      return _openLargeResponse(await _responseKey.extractBytes(), data);
+    }
+    return decrypt(_responseKey, data);
   }
 }
+
+// Large inventory/catalog responses must not block touch input or animations.
+Future<Object?> _openLargeResponse(List<int> keyBytes, Map<String, dynamic> data) =>
+    Isolate.run(() => decrypt(SecretKey(keyBytes), data));
 
 Future<SealedRequest> sealRequest({
   required CcsopCredentials credentials,

@@ -20,20 +20,24 @@ class _CatalogDisplay {
   CatalogSnapshot? snapshot;
   List<List<CatalogProduct>> groups = [];
   Future<void>? pending;
+  Object? pendingCredentials;
   String? category;
 }
 
 final _catalogDisplays = Expando<_CatalogDisplay>();
 _CatalogDisplay _displayFor(StaffAuthController auth) {
   var cached = _catalogDisplays[auth];
-  if (cached == null || !identical(cached.identity, auth.session)) {
-    cached = _CatalogDisplay(auth.session);
+  if (cached == null || !identical(cached.identity, auth.workspaceIdentity)) {
+    cached = _CatalogDisplay(auth.workspaceIdentity);
     _catalogDisplays[auth] = cached;
   }
   return cached;
 }
 
 Future<void> _refreshCatalog(StaffAuthController auth, _CatalogDisplay cached) {
+  final credentials = auth.session;
+  if (!identical(cached.pendingCredentials, credentials)) cached.pending = null;
+  cached.pendingCredentials = credentials;
   return cached.pending ??= (() async {
     try {
       final families = <String, List<CatalogProduct>>{};
@@ -42,7 +46,7 @@ Future<void> _refreshCatalog(StaffAuthController auth, _CatalogDisplay cached) {
       late CatalogSnapshot result;
       do {
         result = await auth.readCatalog(afterProduct: cursor);
-        if (!identical(cached.identity, auth.session)) return;
+        if (!identical(cached.identity, auth.workspaceIdentity)) return;
         for (final p in result.products) {
           final key =
               '${p.categoryRef}/${p.productGroupRef == null ? "sku:${p.reference}" : "group:${p.productGroupRef}"}';
@@ -56,7 +60,7 @@ Future<void> _refreshCatalog(StaffAuthController auth, _CatalogDisplay cached) {
       cached.snapshot = result;
       cached.groups = families.values.toList();
     } finally {
-      cached.pending = null;
+      if (identical(cached.pendingCredentials, credentials)) cached.pending = null;
     }
   })();
 }
@@ -104,6 +108,8 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       : allGroups.where((g) => g.first.categoryRef == category).toList();
   int epoch = 0;
   bool loading = false, failed = false, foreground = true;
+  Object? displayIdentity;
+  Object? credentialsIdentity;
   String t(String key) => tr(widget.language, key);
 
   @override
@@ -112,6 +118,8 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     WidgetsBinding.instance.addObserver(this);
     widget.auth.addListener(identityChanged);
     final cached = _displayFor(widget.auth);
+    displayIdentity = widget.auth.workspaceIdentity;
+    credentialsIdentity = widget.auth.session;
     data = cached.snapshot;
     categories = data?.categories ?? [];
     allGroups = cached.groups;
@@ -120,6 +128,17 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
   }
 
   void identityChanged() {
+    if (widget.auth.busy) return;
+    final next = widget.auth.workspaceIdentity;
+    if (identical(next, displayIdentity)) {
+      if (!identical(credentialsIdentity, widget.auth.session)) {
+        credentialsIdentity = widget.auth.session;
+        if (foreground) unawaited(load());
+      }
+      return;
+    }
+    displayIdentity = next;
+    credentialsIdentity = widget.auth.session;
     ++epoch;
     setState(() {
       data = null;
@@ -128,6 +147,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       loading = false;
       failed = false;
     });
+    if (next != null && foreground) unawaited(load());
   }
 
   @override
@@ -152,12 +172,14 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     if (foreground) {
       unawaited(load(reset: true));
     } else {
-      identityChanged();
+      ++epoch;
+      setState(() => loading = false);
     }
   }
 
   Future<void> load({bool reset = false, int? target}) async {
-    final generation = ++epoch, identity = widget.auth.session;
+    if (widget.auth.busy) return;
+    final generation = ++epoch, identity = widget.auth.workspaceIdentity;
     setState(() {
       loading = true;
       failed = false;
@@ -167,7 +189,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
       await _refreshCatalog(widget.auth, cached);
       if (!mounted ||
           generation != epoch ||
-          !identical(identity, widget.auth.session))
+          !identical(identity, widget.auth.workspaceIdentity))
         return;
       final result = cached.snapshot!;
       setState(() {
