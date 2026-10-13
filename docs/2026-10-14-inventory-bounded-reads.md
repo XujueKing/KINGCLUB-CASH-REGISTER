@@ -20,7 +20,7 @@
 - 后端提交 `c187768e85e4b89c87ca18cc4dbc458a60c62a1b`，迁移 464–466 已应用，运行时健康检查通过。
 - 本次服务端更新为现有容器内的编译文件补丁；后续重建镜像必须包含上述源码提交，不能用旧镜像直接替换容器。
 - ARM32 安装包：`.local/releases/inventory-bounded-20261014/kingclub-cashier-arm32.apk`。
-- APK SHA-256：`fb280224bfff246b5cecd896ce2ee41a7719fda963b2f7d1d376165763f89d3b`。
+- APK SHA-256：`2e20a28c46706535bcf121b0b08fe698daaf0cc776f920465eacca4d7c00f535`。
 - 使用项目保存的原签名重新签名，与上一版 APK 的证书 SHA-256 一致：`7f839333dcc272a167a129317160c2a82b25b5ba8479529eac802be97c9c93ea`。
 - 打包时 ADB 无收银机设备，尚未安装。下次连接后仍须核对目标设备签名，并保留数据升级，不能卸载应用。
 
