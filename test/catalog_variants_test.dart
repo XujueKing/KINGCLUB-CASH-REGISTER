@@ -49,6 +49,74 @@ class PagesAuth extends c.ViewAuth {
 
 void main() {
   testWidgets(
+    'stock ordering stays inside each category and keeps mixed-size families available',
+    (tester) async {
+      final auth = c.ViewAuth()
+        ..reply = {
+          ...c.catalog(),
+          'categories': [
+            ...c.catalog()['categories'] as List,
+            {
+              'categoryRef': 'c2',
+              'majorCategory': 'drinks',
+              'names': c.words('Second category'),
+              'sortOrder': 1,
+            },
+          ],
+          'products': [
+            variant('p001', 100, 0),
+            {...variant('p002', 100, 4), 'categoryRef': 'c2'},
+            variant('p003', 100, 0, group: 'mixed'),
+            variant('p004', 200, 2, group: 'mixed'),
+            {...variant('p005', 100, 0), 'categoryRef': 'c2'},
+            variant('p006', 100, 3),
+          ],
+        };
+      addTearDown(auth.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveCatalogPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final cards = tester
+          .widgetList<Material>(find.byType(Material))
+          .map((w) => w.key)
+          .whereType<ValueKey<String>>()
+          .map((key) => key.value)
+          .where((key) => key.startsWith('catalog-product-'))
+          .toList();
+      expect(cards, [
+        'catalog-product-p003',
+        'catalog-product-p006',
+        'catalog-product-p001',
+        'catalog-product-p002',
+        'catalog-product-p005',
+      ]);
+      await tester.tap(find.byKey(const ValueKey('catalog-category-c2')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('catalog-product-p003')), findsNothing);
+      expect(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('catalog-product-p002')))
+            .dx,
+        lessThan(
+          tester
+              .getTopLeft(find.byKey(const ValueKey('catalog-product-p005')))
+              .dx,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'grouped card selects exact SKU and disables unavailable variants',
     (tester) async {
       final auth = c.ViewAuth()
@@ -59,6 +127,8 @@ void main() {
             variant('p002', 200, 0, group: 'wine'),
             variant('p003', 300, 2, group: 'wine'),
             variant('p004', 100, 3),
+            variant('p005', 100, 0, group: 'empty-wine'),
+            variant('p006', 200, 0, group: 'empty-wine'),
           ],
         };
       addTearDown(auth.dispose);
@@ -81,6 +151,18 @@ void main() {
         find.byKey(const ValueKey('catalog-product-p004')),
         findsOneWidget,
       );
+      for (final entry in {'p001': 1.0, 'p005': .35}.entries) {
+        final card = find.byKey(ValueKey('catalog-product-${entry.key}'));
+        final textOpacity = find.descendant(
+          of: card,
+          matching: find.byType(Opacity),
+        );
+        expect(tester.widgetList<Opacity>(textOpacity).map((w) => w.opacity), [
+          entry.value,
+          entry.value,
+          entry.value,
+        ]);
+      }
       await tester.tap(find.byKey(const ValueKey('catalog-select-p001')));
       await tester.pumpAndSettle();
       expect(

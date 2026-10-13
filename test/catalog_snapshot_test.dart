@@ -95,19 +95,65 @@ class ViewAuth extends StaffAuthController {
 }
 
 void main() {
-  testWidgets('reopening catalog displays cached products before network returns', (tester) async {
-    final auth = ViewAuth();
-    addTearDown(auth.dispose);
-    Widget page() => MaterialApp(home: Scaffold(body: LiveCatalogPanel(auth: auth, language: UiLanguage.zh, onBack: () {})));
-    await tester.pumpWidget(page());
-    await tester.pumpAndSettle();
-    await tester.pumpWidget(const SizedBox());
-    auth.gate = Completer<CatalogSnapshot>();
-    await tester.pumpWidget(page());
-    expect(find.byKey(const ValueKey('catalog-product-p001')), findsOneWidget);
-    auth.gate!.complete(parse(catalog()));
-    await tester.pumpAndSettle();
-  });
+  testWidgets(
+    'initial catalog failure has a product-specific error and touch retry recovers the menu',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 710);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = ViewAuth()..fail = true;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveCatalogPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(tr(UiLanguage.zh, 'catalogReadFailed')), findsOneWidget);
+      expect(find.text(tr(UiLanguage.zh, 'liveReadFailed')), findsNothing);
+      auth.fail = false;
+      await tester.tap(find.byKey(const ValueKey('catalog-retry')));
+      await tester.pumpAndSettle();
+      expect(find.text('TEST product'), findsOneWidget);
+      expect(find.byKey(const ValueKey('catalog-retry')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+  testWidgets(
+    'reopening catalog displays cached products before network returns',
+    (tester) async {
+      final auth = ViewAuth();
+      addTearDown(auth.dispose);
+      Widget page() => MaterialApp(
+        home: Scaffold(
+          body: LiveCatalogPanel(
+            auth: auth,
+            language: UiLanguage.zh,
+            onBack: () {},
+          ),
+        ),
+      );
+      await tester.pumpWidget(page());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      auth.gate = Completer<CatalogSnapshot>();
+      await tester.pumpWidget(page());
+      expect(
+        find.byKey(const ValueKey('catalog-product-p001')),
+        findsOneWidget,
+      );
+      auth.gate!.complete(parse(catalog()));
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('background refresh preserves categories and their interaction', (
     tester,
@@ -221,7 +267,7 @@ void main() {
         expect(last.bottom, lessThan(670));
         expect(
           tester
-              .getRect(find.byKey(const ValueKey('catalog-product-p000')))
+              .getRect(find.byKey(const ValueKey('catalog-product-p002')))
               .top,
           lessThanOrEqualTo(120),
         );
@@ -431,7 +477,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('catalog-refresh')));
       await tester.pumpAndSettle();
       expect(find.text('TEST product'), findsOneWidget);
-      expect(find.text(tr(UiLanguage.th, 'liveReadFailed')), findsOneWidget);
+      expect(find.text(tr(UiLanguage.th, 'catalogReadFailed')), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       auth.dispose();
     },

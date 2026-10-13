@@ -670,6 +670,7 @@ const copy = <String, String>{
   'liveObserved': '本页查询时间|Page observed at|本頁查詢時間|เวลาข้อมูลหน้านี้',
   'liveBusinessDate': '营业日|Business date|營業日|วันที่ดำเนินธุรกิจ',
   'liveReadFailed': '桌台读取失败，已清除旧显示。请检查连接或门店权限后刷新。|Unable to read tables; old display cleared. Check connection or store access and refresh.|桌檯讀取失敗，已清除舊顯示。請檢查連線或門店權限後重新整理。|อ่านโต๊ะไม่สำเร็จ ล้างข้อมูลเดิมแล้ว โปรดตรวจสอบการเชื่อมต่อหรือสิทธิ์ร้านและรีเฟรช',
+  'catalogReadFailed': '商品目录暂未能读取，请点击刷新重试。|Unable to load products. Refresh to retry.|商品目錄暫未能讀取，請點擊重新整理重試。|โหลดรายการสินค้าไม่สำเร็จ กรุณารีเฟรชเพื่อลองอีกครั้ง',
   'liveNoTables': '服务器返回本页无桌台|No tables returned for this page|伺服器回傳本頁無桌檯|เซิร์ฟเวอร์ไม่ส่งโต๊ะในหน้านี้',
   'livePrevious': '上一页|Previous|上一頁|ก่อนหน้า',
   'liveNext': '下一页|Next|下一頁|ถัดไป',

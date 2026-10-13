@@ -25,6 +25,9 @@ class _CatalogDisplay {
 }
 
 final _catalogDisplays = Expando<_CatalogDisplay>();
+bool _hasAvailableStock(List<CatalogProduct> group) =>
+    group.any((p) => p.inventoryKnown && p.available > 0);
+
 _CatalogDisplay _displayFor(StaffAuthController auth) {
   var cached = _catalogDisplays[auth];
   if (cached == null || !identical(cached.identity, auth.workspaceIdentity)) {
@@ -58,9 +61,25 @@ Future<void> _refreshCatalog(StaffAuthController auth, _CatalogDisplay cached) {
         }
       } while (cursor != null);
       cached.snapshot = result;
-      cached.groups = families.values.toList();
+      final categoryOrder = {
+        for (final entry in result.categories.indexed)
+          entry.$2.reference: entry.$1,
+      };
+      final ordered = families.values.indexed.toList()
+        ..sort((a, b) {
+          final category = categoryOrder[a.$2.first.categoryRef]!.compareTo(
+            categoryOrder[b.$2.first.categoryRef]!,
+          );
+          if (category != 0) return category;
+          final stock = (_hasAvailableStock(a.$2) ? 0 : 1).compareTo(
+            _hasAvailableStock(b.$2) ? 0 : 1,
+          );
+          return stock != 0 ? stock : a.$1.compareTo(b.$1);
+        });
+      cached.groups = ordered.map((entry) => entry.$2).toList();
     } finally {
-      if (identical(cached.pendingCredentials, credentials)) cached.pending = null;
+      if (identical(cached.pendingCredentials, credentials))
+        cached.pending = null;
     }
   })();
 }
@@ -294,10 +313,27 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
           ],
         ),
       ),
-      if (failed && data != null) Text(t('liveReadFailed')),
+      if (failed && data != null) Text(t('catalogReadFailed')),
       Expanded(
         child: failed && data == null
-            ? Center(child: Text(t('liveReadFailed')))
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(t('catalogReadFailed')),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      key: const ValueKey('catalog-retry'),
+                      onPressed: loading ? null : () => unawaited(load()),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(160, 52),
+                      ),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(t('liveRefresh')),
+                    ),
+                  ],
+                ),
+              )
             : data == null
             ? const SizedBox()
             : LayoutBuilder(
@@ -481,7 +517,7 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
     final p = variants.first;
     final multiple = variants.length > 1;
     final price = variants.map((p) => p.priceCents).reduce(math.min);
-    final available = variants.any((p) => p.inventoryKnown && p.available > 0);
+    final available = _hasAvailableStock(variants);
     final canSelect = variants.any(canSelectProduct);
     final stockColor = !p.inventoryKnown
         ? const Color(0xff986500)
@@ -509,71 +545,80 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
               const SizedBox(height: 4),
               Row(
                 children: [
-                  ProductThumbnail(
-                    path: p.thumbnailPath,
-                    base: widget.auth.session?.base,
+                  Opacity(
+                    opacity: available ? 1 : .35,
+                    child: ProductThumbnail(
+                      path: p.thumbnailPath,
+                      base: widget.auth.session?.base,
+                    ),
                   ),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Tooltip(
-                          message: p.name(widget.language),
-                          child: LayoutBuilder(
-                            builder: (context, bounds) {
-                              final name = p.name(widget.language);
-                              var fontSize = 16.0;
-                              while (fontSize > 12) {
-                                final measure = TextPainter(
-                                  text: TextSpan(
-                                    text: name,
-                                    style: TextStyle(
-                                      fontSize: fontSize,
-                                      fontWeight: FontWeight.w700,
+                    child: Opacity(
+                      opacity: available ? 1 : .35,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Tooltip(
+                            message: p.name(widget.language),
+                            child: LayoutBuilder(
+                              builder: (context, bounds) {
+                                final name = p.name(widget.language);
+                                var fontSize = 16.0;
+                                while (fontSize > 12) {
+                                  final measure = TextPainter(
+                                    text: TextSpan(
+                                      text: name,
+                                      style: TextStyle(
+                                        fontSize: fontSize,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
-                                  ),
-                                  textDirection: Directionality.of(context),
-                                  textScaler: MediaQuery.textScalerOf(context),
+                                    textDirection: Directionality.of(context),
+                                    textScaler: MediaQuery.textScalerOf(
+                                      context,
+                                    ),
+                                    maxLines: 2,
+                                  )..layout(maxWidth: bounds.maxWidth);
+                                  final fits = !measure.didExceedMaxLines;
+                                  measure.dispose();
+                                  if (fits) break;
+                                  fontSize--;
+                                }
+                                return Text(
+                                  name,
                                   maxLines: 2,
-                                )..layout(maxWidth: bounds.maxWidth);
-                                final fits = !measure.didExceedMaxLines;
-                                measure.dispose();
-                                if (fits) break;
-                                fontSize--;
-                              }
-                              return Text(
-                                name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: fontSize,
-                                  height: 1.15,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Tooltip(
-                          message: p.specification(widget.language),
-                          child: Text(
-                            multiple
-                                ? variants
-                                      .map(
-                                        (p) => p.specification(widget.language),
-                                      )
-                                      .join(' / ')
-                                : p.specification(widget.language),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xff616c65),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: fontSize,
+                                    height: 1.15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                );
+                              },
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 3),
+                          Tooltip(
+                            message: p.specification(widget.language),
+                            child: Text(
+                              multiple
+                                  ? variants
+                                        .map(
+                                          (p) =>
+                                              p.specification(widget.language),
+                                        )
+                                        .join(' / ')
+                                  : p.specification(widget.language),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xff616c65),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -582,37 +627,40 @@ class _LiveCatalogPanelState extends State<LiveCatalogPanel>
               Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          multiple
-                              ? variantCopy('多规格|Multiple sizes|多規格|หลายขนาด')
-                              : !p.inventoryKnown
-                              ? t('catalogUnknown')
-                              : !available
-                              ? t('catalogSoldOut')
-                              : '${t('catalogAvailable')}: ${p.available}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: stockColor,
-                            fontWeight: FontWeight.w600,
+                    child: Opacity(
+                      opacity: available ? 1 : .35,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            multiple
+                                ? variantCopy('多规格|Multiple sizes|多規格|หลายขนาด')
+                                : !p.inventoryKnown
+                                ? t('catalogUnknown')
+                                : !available
+                                ? t('catalogSoldOut')
+                                : '${t('catalogAvailable')}: ${p.available}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: stockColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${data!.currency == 'CNY' ? '¥' : data!.currency} ${formatCents(price)}${multiple ? variantCopy(' 起| +| 起| +') : ''}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                          const SizedBox(height: 2),
+                          Text(
+                            '${data!.currency == 'CNY' ? '¥' : data!.currency} ${formatCents(price)}${multiple ? variantCopy(' 起| +| 起| +') : ''}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   if (widget.onSelect != null && available && multiple)
