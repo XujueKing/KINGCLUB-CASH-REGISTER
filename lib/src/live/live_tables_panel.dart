@@ -32,6 +32,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import '../auth/staff_auth_controller.dart';
 import '../auth/staff_session.dart';
 import '../network/cashier_realtime_client.dart';
+import '../network/ccsop_client.dart';
 import '../strings.dart';
 import 'table_snapshot.dart';
 import 'table_status_color.dart';
@@ -245,6 +246,9 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
   CashierRealtimeClient? realtime;
   Timer? refreshDebounce;
   Timer? clockTimer;
+  Timer? readRetry;
+  int readRetryAttempt = 0;
+  bool reconnectingRead = false;
   DateTime? selectedDate;
   TableHistoryData? history;
   bool historyLoading = false, historyFailed = false;
@@ -465,12 +469,13 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
     } else {
       foreground = false;
       realtime?.stop();
+      readRetry?.cancel();
+      readRetry = null;
       refreshDebounce?.cancel();
       refreshDebounce = null;
       refreshQueued = false;
       ++epoch;
       setState(() {
-        snapshot = null;
         loading = false;
       });
     }
@@ -478,6 +483,8 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
 
   Future<void> load({int? target, bool reset = false}) async {
     if (!mounted || !foreground) return;
+    readRetry?.cancel();
+    readRetry = null;
     final generation = ++epoch;
     final session = widget.auth.session;
     if (session == null) return;
@@ -515,6 +522,8 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
       }
       setState(() {
         snapshot = value;
+        reconnectingRead = false;
+        readRetryAttempt = 0;
         if (aaDetail.value != null) {
           final matching = value.tables.where(
             (t) =>
@@ -527,13 +536,28 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
         loading = false;
       });
       widget.onStoreName?.call(value.storeName);
-    } catch (_) {
+    } catch (error) {
       if (mounted && generation == epoch) {
+        final temporary =
+            error is CcsopFailure && error.code == 'TRANSPORT_FAILED';
         setState(() {
           failed = true;
           loading = false;
-          snapshot = null;
+          reconnectingRead = temporary;
+          if (!temporary) snapshot = null;
         });
+        if (temporary && foreground) {
+          final seconds = readRetryAttempt >= 3
+              ? 30
+              : 5 * (1 << readRetryAttempt);
+          readRetryAttempt++;
+          readRetry = Timer(Duration(seconds: seconds), () {
+            readRetry = null;
+            if (mounted && foreground && !loading) {
+              unawaited(load(target: requestedPage));
+            }
+          });
+        }
       }
     } finally {
       if (mounted && generation == epoch && refreshQueued) queueRefresh();
@@ -553,6 +577,7 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
     aaDetail.dispose();
     widget.auth.removeListener(syncRealtimeSession);
     clockTimer?.cancel();
+    readRetry?.cancel();
     ++epoch;
     refreshDebounce?.cancel();
     realtime?.removeListener(realtimeChanged);
@@ -763,94 +788,170 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
         if (data == null) workspaceHeader(),
         if ((historyMode ? historyLoading : loading) && data == null)
           const LinearProgressIndicator(),
-        Expanded(
-          child: (historyMode ? historyFailed : failed)
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(t('liveReadFailed')),
+        if (!historyMode && reconnectingRead && data != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(
+              children: [
+                const Icon(Icons.cloud_off, size: 18, color: Color(0xffb45309)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    t('liveReadReconnecting'),
+                    style: const TextStyle(color: Color(0xffb45309)),
                   ),
-                )
-              : data == null
-              ? const SizedBox()
-              : LayoutBuilder(
-                  builder: (context, box) {
-                    final scale = MediaQuery.textScalerOf(context)
-                        .scale(1)
-                        .clamp(1.0, 2.0);
-                    final detailWidth = focused == null
-                        ? 0.0
-                        : box.maxWidth / 3;
-                    final columns =
-                        ((box.maxWidth - detailWidth - 24) /
-                                ((focused == null ? 190 : 160) * scale))
-                            .floor()
-                            .clamp(1, 8);
-                    final ordinaryTables = data.tables
-                        .where(
-                          (t) =>
-                              !t.isBarCounter &&
-                              !t.isBarSeat &&
-                              tableFloor(t) == selectedFloor,
-                        )
-                        .toList();
-                    final counters = data.tables
-                        .where((t) => t.isBarCounter)
-                        .toList();
-                    final grid = Column(
-                      children: [
-                        workspaceHeader(),
-                        if (data.tables.isEmpty) Text(t('liveNoTables')),
-                        Expanded(
-                          child: SwipeGrid(
-                            key: ValueKey(
-                              'table-page-$page-floor-$selectedFloor',
-                            ),
-                            columns: columns,
-                            tileHeight: (focused == null ? 124 : 104) * scale,
-                            itemCount: ordinaryTables.length,
-                            itemBuilder: (context, index) =>
-                                tableCard(ordinaryTables[index], data.currency),
-                            hasPrevious: page > 0,
-                            hasNext: data.nextAfterTable != null,
-                            loading: loading,
-                            onPrevious: () => unawaited(load(target: page - 1)),
-                            onNext: next,
+                ),
+                TextButton(
+                  onPressed: loading ? null : () => unawaited(load()),
+                  child: Text(t('liveRefresh')),
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: IgnorePointer(
+            ignoring:
+                !foreground ||
+                (!historyMode && (failed || reconnectingRead) && data != null),
+            child:
+                (historyMode
+                    ? historyFailed
+                    : (failed || reconnectingRead) && data == null)
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            reconnectingRead
+                                ? Icons.cloud_off
+                                : Icons.error_outline,
+                            size: 40,
+                            color: const Color(0xffb45309),
                           ),
-                        ),
-                        for (final bar in counters) ...[
-                          const Divider(height: 16, thickness: 1),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: BarCounterStrip(
-                              table: bar,
-                              alertSeats: {
-                                for (final seat in data.tables.where(
-                                  (s) =>
-                                      s.parentBarRef == bar.reference &&
-                                      !historyMode &&
-                                      widget.orderAlerts?.hasTable(
-                                            s.reference,
-                                          ) ==
-                                          true,
-                                ))
-                                  seat.barSeatNumber!,
-                              },
-                              draftSeats: {
-                                for (final seat in data.tables.where(
-                                  (s) =>
-                                      s.parentBarRef == bar.reference &&
-                                      !historyMode &&
-                                      barDrafts.contains(s.reference),
-                                ))
-                                  seat.barSeatNumber!,
-                              },
-                              groups: [
-                                for (final refs
-                                    in historyMode
-                                        ? <List<String>>[]
-                                        : barGroups)
-                                  if (data.tables
+                          const SizedBox(height: 16),
+                          Text(
+                            t(
+                              reconnectingRead && !historyMode
+                                  ? 'liveReadReconnecting'
+                                  : 'liveReadFailed',
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 20),
+                          if (!historyMode)
+                            FilledButton.icon(
+                              key: const ValueKey('table-read-retry'),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(180, 52),
+                              ),
+                              onPressed: loading
+                                  ? null
+                                  : () => unawaited(load()),
+                              icon: const Icon(Icons.refresh),
+                              label: Text(t('liveRefresh')),
+                            ),
+                        ],
+                      ),
+                    ),
+                  )
+                : data == null
+                ? const SizedBox()
+                : LayoutBuilder(
+                    builder: (context, box) {
+                      final scale = MediaQuery.textScalerOf(context)
+                          .scale(1)
+                          .clamp(1.0, 2.0);
+                      final detailWidth = focused == null
+                          ? 0.0
+                          : box.maxWidth / 3;
+                      final columns =
+                          ((box.maxWidth - detailWidth - 24) /
+                                  ((focused == null ? 190 : 160) * scale))
+                              .floor()
+                              .clamp(1, 8);
+                      final ordinaryTables = data.tables
+                          .where(
+                            (t) =>
+                                !t.isBarCounter &&
+                                !t.isBarSeat &&
+                                tableFloor(t) == selectedFloor,
+                          )
+                          .toList();
+                      final counters = data.tables
+                          .where((t) => t.isBarCounter)
+                          .toList();
+                      final grid = Column(
+                        children: [
+                          workspaceHeader(),
+                          if (data.tables.isEmpty) Text(t('liveNoTables')),
+                          Expanded(
+                            child: SwipeGrid(
+                              key: ValueKey(
+                                'table-page-$page-floor-$selectedFloor',
+                              ),
+                              columns: columns,
+                              tileHeight: (focused == null ? 124 : 104) * scale,
+                              itemCount: ordinaryTables.length,
+                              itemBuilder: (context, index) => tableCard(
+                                ordinaryTables[index],
+                                data.currency,
+                              ),
+                              hasPrevious: page > 0,
+                              hasNext: data.nextAfterTable != null,
+                              loading: loading,
+                              onPrevious: () =>
+                                  unawaited(load(target: page - 1)),
+                              onNext: next,
+                            ),
+                          ),
+                          for (final bar in counters) ...[
+                            const Divider(height: 16, thickness: 1),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: BarCounterStrip(
+                                table: bar,
+                                alertSeats: {
+                                  for (final seat in data.tables.where(
+                                    (s) =>
+                                        s.parentBarRef == bar.reference &&
+                                        !historyMode &&
+                                        widget.orderAlerts?.hasTable(
+                                              s.reference,
+                                            ) ==
+                                            true,
+                                  ))
+                                    seat.barSeatNumber!,
+                                },
+                                draftSeats: {
+                                  for (final seat in data.tables.where(
+                                    (s) =>
+                                        s.parentBarRef == bar.reference &&
+                                        !historyMode &&
+                                        barDrafts.contains(s.reference),
+                                  ))
+                                    seat.barSeatNumber!,
+                                },
+                                groups: [
+                                  for (final refs
+                                      in historyMode
+                                          ? <List<String>>[]
+                                          : barGroups)
+                                    if (data.tables
+                                            .where(
+                                              (t) =>
+                                                  t.parentBarRef ==
+                                                      bar.reference &&
+                                                  refs.contains(
+                                                    t.session?.reference,
+                                                  ),
+                                            )
+                                            .length ==
+                                        refs.length)
+                                      (data.tables
                                           .where(
                                             (t) =>
                                                 t.parentBarRef ==
@@ -859,512 +960,515 @@ class LiveTablesPanelState extends State<LiveTablesPanel>
                                                   t.session?.reference,
                                                 ),
                                           )
-                                          .length ==
-                                      refs.length)
-                                    (data.tables
-                                        .where(
-                                          (t) =>
-                                              t.parentBarRef == bar.reference &&
-                                              refs.contains(
-                                                t.session?.reference,
-                                              ),
-                                        )
-                                        .map((t) => t.barSeatNumber!)
-                                        .toList()
-                                      ..sort()),
-                              ],
-                              seatTables: {
-                                for (final seat in data.tables.where(
-                                  (t) => t.parentBarRef == bar.reference,
-                                ))
-                                  seat.barSeatNumber!: seat,
-                              },
-                              seatAmounts: {
-                                for (final seat in data.tables.where(
-                                  (t) => t.parentBarRef == bar.reference,
-                                ))
-                                  seat.barSeatNumber!:
-                                      (seat.session?.paidCents ?? 0) +
-                                      (seat.session?.pendingCents ?? 0),
-                              },
-                              selectedSeat:
-                                  focusedTableRef == bar.reference ||
-                                      focused?.parentBarRef == bar.reference
-                                  ? selectedBarSeat
-                                  : null,
-                              onSeat: (seat) {
-                                final target = data.tables
-                                    .where(
-                                      (t) =>
-                                          t.parentBarRef == bar.reference &&
-                                          t.barSeatNumber == seat,
-                                    )
-                                    .firstOrNull;
-                                if (target != null) {
-                                  unawaited(selectBarSeat(target));
-                                  return;
-                                }
-                                setState(() {
-                                  focusedTableRef = bar.reference;
-                                  selectedBarSeat = seat;
-                                });
-                                widget.onMenuChanged?.call(false);
-                              },
+                                          .map((t) => t.barSeatNumber!)
+                                          .toList()
+                                        ..sort()),
+                                ],
+                                seatTables: {
+                                  for (final seat in data.tables.where(
+                                    (t) => t.parentBarRef == bar.reference,
+                                  ))
+                                    seat.barSeatNumber!: seat,
+                                },
+                                seatAmounts: {
+                                  for (final seat in data.tables.where(
+                                    (t) => t.parentBarRef == bar.reference,
+                                  ))
+                                    seat.barSeatNumber!:
+                                        (seat.session?.paidCents ?? 0) +
+                                        (seat.session?.pendingCents ?? 0),
+                                },
+                                selectedSeat:
+                                    focusedTableRef == bar.reference ||
+                                        focused?.parentBarRef == bar.reference
+                                    ? selectedBarSeat
+                                    : null,
+                                onSeat: (seat) {
+                                  final target = data.tables
+                                      .where(
+                                        (t) =>
+                                            t.parentBarRef == bar.reference &&
+                                            t.barSeatNumber == seat,
+                                      )
+                                      .firstOrNull;
+                                  if (target != null) {
+                                    unawaited(selectBarSeat(target));
+                                    return;
+                                  }
+                                  setState(() {
+                                    focusedTableRef = bar.reference;
+                                    selectedBarSeat = seat;
+                                  });
+                                  widget.onMenuChanged?.call(false);
+                                },
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
+                            const SizedBox(height: 12),
+                          ],
                         ],
-                      ],
-                    );
-                    if (historyMode && focused != null) {
-                      final scopes = history!.scopes(focused.reference);
-                      return Row(
-                        children: [
-                          Expanded(flex: 2, child: grid),
-                          const VerticalDivider(
-                            width: 1,
-                            thickness: 1,
-                            color: Color(0xffd7e2dc),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: TableBillPanel(
-                                key: ValueKey(
-                                  'history-${selectedDate}-${focused.reference}',
-                                ),
-                                auth: widget.auth,
-                                language: widget.language,
-                                tableRef: focused.reference,
-                                sessionRef: focused.session?.reference ?? '',
-                                seatSessions: scopes,
-                                initialBill: history!.bills[focused.reference],
-                                receiptCaption: ReceiptCaption(
-                                  storeName: data.storeName,
-                                  tableName: focused.name,
-                                  partySize: focused.session?.partySize,
-                                ),
-                                receiptDate: data.businessDate,
-                                revision: 0,
-                                fillHeight: true,
-                                readOnly: true,
-                                changesAllowed: false,
-                                checkoutAllowed: false,
-                                emptySeat: scopes.isEmpty,
-                                headerBuilder: (filter) =>
-                                    historyBillHeader(focused, filter),
-                                orderAction: OutlinedButton(
-                                  onPressed: null,
-                                  child: Text(t('ordering')),
+                      );
+                      if (historyMode && focused != null) {
+                        final scopes = history!.scopes(focused.reference);
+                        return Row(
+                          children: [
+                            Expanded(flex: 2, child: grid),
+                            const VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: Color(0xffd7e2dc),
+                            ),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: TableBillPanel(
+                                  key: ValueKey(
+                                    'history-${selectedDate}-${focused.reference}',
+                                  ),
+                                  auth: widget.auth,
+                                  language: widget.language,
+                                  tableRef: focused.reference,
+                                  sessionRef: focused.session?.reference ?? '',
+                                  seatSessions: scopes,
+                                  initialBill:
+                                      history!.bills[focused.reference],
+                                  receiptCaption: ReceiptCaption(
+                                    storeName: data.storeName,
+                                    tableName: focused.name,
+                                    partySize: focused.session?.partySize,
+                                  ),
+                                  receiptDate: data.businessDate,
+                                  revision: 0,
+                                  fillHeight: true,
+                                  readOnly: true,
+                                  changesAllowed: false,
+                                  checkoutAllowed: false,
+                                  emptySeat: scopes.isEmpty,
+                                  headerBuilder: (filter) =>
+                                      historyBillHeader(focused, filter),
+                                  orderAction: OutlinedButton(
+                                    onPressed: null,
+                                    child: Text(t('ordering')),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    }
-                    if ((focused?.isBarSeat == true ||
-                            focused?.aaParty != null) &&
-                        focused?.session == null) {
-                      final seat = focused!;
-                      final menu = widget.menuVisible ?? emptyBarMenu;
-                      void showMenu(bool value) {
-                        setState(() => emptyBarMenu = value);
-                        widget.onMenuChanged?.call(value);
+                          ],
+                        );
                       }
+                      if ((focused?.isBarSeat == true ||
+                              focused?.aaParty != null) &&
+                          focused?.session == null) {
+                        final seat = focused!;
+                        final menu = widget.menuVisible ?? emptyBarMenu;
+                        void showMenu(bool value) {
+                          setState(() => emptyBarMenu = value);
+                          widget.onMenuChanged?.call(value);
+                        }
 
-                      return Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: menu
-                                ? LiveCatalogPanel(
-                                    auth: widget.auth,
-                                    language: widget.language,
-                                    header: workspaceHeader(),
-                                    paymentTiming: 'prepay',
-                                    onBack: () => showMenu(false),
-                                    canAdd: (p) =>
-                                        !enteringBar &&
-                                        p.inventoryKnown &&
-                                        p.available > 0,
-                                    onSelect: (p) =>
-                                        unawaited(startBarProduct(seat, p)),
-                                  )
-                                : grid,
-                          ),
-                          const VerticalDivider(width: 1),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: TableBillPanel(
-                                auth: widget.auth,
-                                language: widget.language,
-                                tableRef: seat.reference,
-                                sessionRef: '',
-                                revision: 0,
-                                emptySeat: true,
-                                checkoutAllowed: false,
-                                fillHeight: true,
-                                headerBuilder: (filter) => seat.aaParty != null
-                                    ? historyBillHeader(
-                                        seat,
-                                        filter,
-                                        memberOverride: aaMemberButton(seat),
-                                      )
-                                    : BarBillHeader(
-                                        number: seat.barSeatNumber!,
-                                        color: Colors.white,
-                                        language: widget.language,
-                                        filter: filter,
-                                        voucherAction: VoucherScanButton(
-                                          auth: widget.auth,
+                        return Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: menu
+                                  ? LiveCatalogPanel(
+                                      auth: widget.auth,
+                                      language: widget.language,
+                                      header: workspaceHeader(),
+                                      paymentTiming: 'prepay',
+                                      onBack: () => showMenu(false),
+                                      canAdd: (p) =>
+                                          !enteringBar &&
+                                          p.inventoryKnown &&
+                                          p.available > 0,
+                                      onSelect: (p) =>
+                                          unawaited(startBarProduct(seat, p)),
+                                    )
+                                  : grid,
+                            ),
+                            const VerticalDivider(width: 1),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: TableBillPanel(
+                                  auth: widget.auth,
+                                  language: widget.language,
+                                  tableRef: seat.reference,
+                                  sessionRef: '',
+                                  revision: 0,
+                                  emptySeat: true,
+                                  checkoutAllowed: false,
+                                  fillHeight: true,
+                                  headerBuilder: (filter) =>
+                                      seat.aaParty != null
+                                      ? historyBillHeader(
+                                          seat,
+                                          filter,
+                                          memberOverride: aaMemberButton(seat),
+                                        )
+                                      : BarBillHeader(
+                                          number: seat.barSeatNumber!,
+                                          color: Colors.white,
                                           language: widget.language,
-                                          tableName: seat.name,
-                                          tableRef: seat.reference,
-                                        ),
-                                        member: IconButton(
-                                          key: const ValueKey(
-                                            'empty-bar-member',
+                                          filter: filter,
+                                          voucherAction: VoucherScanButton(
+                                            auth: widget.auth,
+                                            language: widget.language,
+                                            tableName: seat.name,
+                                            tableRef: seat.reference,
                                           ),
-                                          onPressed: () =>
-                                              linkEmptyBarMember(seat),
-                                          icon: const CircleAvatar(
-                                            radius: 16,
-                                            backgroundColor: Color(0xffdedede),
-                                            child: Icon(
-                                              Icons.person,
-                                              color: Color(0xff9e9e9e),
-                                              size: 23,
+                                          member: IconButton(
+                                            key: const ValueKey(
+                                              'empty-bar-member',
+                                            ),
+                                            onPressed: () =>
+                                                linkEmptyBarMember(seat),
+                                            icon: const CircleAvatar(
+                                              radius: 16,
+                                              backgroundColor: Color(
+                                                0xffdedede,
+                                              ),
+                                              child: Icon(
+                                                Icons.person,
+                                                color: Color(0xff9e9e9e),
+                                                size: 23,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                orderAction: OutlinedButton(
-                                  onPressed:
-                                      widget.auth.session?.permissions.contains(
-                                            'orders.create',
-                                          ) ==
-                                          true
-                                      ? () => showMenu(!menu)
-                                      : null,
-                                  child: Text(
-                                    menu ? t('ordersBack') : t('ordering'),
+                                  orderAction: OutlinedButton(
+                                    onPressed:
+                                        widget.auth.session?.permissions
+                                                .contains('orders.create') ==
+                                            true
+                                        ? () => showMenu(!menu)
+                                        : null,
+                                    child: Text(
+                                      menu ? t('ordersBack') : t('ordering'),
+                                    ),
                                   ),
-                                ),
-                                primaryAction: FilledButton(
-                                  onPressed: null,
-                                  child: Text(t('billSettled')),
+                                  primaryAction: FilledButton(
+                                    onPressed: null,
+                                    child: Text(t('billSettled')),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    }
-                    final combined = mergedSeats(focused);
-                    if (combined.length > 1) {
-                      final leader = combined.first;
-                      final label = combined
-                          .map((s) => 'B${s.barSeatNumber}')
-                          .join('+');
-                      return Row(
-                        children: [
-                          Expanded(flex: 2, child: grid),
-                          const VerticalDivider(width: 1),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: TableBillPanel(
-                                key: ValueKey(
-                                  'bar-combined-${combined.map((s) => s.session!.reference).join('-')}',
+                          ],
+                        );
+                      }
+                      final combined = mergedSeats(focused);
+                      if (combined.length > 1) {
+                        final leader = combined.first;
+                        final label = combined
+                            .map((s) => 'B${s.barSeatNumber}')
+                            .join('+');
+                        return Row(
+                          children: [
+                            Expanded(flex: 2, child: grid),
+                            const VerticalDivider(width: 1),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: TableBillPanel(
+                                  key: ValueKey(
+                                    'bar-combined-${combined.map((s) => s.session!.reference).join('-')}',
+                                  ),
+                                  auth: widget.auth,
+                                  language: widget.language,
+                                  tableRef: leader.reference,
+                                  sessionRef: leader.session!.reference,
+                                  revision: realtimeRevision,
+                                  fillHeight: true,
+                                  changesAllowed: false,
+                                  seatSessions: [
+                                    for (final seat in combined)
+                                      {
+                                        'tableRef': seat.reference,
+                                        'sessionRef': seat.session!.reference,
+                                      },
+                                  ],
+                                  headerBuilder: (filter) => Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              label,
+                                              style: const TextStyle(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              setState(
+                                                () => barGroups.removeWhere(
+                                                  (g) => g.contains(
+                                                    leader.session!.reference,
+                                                  ),
+                                                ),
+                                              );
+                                              unawaited(saveBarGroups());
+                                            },
+                                            child: Text(
+                                              barText(
+                                                '分开显示',
+                                                'Separate',
+                                                '分開顯示',
+                                                'แสดงแยก',
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              barText(
+                                                '消费明细',
+                                                'Bill',
+                                                '消費明細',
+                                                'รายการ',
+                                              ),
+                                            ),
+                                          ),
+                                          filter,
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                auth: widget.auth,
-                                language: widget.language,
-                                tableRef: leader.reference,
-                                sessionRef: leader.session!.reference,
-                                revision: realtimeRevision,
-                                fillHeight: true,
-                                changesAllowed: false,
-                                seatSessions: [
-                                  for (final seat in combined)
-                                    {
-                                      'tableRef': seat.reference,
-                                      'sessionRef': seat.session!.reference,
-                                    },
-                                ],
-                                headerBuilder: (filter) => Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      if (focused?.isBarCounter == true &&
+                          selectedBarSeat != null) {
+                        return Row(
+                          children: [
+                            Expanded(flex: 2, child: grid),
+                            const VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: Color(0xffd7e2dc),
+                            ),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Row(
                                       children: [
-                                        Expanded(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 18,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xff64716b),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
                                           child: Text(
-                                            label,
+                                            'B$selectedBarSeat',
                                             style: const TextStyle(
+                                              color: Colors.white,
                                               fontSize: 22,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ),
-                                        TextButton(
-                                          onPressed: () {
-                                            setState(
-                                              () => barGroups.removeWhere(
-                                                (g) => g.contains(
-                                                  leader.session!.reference,
-                                                ),
-                                              ),
-                                            );
-                                            unawaited(saveBarGroups());
-                                          },
-                                          child: Text(
-                                            barText(
-                                              '分开显示',
-                                              'Separate',
-                                              '分開顯示',
-                                              'แสดงแยก',
-                                            ),
+                                        const Spacer(),
+                                        IconButton(
+                                          onPressed: () => setState(
+                                            () => focusedTableRef = null,
                                           ),
+                                          icon: const Icon(Icons.close),
                                         ),
                                       ],
                                     ),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            barText(
-                                              '消费明细',
-                                              'Bill',
-                                              '消費明細',
-                                              'รายการ',
-                                            ),
-                                          ),
-                                        ),
-                                        filter,
-                                      ],
+                                    const Divider(),
+                                    Text(
+                                      [
+                                        '座位独立账单尚未启用',
+                                        'Seat billing is not enabled yet',
+                                        '座位獨立帳單尚未啟用',
+                                        'ยังไม่เปิดใช้งานบิลแยกที่นั่ง',
+                                      ][widget.language.index],
                                     ),
                                   ],
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    }
-                    if (focused?.isBarCounter == true &&
-                        selectedBarSeat != null) {
-                      return Row(
-                        children: [
-                          Expanded(flex: 2, child: grid),
-                          const VerticalDivider(
-                            width: 1,
-                            thickness: 1,
-                            color: Color(0xffd7e2dc),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
+                          ],
+                        );
+                      }
+                      if (focused?.session != null &&
+                          widget.auth.session?.permissions.contains(
+                                'orders.read',
+                              ) ==
+                              true) {
+                        final table = focused!;
+                        final actions = Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: t('orderOperations'),
+                              icon: const Icon(Icons.more_horiz),
+                              onPressed: () => showDialog<void>(
+                                context: context,
+                                builder: (dialogContext) => Dialog(
+                                  insetPadding: const EdgeInsets.all(24),
+                                  child: LiveOrdersPanel(
+                                    auth: widget.auth,
+                                    language: widget.language,
+                                    table: table,
+                                    revision: realtimeRevision,
+                                    onBack: () => Navigator.pop(dialogContext),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (widget.auth.session?.permissions.contains(
+                                  'table.clear',
+                                ) ==
+                                true)
+                              IconButton(
+                                key: ValueKey(
+                                  'tableClear-table-${table.reference}',
+                                ),
+                                tooltip: t('tableClearConfirm'),
+                                icon: const Icon(
+                                  Icons.cleaning_services_outlined,
+                                ),
+                                onPressed: () => setState(() {
+                                  tableClear = true;
+                                  clearingTable = table;
+                                }),
+                              ),
+                          ],
+                        );
+                        if (table.session!.status == 'open' &&
+                            widget.auth.session?.permissions.contains(
+                                  'orders.create',
+                                ) ==
+                                true) {
+                          return LiveOrderMembersPanel(
+                            key: ValueKey(
+                              'workspace-${table.session!.reference}',
+                            ),
+                            auth: widget.auth,
+                            language: widget.language,
+                            tableRef: table.reference,
+                            sessionRef: table.session!.reference,
+                            revision: realtimeRevision,
+                            menuVisible: widget.menuVisible,
+                            onMenuChanged: widget.onMenuChanged,
+                            tablePanel: grid,
+                            liveTable: table,
+                            onMemberTap: table.aaParty == null
+                                ? null
+                                : () => showAaSeats(table),
+                            initialProduct: initialBarProducts[table.reference],
+                            onInitialProductConsumed: () =>
+                                initialBarProducts.remove(table.reference),
+                            onDraftChanged: (value) {
+                              if (mounted &&
+                                  barDrafts.contains(table.reference) != value)
+                                setState(() {
+                                  if (value)
+                                    barDrafts.add(table.reference);
+                                  else
+                                    barDrafts.remove(table.reference);
+                                });
+                            },
+                            onMergePayment:
+                                table.isBarSeat &&
+                                    (table.session?.pendingCents ?? 0) > 0
+                                ? () => mergeBarSeats(table)
+                                : null,
+                            menuHeader: workspaceHeader(),
+                            tableActions: actions,
+                            onBack: () =>
+                                setState(() => focusedTableRef = null),
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(flex: 2, child: grid),
+                            Expanded(
+                              flex: 1,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: TableBillPanel(
+                                  auth: widget.auth,
+                                  language: widget.language,
+                                  tableRef: table.reference,
+                                  sessionRef: table.session!.reference,
+                                  revision: realtimeRevision,
+                                  fillHeight: true,
+                                  leading: Row(
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 18,
+                                      Expanded(child: Text(table.name)),
+                                      actions,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: grid),
+                          if (focused != null)
+                            SizedBox(
+                              width: detailWidth,
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.fromLTRB(0, 4, 12, 8),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: IconButton(
+                                        key: const ValueKey(
+                                          'table-detail-back',
                                         ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xff64716b),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'B$selectedBarSeat',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      IconButton(
+                                        tooltip: t('ordersBack'),
                                         onPressed: () => setState(
                                           () => focusedTableRef = null,
                                         ),
                                         icon: const Icon(Icons.close),
                                       ),
-                                    ],
-                                  ),
-                                  const Divider(),
-                                  Text(
-                                    [
-                                      '座位独立账单尚未启用',
-                                      'Seat billing is not enabled yet',
-                                      '座位獨立帳單尚未啟用',
-                                      'ยังไม่เปิดใช้งานบิลแยกที่นั่ง',
-                                    ][widget.language.index],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-                    if (focused?.session != null &&
-                        widget.auth.session?.permissions.contains(
-                              'orders.read',
-                            ) ==
-                            true) {
-                      final table = focused!;
-                      final actions = Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: t('orderOperations'),
-                            icon: const Icon(Icons.more_horiz),
-                            onPressed: () => showDialog<void>(
-                              context: context,
-                              builder: (dialogContext) => Dialog(
-                                insetPadding: const EdgeInsets.all(24),
-                                child: LiveOrdersPanel(
-                                  auth: widget.auth,
-                                  language: widget.language,
-                                  table: table,
-                                  revision: realtimeRevision,
-                                  onBack: () => Navigator.pop(dialogContext),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (widget.auth.session?.permissions.contains(
-                                'table.clear',
-                              ) ==
-                              true)
-                            IconButton(
-                              key: ValueKey(
-                                'tableClear-table-${table.reference}',
-                              ),
-                              tooltip: t('tableClearConfirm'),
-                              icon: const Icon(
-                                Icons.cleaning_services_outlined,
-                              ),
-                              onPressed: () => setState(() {
-                                tableClear = true;
-                                clearingTable = table;
-                              }),
-                            ),
-                        ],
-                      );
-                      if (table.session!.status == 'open' &&
-                          widget.auth.session?.permissions.contains(
-                                'orders.create',
-                              ) ==
-                              true) {
-                        return LiveOrderMembersPanel(
-                          key: ValueKey(
-                            'workspace-${table.session!.reference}',
-                          ),
-                          auth: widget.auth,
-                          language: widget.language,
-                          tableRef: table.reference,
-                          sessionRef: table.session!.reference,
-                          revision: realtimeRevision,
-                          menuVisible: widget.menuVisible,
-                          onMenuChanged: widget.onMenuChanged,
-                          tablePanel: grid,
-                          liveTable: table,
-                          onMemberTap: table.aaParty == null
-                              ? null
-                              : () => showAaSeats(table),
-                          initialProduct: initialBarProducts[table.reference],
-                          onInitialProductConsumed: () =>
-                              initialBarProducts.remove(table.reference),
-                          onDraftChanged: (value) {
-                            if (mounted &&
-                                barDrafts.contains(table.reference) != value)
-                              setState(() {
-                                if (value)
-                                  barDrafts.add(table.reference);
-                                else
-                                  barDrafts.remove(table.reference);
-                              });
-                          },
-                          onMergePayment:
-                              table.isBarSeat &&
-                                  (table.session?.pendingCents ?? 0) > 0
-                              ? () => mergeBarSeats(table)
-                              : null,
-                          menuHeader: workspaceHeader(),
-                          tableActions: actions,
-                          onBack: () => setState(() => focusedTableRef = null),
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(flex: 2, child: grid),
-                          Expanded(
-                            flex: 1,
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: TableBillPanel(
-                                auth: widget.auth,
-                                language: widget.language,
-                                tableRef: table.reference,
-                                sessionRef: table.session!.reference,
-                                revision: realtimeRevision,
-                                fillHeight: true,
-                                leading: Row(
-                                  children: [
-                                    Expanded(child: Text(table.name)),
-                                    actions,
+                                    ),
+                                    IgnorePointer(
+                                      ignoring: loading,
+                                      child: tableDetails(
+                                        focused,
+                                        data.currency,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
                             ),
-                          ),
                         ],
                       );
-                    }
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: grid),
-                        if (focused != null)
-                          SizedBox(
-                            width: detailWidth,
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(0, 4, 12, 8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: IconButton(
-                                      key: const ValueKey('table-detail-back'),
-                                      tooltip: t('ordersBack'),
-                                      onPressed: () => setState(
-                                        () => focusedTableRef = null,
-                                      ),
-                                      icon: const Icon(Icons.close),
-                                    ),
-                                  ),
-                                  IgnorePointer(
-                                    ignoring: loading,
-                                    child: tableDetails(focused, data.currency),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
+                    },
+                  ),
+          ),
         ),
       ],
     );

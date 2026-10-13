@@ -666,6 +666,7 @@ const copy = <String, String>{
   'tableOpen': '已开台|Open session|已開檯|เปิดโต๊ะแล้ว',
   'tableTemporaryHold': '临时占座|Temporary hold|臨時佔座|จองโต๊ะชั่วคราว',
   'liveRefresh': '刷新桌台|Refresh tables|重新整理桌檯|รีเฟรชโต๊ะ',
+  'liveReadReconnecting': '暂时无法连接服务器，正在自动重连。显示的数据尚未更新。|Unable to reach the server. Reconnecting automatically; displayed data has not been updated.|暫時無法連線伺服器，正在自動重連。顯示的資料尚未更新。|ติดต่อเซิร์ฟเวอร์ไม่ได้ กำลังเชื่อมต่อใหม่อัตโนมัติ ข้อมูลที่แสดงยังไม่ได้อัปเดต',
   'liveReadOnly': '只读桌台快照 · 尚未接入实时推送，请手动刷新；未付款订单合计不等于最终结账金额。|Read-only snapshot · No live updates yet; refresh manually. Pending orders are not the final bill.|唯讀桌檯快照 · 尚未接入即時推送，請手動重新整理；未付款訂單合計不等於最終結帳金額。|ข้อมูลโต๊ะ ณ เวลาที่อ่าน · ยังไม่อัปเดตอัตโนมัติ โปรดรีเฟรช ยอดคำสั่งซื้อค้างชำระไม่ใช่ยอดบิลสุดท้าย',
   'liveObserved': '本页查询时间|Page observed at|本頁查詢時間|เวลาข้อมูลหน้านี้',
   'liveBusinessDate': '营业日|Business date|營業日|วันที่ดำเนินธุรกิจ',

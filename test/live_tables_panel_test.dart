@@ -9,6 +9,7 @@ import 'package:kingclub_cash_register/src/live/bar_counter_strip.dart';
 import 'package:kingclub_cash_register/src/live/opening_snapshot.dart';
 import 'package:kingclub_cash_register/src/strings.dart';
 import 'package:kingclub_cash_register/src/network/cashier_realtime_client.dart';
+import 'package:kingclub_cash_register/src/network/ccsop_client.dart';
 
 import 'support/table_fixture.dart';
 
@@ -51,6 +52,7 @@ class TableAuth extends StaffAuthController {
   final requested = <String?>[];
   Completer<Object?>? gate;
   bool fail = false;
+  CcsopFailure? failure;
   TableAuth({List<String> permissions = const ['workbench.read']})
     : session = StaffSession.fromServer(
         {
@@ -80,6 +82,7 @@ class TableAuth extends StaffAuthController {
   @override
   Future<Object?> readWorkbench({String? afterTable}) async {
     requested.add(afterTable);
+    if (failure != null) throw failure!;
     if (gate != null) return gate!.future;
     if (fail) throw StateError('PRIVATE_ERROR');
     return reply;
@@ -383,6 +386,68 @@ void main() {
   }
 
   testWidgets(
+    'cold-start transport failure retries and recovers without a tap',
+    (tester) async {
+      final auth = TableAuth()
+        ..failure = const CcsopFailure('TRANSPORT_FAILED');
+      await show(tester, auth);
+      expect(find.byKey(const ValueKey('table-read-retry')), findsOneWidget);
+      expect(find.textContaining('自动重连'), findsOneWidget);
+      expect(auth.requested.length, 1);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(auth.requested.length, 2);
+      auth.failure = null;
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+      expect(auth.requested.length, 3);
+      expect(find.text('Test table 0'), findsOneWidget);
+      expect(find.byKey(const ValueKey('table-read-retry')), findsNothing);
+      await tester.pump(const Duration(seconds: 45));
+      expect(auth.requested.length, 3);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+
+  testWidgets(
+    'network loss retains read-only tables, pause cancels retry, and resume recovers',
+    (tester) async {
+      final auth = TableAuth();
+      await show(tester, auth);
+      auth.failure = const CcsopFailure('TRANSPORT_FAILED');
+      await tester.tap(find.byKey(const ValueKey('table-tools')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('live-refresh')));
+      await tester.pumpAndSettle();
+      final card = find.byKey(const ValueKey('live-table-test-000'));
+      expect(card, findsOneWidget);
+      expect(find.textContaining('自动重连'), findsOneWidget);
+      final blocked = find.ancestor(
+        of: card,
+        matching: find.byType(IgnorePointer),
+      );
+      expect(
+        tester.widgetList<IgnorePointer>(blocked).any((w) => w.ignoring),
+        isTrue,
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      final reads = auth.requested.length;
+      await tester.pump(const Duration(seconds: 35));
+      expect(auth.requested.length, reads);
+      expect(card, findsOneWidget);
+      auth.failure = null;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(auth.requested.length, reads + 1);
+      expect(find.textContaining('自动重连'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
+
+  testWidgets(
     'table card shows occupied and empty seats with readable opening time',
     (tester) async {
       final auth = TableAuth(), data = tableFixture();
@@ -564,7 +629,7 @@ void main() {
       await tester.pump();
       pending.complete(tableFixture());
       await tester.pump();
-      expect(find.text('Test table 0'), findsNothing);
+      expect(find.text('Test table 0'), findsOneWidget);
       final reads = auth.requested.length;
       auth.gate = null;
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
