@@ -37,6 +37,17 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
       selectedUnit?['priceCents'] ?? widget.product['priceCents'];
   int get stockUnits => (selectedUnit?['stockUnits'] as int?) ?? 1;
   dynamic suggested(dynamic cents) => cents is num ? cents * stockUnits : null;
+  int? multipliedCost(dynamic cost, int multiplier) {
+    if (cost is! num || cost <= 0 || !cost.isFinite) return null;
+    final value = (cost * stockUnits * multiplier).round();
+    return value >= 1 && value <= 100000000 ? value : null;
+  }
+
+  void usePrice(int value) => setState(() {
+    amount = (value / 100).toStringAsFixed(2);
+    fresh = true;
+    error = null;
+  });
   String t(String zh, String en, String tw, String th) =>
       [zh, en, tw, th][widget.language.index];
   String name(dynamic value) => value is Map
@@ -278,12 +289,63 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
                                       ),
                                     ),
                                     const SizedBox(height: 8),
-                                    Text(
-                                      '${t('折算进货单价', 'Unit purchase cost', '折算進貨單價', 'ต้นทุนต่อหน่วย')}  ${money(q['unitCostCents'])}',
-                                      style: const TextStyle(
-                                        fontSize: 17,
-                                        color: green,
-                                      ),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '${t('折算进货单价', 'Unit purchase cost', '折算進貨單價', 'ต้นทุนต่อหน่วย')}  ${money(q['unitCostCents'])}',
+                                            style: const TextStyle(
+                                              fontSize: 17,
+                                              color: green,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        for (final multiple in [3, 5]) ...[
+                                          FilledButton.tonal(
+                                            key: ValueKey(
+                                              'retail-cost-${quotes.indexOf(q)}-$multiple',
+                                            ),
+                                            style: FilledButton.styleFrom(
+                                              minimumSize: const Size(60, 48),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                  ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                            ),
+                                            onPressed:
+                                                busy ||
+                                                    multipliedCost(
+                                                          q['unitCostCents'],
+                                                          multiple,
+                                                        ) ==
+                                                        null
+                                                ? null
+                                                : () => usePrice(
+                                                    multipliedCost(
+                                                      q['unitCostCents'],
+                                                      multiple,
+                                                    )!,
+                                                  ),
+                                            child: Text(
+                                              t(
+                                                '$multiple倍',
+                                                '×$multiple',
+                                                '$multiple倍',
+                                                '×$multiple',
+                                              ),
+                                            ),
+                                          ),
+                                          if (multiple == 3)
+                                            const SizedBox(width: 8),
+                                        ],
+                                      ],
                                     ),
                                     const SizedBox(height: 6),
                                     Row(
@@ -421,6 +483,7 @@ class _RetailPriceDialogState extends State<RetailPriceDialog> {
                               ),
                             ),
                           ),
+                          const SizedBox(height: 16),
                           if (error != null)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8),

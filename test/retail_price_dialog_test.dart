@@ -64,9 +64,17 @@ void main() {
       expect(find.text('¥ 140.00'), findsOneWidget);
       expect(find.textContaining('¥ 6.00'), findsNWidgets(2));
       expect(find.textContaining('¥ 150.00'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('retail-cost-0-3')));
+      await tester.pump();
+      expect(find.text('¥ 108.00'), findsOneWidget);
+      expect(saved, isNull);
       await tester.tap(find.byKey(const ValueKey('retail-unit-U12')));
       await tester.pump();
       expect(find.text('¥ 258.00'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('retail-cost-0-5')));
+      await tester.pump();
+      expect(find.text('¥ 360.00'), findsOneWidget);
+      expect(saved, isNull);
       await tester.tap(find.byKey(const ValueKey('retail-key-3')));
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('retail-key-0')));
@@ -150,6 +158,34 @@ void main() {
     expect(find.byType(RetailPriceDialog), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'cost multiples use bottle cost instead of case quote and save remains separate',
+    (tester) async {
+      int? saved;
+      await show(tester, (value) async {
+        saved = value;
+        return true;
+      });
+      await tester.tap(find.byKey(const ValueKey('retail-cost-0-3')));
+      await tester.pump();
+      expect(find.text('¥ 300.00'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('retail-cost-0-5')));
+      await tester.pump();
+      expect(find.text('¥ 500.00'), findsOneWidget);
+      expect(saved, isNull);
+      final lastKey = tester.getRect(
+        find.byKey(const ValueKey('retail-key-0')),
+      );
+      final saveButton = tester.getRect(
+        find.byKey(const ValueKey('retail-price-save')),
+      );
+      expect(saveButton.top - lastKey.bottom, greaterThanOrEqualTo(15));
+      await tester.tap(find.byKey(const ValueKey('retail-price-save')));
+      await tester.pumpAndSettle();
+      expect(saved, 50000);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'using recommended price still requires saving; closing cancels',
     (tester) async {
