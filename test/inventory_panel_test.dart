@@ -57,7 +57,7 @@ class InventoryAuth extends TableAuth {
         ],
       };
     }
-    return {
+    final result = <String, dynamic>{
       'storeRef': 'test-store',
       'categories': [
         {
@@ -198,6 +198,18 @@ class InventoryAuth extends TableAuth {
       'movements': [],
       'lastCountAt': null,
     };
+    if (command['action'] == 'procurement_page') {
+      final products =
+          (result['procurementProducts'] ?? result['products']) as List;
+      return {
+        'storeRef': 'test-store',
+        'products': products,
+        'total': products.length,
+        'hasMore': false,
+        'categories': [],
+      };
+    }
+    return result;
   }
 }
 
@@ -241,7 +253,10 @@ void main() {
         expect(find.text('已按供应商报价自动带入'), findsOneWidget);
         expect(find.text('调整实际进货价'), findsOneWidget);
         expect(find.text('录入实际进货价'), findsNothing);
-        expect(auth.calls, hasLength(1));
+        expect(
+          auth.calls.where((c) => c['action'] != 'procurement_page'),
+          hasLength(1),
+        );
         await tester.tap(find.text('取消').last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('保存草稿'));
@@ -301,7 +316,10 @@ void main() {
         await tester.tap(find.byIcon(Icons.close).last);
         await tester.pumpAndSettle();
       }
-      expect(auth.calls, hasLength(1));
+      expect(
+        auth.calls.where((c) => c['action'] != 'procurement_page'),
+        hasLength(1),
+      );
       expect(auth.batch, isNull);
       expect(find.byIcon(Icons.delete_outline), findsNothing);
       expect(tester.takeException(), isNull);
@@ -342,7 +360,10 @@ void main() {
         find.byKey(const ValueKey('delete-purchase-draft-$batchRef')),
       );
       await tester.pumpAndSettle();
-      expect(auth.calls, hasLength(2));
+      expect(
+        auth.calls.where((c) => c['action'] != 'procurement_page'),
+        hasLength(2),
+      );
       expect(auth.calls.last, containsPair('action', 'purchase_batch_delete'));
       expect(auth.calls.last, containsPair('revision', 1));
       expect(
@@ -381,11 +402,17 @@ void main() {
       expect(choice, findsOneWidget);
       await tester.tap(choice);
       await tester.pumpAndSettle();
-      expect(auth.calls, hasLength(1));
+      expect(
+        auth.calls.where((c) => c['action'] != 'procurement_page'),
+        hasLength(1),
+      );
       expect(find.text('采购单价 ¥ 26.00'), findsOneWidget);
       await tester.tap(find.text('保存草稿'));
       await tester.pumpAndSettle();
-      expect(auth.calls, hasLength(2));
+      expect(
+        auth.calls.where((c) => c['action'] != 'procurement_page'),
+        hasLength(2),
+      );
       final saved = find.byKey(
         const ValueKey('purchase-line-new-store-product-test-supplier'),
       );
@@ -400,7 +427,10 @@ void main() {
       expect(saved, findsOneWidget);
       await tester.tap(find.byIcon(Icons.close).last);
       await tester.pumpAndSettle();
-      expect(auth.calls, hasLength(2));
+      expect(
+        auth.calls.where((c) => c['action'] != 'procurement_page'),
+        hasLength(2),
+      );
       expect((auth.batch!['items'] as List).single['quantity'], 1);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -512,7 +542,10 @@ void main() {
         }
         await tester.pumpAndSettle();
         expect(find.byIcon(Icons.close), findsNothing);
-        expect(auth.calls, hasLength(1));
+        expect(
+          auth.calls.where((c) => c['action'] != 'procurement_page'),
+          hasLength(1),
+        );
         expect(auth.batch!['revision'], 1);
         expect((auth.batch!['items'] as List).single['quantity'], 2);
         expect(tester.takeException(), isNull);
@@ -559,7 +592,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        auth.calls.length,
+        auth.calls.where((c) => c['action'] != 'procurement_page').length,
         1,
         reason: 'Adding products edits the batch locally',
       );
@@ -620,7 +653,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('inventory-stock-all')));
     await tester.pumpAndSettle();
     expect(find.textContaining('测试酒品'), findsWidgets);
-    expect(auth.calls.length, 1);
+    expect(
+      auth.calls.where((c) => c['action'] != 'procurement_page').length,
+      1,
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -663,7 +699,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Other supplier'), findsOneWidget);
       expect(
-        auth.calls.length,
+        auth.calls.where((c) => c['action'] != 'procurement_page').length,
         1,
         reason: 'Price changes and supplier selection remain local',
       );
@@ -707,14 +743,17 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(auth.calls.length, 1);
+      expect(
+        auth.calls.where((c) => c['action'] != 'procurement_page').length,
+        1,
+      );
       for (var i = 0; i < 7; i++) {
         await tester.tap(find.byKey(ValueKey('inventory-tab-$i')));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       }
       expect(
-        auth.calls.length,
+        auth.calls.where((c) => c['action'] != 'procurement_page').length,
         1,
         reason: 'Changing tabs must not reload the page',
       );

@@ -503,7 +503,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final command = {
         'action': 'context',
         'before': before,
-        'view': stock ? 'stock' : 'full',
+        'view': stock ? 'stock' : 'summary',
         if (stock) ...{
           'pageSize': 50,
           'offset': stockOffset,
@@ -579,6 +579,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
   }
 
+  Map<String, dynamic> get responseQuery => {
+    'view': tab == 0 ? 'stock' : 'summary',
+    if (tab == 0) ...{
+      'pageSize': 50,
+      'offset': stockOffset,
+      'category': category,
+      'stockFilter': stockFilter,
+      'search': search.text.trim(),
+    },
+  };
+
   Future<bool> submit(Map<String, dynamic> command) async {
     if (working) return false;
     final request = epoch;
@@ -588,16 +599,25 @@ class _InventoryPanelState extends State<InventoryPanel> {
       if (!await resolvePending() || !mounted || request != epoch) return false;
     }
     setState(() => working = true);
-    pending = {...command, 'requestId': command['requestId'] ?? uid()};
+    pending = {
+      ...command,
+      'requestId': command['requestId'] ?? uid(),
+      'responseQuery': responseQuery,
+    };
     try {
       await saveDraft();
       if (!mounted || request != epoch) return false;
       final v = await widget.auth.inventory(pending!);
       if (!mounted || request != epoch) return false;
-      WorkspaceReadCache.put(cacheIdentity, 'inventory:0', v);
-      unawaited(
-        pageCache.write(displayScope, {...v, 'imageMaterials': imageMaterials}),
-      );
+      WorkspaceReadCache.put(cacheIdentity, readKey, v);
+      if (defaultStockPage) {
+        unawaited(
+          pageCache.write(displayScope, {
+            ...v,
+            'imageMaterials': imageMaterials,
+          }),
+        );
+      }
       setState(() {
         data = v;
         if (command['candidateKey'] != null) {
@@ -726,6 +746,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
     try {
       final v = await widget.auth.inventory({
         'action': 'resolve_pending',
+        'responseQuery': responseQuery,
         'requestId': previous['requestId'],
         'originalAction': previous['action'],
         if (previous['productRef'] != null)
@@ -757,11 +778,16 @@ class _InventoryPanelState extends State<InventoryPanel> {
         pending = null;
         error = null;
       });
-      WorkspaceReadCache.put(cacheIdentity, 'inventory:0', v);
+      WorkspaceReadCache.put(cacheIdentity, readKey, v);
       await saveDraft();
-      unawaited(
-        pageCache.write(displayScope, {...v, 'imageMaterials': imageMaterials}),
-      );
+      if (defaultStockPage) {
+        unawaited(
+          pageCache.write(displayScope, {
+            ...v,
+            'imageMaterials': imageMaterials,
+          }),
+        );
+      }
       return true;
     } catch (_) {
       if (mounted)
@@ -777,29 +803,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
     } finally {
       if (mounted && request == epoch) setState(() => working = false);
     }
-  }
-
-  Future<void> ensureProcurementProducts() async {
-    if (data?['procurementProducts'] is List) return;
-    if (data?['view'] != 'stock') return;
-    final identity = cacheIdentity;
-    Map<String, dynamic> v;
-    try {
-      v = await (procurementRead ??= widget.auth.inventory({
-        'action': 'context',
-        'view': 'full',
-      }));
-    } catch (_) {
-      procurementRead = null;
-      rethrow;
-    }
-    if (!mounted || !identical(identity, cacheIdentity)) return;
-    setState(
-      () => data = {
-        ...?data,
-        'procurementProducts': v['procurementProducts'] ?? v['products'],
-      },
-    );
   }
 
   Future<void> loadImages() async {
@@ -1579,7 +1582,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
     bool receiving = false,
   }) async {
     try {
-      await ensureProcurementProducts();
       if (!mounted) return;
       final detail = batch['items'] is List
           ? batch
@@ -1595,9 +1597,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
           categories: rows('categories'),
           language: widget.language,
           batch: detail,
-          products: data?['procurementProducts'] is List
-              ? rows('procurementProducts')
-              : rows('products'),
+          products: rows('products'),
+          loadProducts: (query) =>
+              widget.auth.inventory({'action': 'procurement_page', ...query}),
           suppliers: rows('suppliers'),
           locations: locations,
           l: l,
@@ -2782,7 +2784,11 @@ class _InventoryPanelState extends State<InventoryPanel> {
       stockOffset = max(0, stockOffset + delta);
       selected = '';
     });
-    if (pagedStock) { unawaited(load()); } else { unawaited(loadImages()); }
+    if (pagedStock) {
+      unawaited(load());
+    } else {
+      unawaited(loadImages());
+    }
   }
 
   Widget counts() => box(
@@ -3489,11 +3495,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   KeyedSubtree(
                     key: ValueKey('inventory-tab-$i'),
                     child: button(titles[i], () {
-                      final needsRead = (data?['paged'] == true && i != 0) || (i == 0 && data?['view'] == 'full');
+                      final needsRead =
+                          (data?['paged'] == true && i != 0) ||
+                          (i == 0 &&
+                              ['full', 'summary'].contains(data?['view']));
                       setState(() {
                         tab = i;
                       });
-                      if(needsRead) unawaited(load());
+                      if (needsRead) unawaited(load());
                     }, primary: tab == i),
                   ),
               ],

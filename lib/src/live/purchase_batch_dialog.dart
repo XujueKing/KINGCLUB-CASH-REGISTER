@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../strings.dart';
@@ -11,6 +13,7 @@ class PurchaseBatchDialog extends StatefulWidget {
     super.key,
     required this.batch,
     required this.products,
+    this.loadProducts,
     this.categories = const [],
     required this.suppliers,
     required this.locations,
@@ -23,6 +26,8 @@ class PurchaseBatchDialog extends StatefulWidget {
     this.initialProduct,
     required this.attach,
   });
+  final Future<Map<String, dynamic>> Function(Map<String, dynamic>)?
+  loadProducts;
   final Map<String, dynamic> batch;
   final List<Map<String, dynamic>> products, suppliers;
   final List<Map<String, dynamic>> categories;
@@ -46,7 +51,11 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   final search = TextEditingController();
   String query = '';
   String category = '';
-  late final List<Map<String, dynamic>> browseProducts;
+  late List<Map<String, dynamic>> browseProducts;
+  Timer? searchTimer;
+  int browseEpoch = 0, offset = 0, total = 0;
+  bool browseLoading = false, hasMore = false;
+  String? browseError;
   late final Map<String, String> browseCategories;
   String categoryKey(Map p) =>
       '${p['categoryKey'] ?? p['categoryRef'] ?? '_other'}';
@@ -146,6 +155,10 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
         .map((x) => Map<String, dynamic>.from(x as Map))
         .toList();
     title = TextEditingController(text: '${batch['title']}');
+    if (widget.loadProducts != null && editable) {
+      browseProducts = [];
+      unawaited(readProducts());
+    }
     if (widget.initialProduct != null && status == 'draft') {
       add(widget.initialProduct!, notify: false);
     }
@@ -153,9 +166,85 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
 
   @override
   void dispose() {
+    browseEpoch++;
+    searchTimer?.cancel();
     title.dispose();
     search.dispose();
     super.dispose();
+  }
+
+  Future<void> readProducts() async {
+    final loader = widget.loadProducts;
+    if (loader == null) return;
+    final epoch = ++browseEpoch;
+    setState(() {
+      browseLoading = true;
+      browseError = null;
+    });
+    try {
+      final page = await loader({
+        'pageSize': 50,
+        'offset': offset,
+        'category': category,
+        'search': query,
+      });
+      if (!mounted || epoch != browseEpoch) return;
+      final products = (page['products'] as List)
+          .map((p) => Map<String, dynamic>.from(p as Map))
+          .toList();
+      final order = (page['orderedRefs'] as List? ?? []).cast<String>();
+      final positions = {for (var i = 0; i < order.length; i++) order[i]: i};
+      products.sort(
+        (a, b) => (positions[a['productRef']] ?? 0).compareTo(
+          positions[b['productRef']] ?? 0,
+        ),
+      );
+      setState(() {
+        browseProducts = products;
+        total = (page['total'] as num).toInt();
+        hasMore = page['hasMore'] == true || page['hasMore'] == 1;
+        browseCategories.clear();
+        for (final c in (page['categories'] as List? ?? [])) {
+          browseCategories['${c['categoryKey']}'] = name(c['names']);
+        }
+      });
+    } catch (_) {
+      if (mounted && epoch == browseEpoch)
+        setState(
+          () => browseError = t(
+            '选货未能读取，请重试',
+            'Could not load products. Retry.',
+            '選貨未能讀取，請重試',
+            'อ่านสินค้าไม่ได้ ลองอีกครั้ง',
+          ),
+        );
+    } finally {
+      if (mounted && epoch == browseEpoch)
+        setState(() => browseLoading = false);
+    }
+  }
+
+  void changeBrowse({String? text, String? selectedCategory, int? nextOffset}) {
+    searchTimer?.cancel();
+    browseEpoch++;
+    setState(() {
+      query = text?.trim().toLowerCase() ?? query;
+      category = selectedCategory ?? category;
+      offset = nextOffset ?? 0;
+      if (widget.loadProducts != null) {
+        browseProducts = [];
+        browseLoading = true;
+      }
+    });
+    if (widget.loadProducts == null) return;
+    if (text != null) {
+      searchTimer = Timer(
+        const Duration(milliseconds: 250),
+        () => unawaited(readProducts()),
+      );
+    } else {
+      unawaited(readProducts());
+    }
   }
 
   void priceFor(Map<String, dynamic> line, Map product, String supplier) {
@@ -288,7 +377,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
 
   Future<void> edit(Map<String, dynamic> line) async {
     if (busy) return;
-    final product = widget.products
+    Map<String, dynamic>? product = browseProducts
         .where(
           (p) =>
               p['productRef'] == line['productRef'] ||
@@ -296,9 +385,38 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                   p['sharedProductKey'] == line['sharedProductKey']),
         )
         .firstOrNull;
-    if (product == null) return;
+    if (widget.loadProducts != null) {
+      setState(() => busy = true);
+      try {
+        final page = await widget.loadProducts!({
+          'pageSize': 1,
+          'productRefs': [
+            line['productRef'],
+            if (line['sharedProductKey'] != null) line['sharedProductKey'],
+          ],
+        });
+        product = (page['products'] as List)
+            .map((p) => Map<String, dynamic>.from(p as Map))
+            .firstOrNull;
+      } catch (_) {
+        if (mounted)
+          setState(
+            () => error = t(
+              '报价读取失败，请重试',
+              'Could not load quote. Retry.',
+              '報價讀取失敗，請重試',
+              'อ่านราคาไม่ได้ ลองใหม่',
+            ),
+          );
+        return;
+      } finally {
+        if (mounted) setState(() => busy = false);
+      }
+    }
+    if (!mounted || product == null) return;
+    final selectedProduct = product;
     final copy = {...line};
-    copy['quote'] ??= quotes(product)
+    copy['quote'] ??= quotes(selectedProduct)
         .where((q) => q['key'] == copy['quoteKey'])
         .firstOrNull;
     final ok = await showDialog<bool>(
@@ -325,7 +443,8 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                       ),
                   ],
                   onChanged: (v) {
-                    if (v != null) set(() => priceFor(copy, product, v));
+                    if (v != null)
+                      set(() => priceFor(copy, selectedProduct, v));
                   },
                 ),
                 const SizedBox(height: 16),
@@ -592,16 +711,18 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
   };
   @override
   Widget build(BuildContext context) {
-    final filtered = browseProducts
-        .where(
-          (p) =>
-              (category.isEmpty ||
-                  (category == '_unpriced'
-                      ? !hasQuote(p)
-                      : categoryKey(p) == category)) &&
-              productTitle(p).toLowerCase().contains(query),
-        )
-        .toList();
+    final filtered = widget.loadProducts != null
+        ? browseProducts
+        : browseProducts
+              .where(
+                (p) =>
+                    (category.isEmpty ||
+                        (category == '_unpriced'
+                            ? !hasQuote(p)
+                            : categoryKey(p) == category)) &&
+                    productTitle(p).toLowerCase().contains(query),
+              )
+              .toList();
     final total = items.fold<num>(
       0,
       (sum, i) =>
@@ -698,9 +819,7 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                             children: [
                               TextField(
                                 controller: search,
-                                onChanged: (v) => setState(
-                                  () => query = v.trim().toLowerCase(),
-                                ),
+                                onChanged: (v) => changeBrowse(text: v),
                                 decoration: InputDecoration(
                                   prefixIcon: const Icon(Icons.search),
                                   hintText: t(
@@ -714,6 +833,57 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                                 ),
                               ),
                               const SizedBox(height: 8),
+                              if (widget.loadProducts != null)
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        browseLoading
+                                            ? t(
+                                                '正在读取',
+                                                'Loading',
+                                                '正在讀取',
+                                                'กำลังโหลด',
+                                              )
+                                            : '${this.total == 0 ? 0 : offset + 1}-${offset + browseProducts.length} / ${this.total}',
+                                      ),
+                                    ),
+                                    IconButton(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 52,
+                                        minHeight: 52,
+                                      ),
+                                      onPressed: browseLoading || offset == 0
+                                          ? null
+                                          : () => changeBrowse(
+                                              nextOffset: offset - 50,
+                                            ),
+                                      icon: const Icon(Icons.chevron_left),
+                                    ),
+                                    IconButton(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 52,
+                                        minHeight: 52,
+                                      ),
+                                      onPressed: browseLoading || !hasMore
+                                          ? null
+                                          : () => changeBrowse(
+                                              nextOffset: offset + 50,
+                                            ),
+                                      icon: const Icon(Icons.chevron_right),
+                                    ),
+                                  ],
+                                ),
+                              if (browseError != null)
+                                TextButton(
+                                  onPressed: browseLoading
+                                      ? null
+                                      : readProducts,
+                                  child: Text(
+                                    browseError!,
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
+                                ),
                               Expanded(
                                 child: Row(
                                   crossAxisAlignment:
@@ -741,9 +911,10 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                                               ...browseCategories.entries.map(
                                                 (e) => (e.key, e.value),
                                               ),
-                                              if (browseProducts.any(
-                                                (p) => !hasQuote(p),
-                                              ))
+                                              if (widget.loadProducts != null ||
+                                                  browseProducts.any(
+                                                    (p) => !hasQuote(p),
+                                                  ))
                                                 (
                                                   '_unpriced',
                                                   t(
@@ -762,8 +933,8 @@ class _PurchaseBatchDialogState extends State<PurchaseBatchDialog> {
                                                   key: ValueKey(
                                                     'purchase-category-${c.$1}',
                                                   ),
-                                                  onTap: () => setState(
-                                                    () => category = c.$1,
+                                                  onTap: () => changeBrowse(
+                                                    selectedCategory: c.$1,
                                                   ),
                                                   child: Container(
                                                     constraints:
