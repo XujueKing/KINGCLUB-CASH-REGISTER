@@ -26,7 +26,7 @@ class CandidateAuth extends InventoryAuth {
       adopted = true;
       price = p['priceCents'] as int;
     }
-    return {
+    final result = <String, dynamic>{
       ...v,
       'listingPermissions': {'direct': administrator, 'submit': true},
       if (adopted)
@@ -65,13 +65,48 @@ class CandidateAuth extends InventoryAuth {
             },
       ],
     };
+    if (p['action'] == 'context' && p['pageSize'] != null) {
+      final all =
+          [
+            ...result['products'] as List,
+            ...result['catalogProducts'] as List,
+          ].where((v) {
+            final row = v as Map;
+            final text =
+                '${(row['names'] as Map)['zh-CN']} ${(row['specifications'] as Map)['zh-CN']}';
+            return text.contains('${p['search'] ?? ''}') &&
+                (p['stockFilter'] == 'listed'
+                    ? row['listed'] == true
+                    : p['stockFilter'] == 'unlisted'
+                    ? row['listed'] != true
+                    : true);
+          }).toList();
+      final selected = all.skip(p['offset'] as int? ?? 0).take(50).toList();
+      return {
+        ...result,
+        'paged': true,
+        'offset': p['offset'] ?? 0,
+        'pageSize': 50,
+        'total': all.length,
+        'category': p['category'] ?? '',
+        'stockFilter': p['stockFilter'] ?? 'all',
+        'search': p['search'] ?? '',
+        'products': selected
+            .where((v) => (v as Map)['candidate'] != true)
+            .toList(),
+        'catalogProducts': selected
+            .where((v) => (v as Map)['candidate'] == true)
+            .toList(),
+      };
+    }
+    return result;
   }
 }
 
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
-    'supplier candidates are paged and searched locally with shared editing controls',
+    'supplier candidates are paged and searched by the server with shared editing controls',
     (tester) async {
       tester.view.physicalSize = const Size(1274, 710);
       tester.view.devicePixelRatio = 1;
@@ -94,7 +129,11 @@ void main() {
       expect(find.text('备选酒60 700ml'), findsNothing);
       await tester.tap(find.byKey(const ValueKey('inventory-stock-next')));
       await tester.pumpAndSettle();
-      expect(auth.calls.where((p) => p['action'] == 'context'), hasLength(1));
+      expect(auth.calls.where((p) => p['action'] == 'context'), hasLength(2));
+      expect(
+        auth.calls.where((p) => p['action'] == 'context').last['offset'],
+        50,
+      );
       await tester.enterText(find.byType(TextField).first, '备选酒100');
       await tester.pumpAndSettle();
       expect(find.text('备选酒100 700ml'), findsOneWidget);

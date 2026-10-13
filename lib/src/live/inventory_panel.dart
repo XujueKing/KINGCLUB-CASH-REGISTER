@@ -53,40 +53,65 @@ class _InventoryPanelState extends State<InventoryPanel> {
         stockIndex.putIfAbsent('${p['productRef']}', () => p);
       }
       indexedStockRows = stockIndex.values.toList();
+      final order = (data?['orderedRefs'] as List? ?? []).cast<String>();
+      if (order.isNotEmpty) {
+        final positions = {for (var i = 0; i < order.length; i++) order[i]: i};
+        indexedStockRows.sort(
+          (a, b) => (positions[a['productRef']] ?? 0).compareTo(
+            positions[b['productRef']] ?? 0,
+          ),
+        );
+      }
     }
     return indexedStockRows;
   }
 
   bool isCandidate(Map p) => p['candidate'] == true || p['candidate'] == 1;
+  bool get pagedStock => tab == 0 && data?['paged'] == true;
+  int get stockTotal => pagedStock
+      ? (data?['total'] as num? ?? 0).toInt()
+      : visibleProducts.length;
+  bool get defaultStockPage =>
+      tab == 0 &&
+      stockOffset == 0 &&
+      category.isEmpty &&
+      stockFilter == 'all' &&
+      search.text.trim().isEmpty;
+  String get readKey =>
+      'inventory-page:${jsonEncode([tab, stockOffset, category, stockFilter, search.text.trim()])}';
   List<Map<String, dynamic>> get shownProducts {
+    if (pagedStock) return stockRows;
     final rows = visibleProducts;
     if (stockOffset >= rows.length) stockOffset = 0;
     return rows.skip(stockOffset).take(50).toList();
   }
 
   String category = '', stockFilter = 'all', movementFilter = 'all';
-  List<Map<String, dynamic>> get visibleProducts =>
-      (tab == 0 ? stockRows : rows('products'))
-          .where(
-            (p) =>
-                (category.isEmpty ||
-                    (category == '_uncategorized'
-                        ? p['categoryRef'] == null
-                        : p['categoryRef'] == category)) &&
-                (stockFilter == 'all' ||
-                    (stockFilter == 'listed'
-                        ? isListed(p)
-                        : stockFilter == 'unlisted'
-                        ? p['listed'] == false || p['listed'] == 0
-                        : stockFilter == 'empty'
-                        ? (p['available'] as num? ?? 0) <= 0
-                        : p['lowStock'] == true || p['lowStock'] == 1)) &&
-                '${name(p['names'])} ${name(p['specifications'])}'
-                    .toLowerCase()
-                    .contains(search.text.trim().toLowerCase()),
-          )
-          .toList();
-  void filterChanged(VoidCallback change) {
+  List<Map<String, dynamic>> get visibleProducts => pagedStock
+      ? stockRows
+      : (tab == 0 ? stockRows : rows('products'))
+            .where(
+              (p) =>
+                  (category.isEmpty ||
+                      (category == '_uncategorized'
+                          ? p['categoryRef'] == null
+                          : p['categoryRef'] == category)) &&
+                  (stockFilter == 'all' ||
+                      (stockFilter == 'listed'
+                          ? isListed(p)
+                          : stockFilter == 'unlisted'
+                          ? p['listed'] == false || p['listed'] == 0
+                          : stockFilter == 'empty'
+                          ? (p['available'] as num? ?? 0) <= 0
+                          : p['lowStock'] == true || p['lowStock'] == 1)) &&
+                  '${name(p['names'])} ${name(p['specifications'])}'
+                      .toLowerCase()
+                      .contains(search.text.trim().toLowerCase()),
+            )
+            .toList();
+  void filterChanged(VoidCallback change, {bool debounce = false}) {
+    if (working) return;
+    searchTimer?.cancel();
     setState(() {
       change();
       stockOffset = 0;
@@ -94,7 +119,21 @@ class _InventoryPanelState extends State<InventoryPanel> {
         selected = '';
       }
     });
-    unawaited(loadImages());
+    if (pagedStock) {
+      setState(() => selected = '');
+      if (debounce) {
+        // Invalidate an older search response before waiting for the next key.
+        epoch++;
+        searchTimer = Timer(
+          const Duration(milliseconds: 250),
+          () => unawaited(load()),
+        );
+      } else {
+        unawaited(load());
+      }
+    } else {
+      unawaited(loadImages());
+    }
   }
 
   Widget productFilters({bool categoryRail = false}) {
@@ -210,7 +249,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
               ),
               const SizedBox(width: 12),
               label(
-                '${visibleProducts.length} ${l('款', 'items', '款', 'รายการ')}',
+                '${stockTotal} ${l('款', 'items', '款', 'รายการ')}',
                 color: muted,
               ),
             ],
@@ -231,6 +270,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
   CashierRealtimeClient? realtime;
   int revision = 0;
   Timer? refreshTimer;
+  Timer? searchTimer;
   Object? cacheIdentity;
   Object? credentialsIdentity;
   final pageCache = const InventoryPageCache();
@@ -340,7 +380,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
     credentialsIdentity = widget.auth.session;
     data = WorkspaceReadCache.read<Map<String, dynamic>>(
       cacheIdentity,
-      'inventory:0',
+      readKey,
       maxAge: const Duration(minutes: 5),
     );
     imageMaterials = Map<String, dynamic>.from(
@@ -355,12 +395,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
 
   Future<void> restoreDisplay() async {
     final oldScope = displayScope, oldIdentity = cacheIdentity;
-    if (data != null) return;
+    if (data != null || !defaultStockPage) return;
     final saved = await pageCache.read(oldScope);
     if (!mounted ||
         oldScope != displayScope ||
         !identical(oldIdentity, cacheIdentity) ||
         data != null ||
+        !defaultStockPage ||
         saved == null)
       return;
     if (saved['storeRef'] != widget.auth.session?.storeRef) return;
@@ -370,7 +411,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
         saved['imageMaterials'] as Map? ?? {},
       );
     });
-    WorkspaceReadCache.put(cacheIdentity, 'inventory:0', saved);
+    WorkspaceReadCache.put(cacheIdentity, readKey, saved);
   }
 
   void authChanged() {
@@ -409,6 +450,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
     epoch++;
     widget.auth.removeListener(authChanged);
     refreshTimer?.cancel();
+    searchTimer?.cancel();
     realtime?.removeListener(onRealtime);
     realtime?.dispose();
     search.dispose();
@@ -450,6 +492,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
     if (working || widget.auth.busy) return;
     final request = ++epoch;
     final identity = cacheIdentity;
+    final key = '$readKey:$before';
+    final stock = tab == 0;
+    final saveDisplay = defaultStockPage;
     setState(() => loading = true);
     try {
       if (data == null) await cacheRestore;
@@ -458,8 +503,21 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final command = {
         'action': 'context',
         'before': before,
-        'view': 'stock',
+        'view': stock ? 'stock' : 'full',
+        if (stock) ...{
+          'pageSize': 50,
+          'offset': stockOffset,
+          'category': category,
+          'stockFilter': stockFilter,
+          'search': search.text.trim(),
+        },
         if (before == 0 &&
+            stock &&
+            data?['paged'] == true &&
+            data?['offset'] == stockOffset &&
+            data?['category'] == category &&
+            data?['stockFilter'] == stockFilter &&
+            data?['search'] == search.text.trim() &&
             data?['view'] == 'stock' &&
             data?['version'] is String)
           'knownVersion': data!['version'],
@@ -470,7 +528,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
           ? await widget.auth.inventory(command)
           : await WorkspaceReadCache.readOnce<Map<String, dynamic>>(
               identity,
-              'inventory:$before',
+              key,
               () => widget.auth.inventory(command),
             );
       if (!mounted || request != epoch) return;
@@ -486,19 +544,20 @@ class _InventoryPanelState extends State<InventoryPanel> {
           status is Map &&
           status['requestId'] == pending?['requestId'] &&
           ['applied', 'cancelled'].contains(status['state']);
-      WorkspaceReadCache.put(identity, 'inventory:$before', next);
+      WorkspaceReadCache.put(identity, readKey, next);
       setState(() {
         data = next;
         error = null;
         if (acknowledged) pending = null;
       });
       if (acknowledged) await saveDraft();
-      unawaited(
-        pageCache.write(displayScope, {
-          ...next,
-          'imageMaterials': imageMaterials,
-        }),
-      );
+      if (saveDisplay)
+        unawaited(
+          pageCache.write(displayScope, {
+            ...next,
+            'imageMaterials': imageMaterials,
+          }),
+        );
       unawaited(loadImages());
     } catch (failure) {
       debugPrint('cashier_inventory_read_failed: ${failure.runtimeType}');
@@ -2538,12 +2597,12 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   ],
                 ),
               ),
-              if (visibleProducts.length > 50)
+              if (stockTotal > 50 || stockOffset > 0)
                 Row(
                   children: [
                     IconButton(
                       key: const ValueKey('inventory-stock-prev'),
-                      onPressed: stockOffset == 0
+                      onPressed: loading || stockOffset == 0
                           ? null
                           : () => filterPage(-50),
                       icon: const Icon(Icons.chevron_left),
@@ -2551,14 +2610,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
                     Expanded(
                       child: Center(
                         child: label(
-                          '${stockOffset + 1}–${min(stockOffset + 50, visibleProducts.length)} / ${visibleProducts.length}',
+                          '${stockOffset + 1}–${min(stockOffset + 50, stockTotal)} / $stockTotal',
                           color: muted,
                         ),
                       ),
                     ),
                     IconButton(
                       key: const ValueKey('inventory-stock-next'),
-                      onPressed: stockOffset + 50 >= visibleProducts.length
+                      onPressed: loading || stockOffset + 50 >= stockTotal
                           ? null
                           : () => filterPage(50),
                       icon: const Icon(Icons.chevron_right),
@@ -2719,8 +2778,11 @@ class _InventoryPanelState extends State<InventoryPanel> {
   );
 
   void filterPage(int delta) {
-    setState(() => stockOffset = max(0, stockOffset + delta));
-    unawaited(loadImages());
+    setState(() {
+      stockOffset = max(0, stockOffset + delta);
+      selected = '';
+    });
+    if (pagedStock) { unawaited(load()); } else { unawaited(loadImages()); }
   }
 
   Widget counts() => box(
@@ -3381,8 +3443,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 const SizedBox(width: 24),
                 Expanded(
                   child: TextField(
+                    enabled: !working,
                     controller: search,
-                    onChanged: (_) => filterChanged(() {}),
+                    onChanged: (_) => filterChanged(() {}, debounce: true),
                     decoration: InputDecoration(
                       hintText: l(
                         '查找商品 / 规格',
@@ -3425,11 +3488,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 for (var i = 0; i < titles.length; i++)
                   KeyedSubtree(
                     key: ValueKey('inventory-tab-$i'),
-                    child: button(
-                      titles[i],
-                      () => setState(() => tab = i),
-                      primary: tab == i,
-                    ),
+                    child: button(titles[i], () {
+                      final needsRead = (data?['paged'] == true && i != 0) || (i == 0 && data?['view'] == 'full');
+                      setState(() {
+                        tab = i;
+                      });
+                      if(needsRead) unawaited(load());
+                    }, primary: tab == i),
                   ),
               ],
             ),
@@ -3439,7 +3504,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 child: label(error!, color: Colors.red),
               ),
             Expanded(
-              child: data == null
+              child: data == null || (tab != 0 && data?['paged'] == true)
                   ? Center(
                       child: label(
                         l(

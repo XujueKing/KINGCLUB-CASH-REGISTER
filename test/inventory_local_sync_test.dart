@@ -67,6 +67,15 @@ class SyncAuth extends InventoryAuth {
       ...v,
       'view': command['view'] ?? 'stock',
       'version': version,
+      if (command['action'] == 'context' && command['pageSize'] != null) ...{
+        'paged': true,
+        'offset': command['offset'] ?? 0,
+        'pageSize': 50,
+        'total': 1,
+        'category': command['category'] ?? '',
+        'stockFilter': command['stockFilter'] ?? 'all',
+        'search': command['search'] ?? '',
+      },
       'products': (v['products'] as List)
           .map((p) => {...p as Map, 'priceCents': 100, 'revision': 1})
           .toList(),
