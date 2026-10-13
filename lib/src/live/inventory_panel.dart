@@ -543,7 +543,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
         data = v;
         pending = null;
         error = null;
-        if (['count', 'opening', 'handover'].contains(command['action'])) {
+        if (command['quickCount'] != true &&
+            ['count', 'opening', 'handover'].contains(command['action'])) {
           countDraft.clear();
         }
       });
@@ -1069,153 +1070,281 @@ class _InventoryPanelState extends State<InventoryPanel> {
     await subscription?.cancel();
   }
 
-  Future<void> productAction(String action, Map<String, dynamic> p) async {
+  Future<void> productAction(
+    String action,
+    Map<String, dynamic> p, {
+    bool quickCount = false,
+  }) async {
+    if (quickCount && (!directListing || !canWrite)) return;
     var quantity = action == 'count'
-        ? (countDraft[p['productRef']]?['quantity'] as int? ??
+        ? ((quickCount ? null : countDraft[p['productRef']]?['quantity'])
+                  as int? ??
               (p['onHand'] as num).toInt())
         : 1;
-    final saved = action == 'count' ? countDraft[p['productRef']] : null;
+    final saved = action == 'count' && !quickCount
+        ? countDraft[p['productRef']]
+        : null;
+    bool saving = false;
+    String? countError;
     int? unitCost = saved?['unitCostCents'] as int?;
     String location =
             saved?['location'] as String? ?? locations.firstOrNull ?? '',
         note = saved?['note'] as String? ?? '';
     final ok = await showDialog<bool>(
       context: context,
+      barrierDismissible: !quickCount,
       builder: (context) => StatefulBuilder(
-        builder: (context, set) => Dialog(
-          child: SizedBox(
-            width: 560,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+        builder: (context, set) => PopScope(
+          canPop: !saving,
+          child: AbsorbPointer(
+            absorbing: saving,
+            child: Dialog(
+              child: SizedBox(
+                width: 560,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: label(
-                          productName('${p['productRef']}'),
-                          size: 20,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: label(
+                              productName('${p['productRef']}'),
+                              size: 20,
+                              weight: FontWeight.bold,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (quickCount) ...[
+                        label(
+                          l(
+                            '修改库存 · 保存即记录盘点',
+                            'Edit stock · recorded as a count',
+                            '修改庫存 · 儲存即記錄盤點',
+                            'แก้ไขสต็อก · บันทึกเป็นการตรวจนับ',
+                          ),
                           weight: FontWeight.bold,
                         ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  label(
-                    '${l('账面', 'On hand', '帳面', 'คงคลัง')} ${p['onHand']}    ${l('预留', 'Reserved', '預留', 'จอง')} ${p['reserved']}    ${l('可售', 'Available', '可售', 'ขายได้')} ${p['available']}',
-                    color: muted,
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: numberField(
-                          action == 'count'
-                              ? l(
-                                  '实盘数量',
-                                  'Counted units',
-                                  '實盤數量',
-                                  'จำนวนตรวจนับ',
-                                )
-                              : l('数量', 'Quantity', '數量', 'จำนวน'),
-                          quantity,
-                          (v) => set(() => quantity = v),
+                        const SizedBox(height: 8),
+                        label(
+                          l(
+                            '按实际瓶／件数填写，不是半打或一打的组数',
+                            'Enter individual stock units, not sale packs',
+                            '按實際瓶／件數填寫，不是半打或一打的組數',
+                            'กรอกจำนวนขวด/ชิ้น ไม่ใช่จำนวนชุด',
+                          ),
+                          color: muted,
                         ),
+                        const SizedBox(height: 12),
+                      ],
+                      label(
+                        '${l('账面', 'On hand', '帳面', 'คงคลัง')} ${p['onHand']}    ${l('预留', 'Reserved', '預留', 'จอง')} ${p['reserved']}    ${l('可售', 'Available', '可售', 'ขายได้')} ${p['available']}',
+                        color: muted,
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: numberField(
+                              action == 'count'
+                                  ? l(
+                                      '实盘数量',
+                                      'Counted units',
+                                      '實盤數量',
+                                      'จำนวนตรวจนับ',
+                                    )
+                                  : l('数量', 'Quantity', '數量', 'จำนวน'),
+                              quantity,
+                              (v) => set(() => quantity = v),
+                            ),
+                          ),
+                          if (action == 'count') ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    number(
+                                      l(
+                                        '盘盈商品单价（元）',
+                                        'Cost of added units',
+                                        '盤盈商品單價（元）',
+                                        'ต้นทุนสินค้าที่เพิ่ม',
+                                      ),
+                                      unitCost ?? 0,
+                                      cents: true,
+                                    ).then((v) {
+                                      if (v != null) set(() => unitCost = v);
+                                    }),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    label(
+                                      l(
+                                        '盘盈成本',
+                                        'Cost of added units',
+                                        '盤盈成本',
+                                        'ต้นทุนส่วนเพิ่ม',
+                                      ),
+                                      size: 12,
+                                      color: muted,
+                                    ),
+                                    Text(money(unitCost)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       if (action == 'count') ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () =>
-                                number(
-                                  l(
-                                    '盘盈商品单价（元）',
-                                    'Cost of added units',
-                                    '盤盈商品單價（元）',
-                                    'ต้นทุนสินค้าที่เพิ่ม',
-                                  ),
-                                  unitCost ?? 0,
-                                  cents: true,
-                                ).then((v) {
-                                  if (v != null) set(() => unitCost = v);
-                                }),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                label(
-                                  l(
-                                    '盘盈成本',
-                                    'Cost of added units',
-                                    '盤盈成本',
-                                    'ต้นทุนส่วนเพิ่ม',
-                                  ),
-                                  size: 12,
-                                  color: muted,
-                                ),
-                                Text(money(unitCost)),
-                              ],
-                            ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          initialValue: locations.contains(location)
+                              ? location
+                              : null,
+                          items: locations
+                              .map(
+                                (s) =>
+                                    DropdownMenuItem(value: s, child: Text(s)),
+                              )
+                              .toList(),
+                          onChanged: (v) => set(() => location = v ?? ''),
+                          decoration: InputDecoration(
+                            labelText: l('存放柜格', 'Cabinet', '存放櫃格', 'ช่องเก็บ'),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                       ],
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        initialValue: note,
+                        onChanged: (v) => note = v,
+                        maxLength: 500,
+                        decoration: InputDecoration(
+                          labelText: l(
+                            '备注 / 原因',
+                            'Note / reason',
+                            '備註 / 原因',
+                            'หมายเหตุ / เหตุผล',
+                          ),
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (countError != null) ...[
+                        Text(
+                          countError!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      SizedBox(
+                        width: double.infinity,
+                        child: button(
+                          action == 'borrow'
+                              ? l(
+                                  '扫借酒人会员码',
+                                  'Scan borrower',
+                                  '掃借酒人會員碼',
+                                  'สแกนผู้ยืม',
+                                )
+                              : quickCount
+                              ? l('保存盘点', 'Save count', '儲存盤點', 'บันทึกตรวจนับ')
+                              : l('确定', 'Confirm', '確定', 'ยืนยัน'),
+                          () async {
+                            if (!quickCount) {
+                              Navigator.pop(context, true);
+                              return;
+                            }
+                            if (quantity < (p['reserved'] as num).toInt() ||
+                                !locations.contains(location)) {
+                              set(
+                                () => countError = l(
+                                  '数量不能少于预留，请选择存放柜格',
+                                  'Count must cover reservations; select a cabinet',
+                                  '數量不能少於預留，請選擇存放櫃格',
+                                  'จำนวนต้องไม่น้อยกว่าที่จอง กรุณาเลือกช่องเก็บ',
+                                ),
+                              );
+                              return;
+                            }
+                            set(() {
+                              saving = true;
+                              countError = null;
+                            });
+                            final previous = pending;
+                            bool applied = false;
+                            if (previous != null) {
+                              if (await resolvePending()) {
+                                final latest = rows('products')
+                                    .where(
+                                      (v) => v['productRef'] == p['productRef'],
+                                    )
+                                    .firstOrNull;
+                                final previousItems =
+                                    previous['items'] as List?;
+                                applied =
+                                    previous['quickCount'] == true &&
+                                    previousItems?.length == 1 &&
+                                    (previousItems!.single
+                                            as Map)['productRef'] ==
+                                        p['productRef'] &&
+                                    (previousItems.single as Map)['quantity'] ==
+                                        quantity &&
+                                    latest?['onHand'] == quantity;
+                              } else {
+                                if (context.mounted) {
+                                  set(() {
+                                    saving = false;
+                                    countError = error;
+                                  });
+                                }
+                                return;
+                              }
+                            }
+                            final completed =
+                                applied ||
+                                await submit({
+                                  'action': 'count',
+                                  'quickCount': true,
+                                  'note': note,
+                                  'items': [
+                                    {
+                                      'productRef': p['productRef'],
+                                      'quantity': quantity,
+                                      'expectedOnHand': p['onHand'],
+                                      'expectedReserved': p['reserved'],
+                                      'location': location,
+                                      'unitCostCents': unitCost,
+                                      'note': note,
+                                    },
+                                  ],
+                                });
+                            if (!context.mounted) return;
+                            if (completed) {
+                              set(() => saving = false);
+                              Navigator.pop(context);
+                            } else {
+                              set(() {
+                                saving = false;
+                                countError = error;
+                              });
+                            }
+                          },
+                          primary: true,
+                        ),
+                      ),
                     ],
                   ),
-                  if (action == 'count') ...[
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: locations.contains(location)
-                          ? location
-                          : null,
-                      items: locations
-                          .map(
-                            (s) => DropdownMenuItem(value: s, child: Text(s)),
-                          )
-                          .toList(),
-                      onChanged: (v) => set(() => location = v ?? ''),
-                      decoration: InputDecoration(
-                        labelText: l('存放柜格', 'Cabinet', '存放櫃格', 'ช่องเก็บ'),
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    initialValue: note,
-                    onChanged: (v) => note = v,
-                    maxLength: 500,
-                    decoration: InputDecoration(
-                      labelText: l(
-                        '备注 / 原因',
-                        'Note / reason',
-                        '備註 / 原因',
-                        'หมายเหตุ / เหตุผล',
-                      ),
-                      border: const OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: button(
-                      action == 'borrow'
-                          ? l(
-                              '扫借酒人会员码',
-                              'Scan borrower',
-                              '掃借酒人會員碼',
-                              'สแกนผู้ยืม',
-                            )
-                          : l('确定', 'Confirm', '確定', 'ยืนยัน'),
-                      () => Navigator.pop(context, true),
-                      primary: true,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -2417,25 +2546,46 @@ class _InventoryPanelState extends State<InventoryPanel> {
                           weight: FontWeight.bold,
                         ),
                         const SizedBox(height: 12),
-                        button(
-                          l(
-                            '修改零售价',
-                            'Edit retail price',
-                            '修改零售價',
-                            'แก้ไขราคาขาย',
-                          ),
-                          !working &&
-                                  widget.auth.session?.permissions.contains(
-                                        'price.adjust',
-                                      ) ==
-                                      true
-                              ? () async {
-                                  if (await resolvePending() &&
-                                      mounted &&
-                                      current != null)
-                                    await retailPrice(current!);
-                                }
-                              : null,
+                        Wrap(
+                          children: [
+                            button(
+                              l(
+                                '修改零售价',
+                                'Edit retail price',
+                                '修改零售價',
+                                'แก้ไขราคาขาย',
+                              ),
+                              !working &&
+                                      widget.auth.session?.permissions.contains(
+                                            'price.adjust',
+                                          ) ==
+                                          true
+                                  ? () async {
+                                      if (await resolvePending() &&
+                                          mounted &&
+                                          current != null)
+                                        await retailPrice(current!);
+                                    }
+                                  : null,
+                            ),
+                            if (directListing && canWrite)
+                              button(
+                                l('修改库存', 'Edit stock', '修改庫存', 'แก้ไขสต็อก'),
+                                !working
+                                    ? () async {
+                                        if (await resolvePending() &&
+                                            mounted &&
+                                            current != null) {
+                                          await productAction(
+                                            'count',
+                                            Map<String, dynamic>.from(current!),
+                                            quickCount: true,
+                                          );
+                                        }
+                                      }
+                                    : null,
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                       ],
