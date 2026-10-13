@@ -76,6 +76,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 (stockFilter == 'all' ||
                     (stockFilter == 'listed'
                         ? isListed(p)
+                        : stockFilter == 'unlisted'
+                        ? p['listed'] == false || p['listed'] == 0
                         : stockFilter == 'empty'
                         ? (p['available'] as num? ?? 0) <= 0
                         : p['lowStock'] == true || p['lowStock'] == 1)) &&
@@ -181,19 +183,32 @@ class _InventoryPanelState extends State<InventoryPanel> {
         children: [
           Row(
             children: [
-              for (final s in [
-                ('all', l('所有库存', 'All stock', '所有庫存', 'สต็อกทั้งหมด')),
-                ('listed', l('已上架', 'Listed', '已上架', 'วางจำหน่าย')),
-                ('low', l('库存不足', 'Low stock', '庫存不足', 'สต็อกต่ำ')),
-                ('empty', l('无库存', 'Out of stock', '無庫存', 'สินค้าหมด')),
-              ])
-                choice(
-                  'inventory-stock-${s.$1}',
-                  s.$2,
-                  stockFilter == s.$1,
-                  () => stockFilter = s.$1,
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final s in [
+                        ('all', l('所有库存', 'All stock', '所有庫存', 'สต็อกทั้งหมด')),
+                        ('listed', l('已上架', 'Listed', '已上架', 'วางจำหน่าย')),
+                        (
+                          'unlisted',
+                          l('未上架', 'Unlisted', '未上架', 'ยังไม่วางจำหน่าย'),
+                        ),
+                        ('low', l('库存不足', 'Low stock', '庫存不足', 'สต็อกต่ำ')),
+                        ('empty', l('无库存', 'Out of stock', '無庫存', 'สินค้าหมด')),
+                      ])
+                        choice(
+                          'inventory-stock-${s.$1}',
+                          s.$2,
+                          stockFilter == s.$1,
+                          () => stockFilter = s.$1,
+                        ),
+                    ],
+                  ),
                 ),
-              const Spacer(),
+              ),
+              const SizedBox(width: 12),
               label(
                 '${visibleProducts.length} ${l('款', 'items', '款', 'รายการ')}',
                 color: muted,
