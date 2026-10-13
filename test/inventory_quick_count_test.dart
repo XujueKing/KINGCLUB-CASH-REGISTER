@@ -6,8 +6,70 @@ import 'package:kingclub_cash_register/src/strings.dart';
 
 import 'inventory_listing_test.dart' show ListingAuth;
 
+class CountCostAuth extends ListingAuth {
+  CountCostAuth() : super(direct: true);
+  @override
+  Future<Map<String, dynamic>> inventory(Map<String, dynamic> command) async {
+    final value = await super.inventory(command);
+    return {
+      ...value,
+      'products': [
+        for (final p in value['products'] as List)
+          {...p as Map, 'countCostCents': 3500},
+      ],
+    };
+  }
+}
+
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  testWidgets(
+    'only count gains show the server supplier reference and save it as new batch valuation',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 710);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = CountCostAuth();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InventoryPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('测试酒品').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('修改库存'));
+      await tester.pumpAndSettle();
+      expect(find.text('盘盈成本'), findsNothing);
+      expect(find.text('成本未知'), findsNothing);
+      await tester.tap(find.text('实盘数量'));
+      await tester.pumpAndSettle();
+      for (final key in ['1', '4']) {
+        await tester.tap(find.text(key).last);
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('确定').last);
+      await tester.pumpAndSettle();
+      expect(find.text('¥ 35.00'), findsOneWidget);
+      await tester.tap(find.text('保存盘点'));
+      await tester.pumpAndSettle();
+      final saved = auth.calls.where((v) => v['action'] == 'count').single;
+      expect((saved['items'] as List).single, containsPair('quantity', 14));
+      expect(
+        (saved['items'] as List).single,
+        containsPair('unitCostCents', 3500),
+      );
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    },
+  );
   for (final direct in [false, true]) {
     testWidgets(
       'quick count requires administrator and saves a count, never on close ($direct)',

@@ -541,6 +541,16 @@ class _InventoryPanelState extends State<InventoryPanel> {
       );
       setState(() {
         data = v;
+        if (command['candidateKey'] != null) {
+          selected =
+              rows('products')
+                      .where(
+                        (p) => p['sharedProductKey'] == command['candidateKey'],
+                      )
+                      .firstOrNull?['productRef']
+                  as String? ??
+              selected;
+        }
         pending = null;
         error = null;
         if (command['quickCount'] != true &&
@@ -661,6 +671,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
         'originalAction': previous['action'],
         if (previous['productRef'] != null)
           'productRef': previous['productRef'],
+        if (previous['action'] == 'retail_price' &&
+            previous['candidateKey'] != null)
+          'candidateKey': previous['candidateKey'],
         'cancelIfUnsent': true,
       });
       if (!mounted || request != epoch) return false;
@@ -671,6 +684,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
         return false;
       setState(() {
         data = v;
+        if (previous['candidateKey'] != null) {
+          selected =
+              rows('products')
+                      .where(
+                        (p) =>
+                            p['sharedProductKey'] == previous['candidateKey'],
+                      )
+                      .firstOrNull?['productRef']
+                  as String? ??
+              selected;
+        }
         pending = null;
         error = null;
       });
@@ -1086,7 +1110,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
         : null;
     bool saving = false;
     String? countError;
-    int? unitCost = saved?['unitCostCents'] as int?;
+    int? unitCost =
+        saved?['unitCostCents'] as int? ??
+        (quickCount ? (p['countCostCents'] as num?)?.toInt() : null);
     String location =
             saved?['location'] as String? ?? locations.firstOrNull ?? '',
         note = saved?['note'] as String? ?? '';
@@ -1166,7 +1192,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
                               (v) => set(() => quantity = v),
                             ),
                           ),
-                          if (action == 'count') ...[
+                          if (action == 'count' &&
+                              (!quickCount ||
+                                  quantity > (p['onHand'] as num).toInt())) ...[
                             const SizedBox(width: 12),
                             Expanded(
                               child: OutlinedButton(
@@ -1196,7 +1224,28 @@ class _InventoryPanelState extends State<InventoryPanel> {
                                       size: 12,
                                       color: muted,
                                     ),
-                                    Text(money(unitCost)),
+                                    Text(
+                                      unitCost == null && quickCount
+                                          ? l(
+                                              '填写成本单价',
+                                              'Enter unit cost',
+                                              '填寫成本單價',
+                                              'กรอกต้นทุนต่อหน่วย',
+                                            )
+                                          : money(unitCost),
+                                    ),
+                                    if (quickCount &&
+                                        p['countCostCents'] != null)
+                                      label(
+                                        l(
+                                          '已带入进货参考价，可修改',
+                                          'Supplier reference, editable',
+                                          '已帶入進貨參考價，可修改',
+                                          'ราคาอ้างอิง แก้ไขได้',
+                                        ),
+                                        size: 11,
+                                        color: muted,
+                                      ),
                                   ],
                                 ),
                               ),
@@ -1286,7 +1335,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
                               if (await resolvePending()) {
                                 final latest = rows('products')
                                     .where(
-                                      (v) => v['productRef'] == p['productRef'],
+                                      (v) => isCandidate(p)
+                                          ? v['sharedProductKey'] ==
+                                                p['sharedProductKey']
+                                          : v['productRef'] == p['productRef'],
                                     )
                                     .firstOrNull;
                                 final previousItems =
@@ -1315,6 +1367,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
                                 await submit({
                                   'action': 'count',
                                   'quickCount': true,
+                                  if (isCandidate(p))
+                                    'candidateKey': p['sharedProductKey'],
                                   'note': note,
                                   'items': [
                                     {
@@ -2222,7 +2276,11 @@ class _InventoryPanelState extends State<InventoryPanel> {
       if (previous != null) {
         if (!await resolvePending()) return false;
         final latest = rows('products')
-            .where((p) => p['productRef'] == snapshot['productRef'])
+            .where(
+              (p) => isCandidate(snapshot)
+                  ? p['sharedProductKey'] == snapshot['sharedProductKey']
+                  : p['productRef'] == snapshot['productRef'],
+            )
             .firstOrNull;
         final units = (latest?['saleUnits'] as Map?)?['units'] as List? ?? [];
         final unit = units
@@ -2245,6 +2303,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
         'productRef': snapshot['productRef'],
         'revision': snapshot['revision'],
         'priceCents': cents,
+        if (isCandidate(snapshot)) 'candidateKey': snapshot['sharedProductKey'],
         if (unitRef != null) 'saleUnitRef': unitRef,
       });
     }
@@ -2344,10 +2403,21 @@ class _InventoryPanelState extends State<InventoryPanel> {
         !identical(identity, cacheIdentity)) {
       return;
     }
-    final product = rows('products')
-        .where((p) => p['productRef'] == ref)
-        .firstOrNull;
+    final product = stockRows.where((p) => p['productRef'] == ref).firstOrNull;
     if (product == null) return;
+    if (listed &&
+        (isCandidate(product) || (product['priceCents'] as num? ?? 0) <= 0)) {
+      message(
+        l(
+          '先保存零售价，再点击上架',
+          'Set a retail price before listing',
+          '先儲存零售價，再點擊上架',
+          'ตั้งราคาขายก่อนเปิดจำหน่าย',
+        ),
+      );
+      await retailPrice(product);
+      return;
+    }
     await submit({
       'action': 'set_listing',
       'productRef': ref,
@@ -2514,8 +2584,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
                     ),
                   ),
                 )
-              : isCandidate(current!)
-              ? candidateDetails(current!)
               : SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2539,7 +2607,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
                         ),
                       ],
                       const SizedBox(height: 20),
-                      if (current!['priceCents'] is num) ...[
+                      if (current!['priceCents'] is num ||
+                          isCandidate(current!)) ...[
                         label(
                           '${l('本店零售价', 'Store retail price', '本店零售價', 'ราคาขายของร้าน')}  ${retailSummary(current!)}',
                           size: 20,
@@ -2598,19 +2667,19 @@ class _InventoryPanelState extends State<InventoryPanel> {
                           ),
                           button(
                             l('借酒', 'Loan', '借酒', 'ยืม'),
-                            canWrite
+                            canWrite && !isCandidate(current!)
                                 ? () => productAction('borrow', current!)
                                 : null,
                           ),
                           button(
                             l('破损', 'Damage', '破損', 'เสียหาย'),
-                            canWrite
+                            canWrite && !isCandidate(current!)
                                 ? () => productAction('damage', current!)
                                 : null,
                           ),
                           button(
                             l('遗失', 'Loss', '遺失', 'สูญหาย'),
-                            canWrite
+                            canWrite && !isCandidate(current!)
                                 ? () => productAction('loss', current!)
                                 : null,
                           ),
@@ -2654,45 +2723,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
     unawaited(loadImages());
   }
 
-  Widget candidateDetails(Map<String, dynamic> p) => SingleChildScrollView(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        label(
-          productName('${p['productRef']}'),
-          size: 21,
-          weight: FontWeight.bold,
-        ),
-        const SizedBox(height: 18),
-        label(
-          l(
-            '未上架 · 无库存',
-            'Unlisted · No stock',
-            '未上架 · 無庫存',
-            'ยังไม่ขาย · ไม่มีสต็อก',
-          ),
-          color: muted,
-        ),
-        const SizedBox(height: 18),
-        label(
-          l(
-            '采购备选商品，采购收货后计入库存；设置零售价并上架后可点单。',
-            'Procurement candidate. Receive stock, set a retail price and list to sell.',
-            '採購備選商品，採購收貨後計入庫存；設定零售價並上架後可點單。',
-            'สินค้าสำหรับจัดซื้อ รับสินค้า ตั้งราคาขายแล้วเปิดจำหน่าย',
-          ),
-          color: muted,
-          size: 15,
-        ),
-        const SizedBox(height: 24),
-        button(
-          l('采购', 'Purchase', '採購', 'ซื้อ'),
-          canWrite ? () => purchase(p) : null,
-          primary: true,
-        ),
-      ],
-    ),
-  );
   Widget counts() => box(
     Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -7,24 +7,62 @@ import 'package:kingclub_cash_register/src/strings.dart';
 import 'inventory_panel_test.dart' show InventoryAuth;
 
 class CandidateAuth extends InventoryAuth {
+  CandidateAuth({this.administrator = false})
+    : super(
+        permissions: [
+          'workbench.read',
+          'report.read',
+          'shift.manage',
+          'price.adjust',
+        ],
+      );
+  final bool administrator;
+  bool adopted = false;
+  int price = 0;
   @override
   Future<Map<String, dynamic>> inventory(Map<String, dynamic> p) async {
     final v = await super.inventory(p);
+    if (p['action'] == 'retail_price' && p['candidateKey'] != null) {
+      adopted = true;
+      price = p['priceCents'] as int;
+    }
     return {
       ...v,
-      'catalogProducts': [
-        for (var i = 0; i < 110; i++)
+      'listingPermissions': {'direct': administrator, 'submit': true},
+      if (adopted)
+        'products': [
+          ...v['products'] as List,
           {
-            'productRef': 'candidate-$i',
-            'names': {'zh-CN': '备选酒$i'},
+            'productRef': 'adopted-product',
+            'sharedProductKey': '0' * 64,
+            'names': {'zh-CN': '备选酒0'},
             'specifications': {'zh-CN': '700ml'},
             'categoryRef': 'wine',
-            'candidate': true,
-            'listed': false,
             'onHand': 0,
             'reserved': 0,
             'available': 0,
+            'revision': 2,
+            'priceCents': price,
+            'listed': false,
           },
+        ],
+      'catalogProducts': [
+        for (var i = 0; i < 110; i++)
+          if (i != 0 || !adopted)
+            {
+              'productRef': i.toRadixString(16).padLeft(64, '0'),
+              'sharedProductKey': i.toRadixString(16).padLeft(64, '0'),
+              'revision': 0,
+              'priceCents': null,
+              'names': {'zh-CN': '备选酒$i'},
+              'specifications': {'zh-CN': '700ml'},
+              'categoryRef': 'wine',
+              'candidate': true,
+              'listed': false,
+              'onHand': 0,
+              'reserved': 0,
+              'available': 0,
+            },
       ],
     };
   }
@@ -33,7 +71,7 @@ class CandidateAuth extends InventoryAuth {
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
-    'supplier candidates are paged and searched locally; absent images and sale controls are clear',
+    'supplier candidates are paged and searched locally with shared editing controls',
     (tester) async {
       tester.view.physicalSize = const Size(1274, 710);
       tester.view.devicePixelRatio = 1;
@@ -66,13 +104,65 @@ void main() {
       expect(find.text('采购'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('inventory-listing-switch')),
-        findsNothing,
+        findsOneWidget,
       );
-      expect(find.text('修改零售价'), findsNothing);
+      expect(find.text('修改零售价'), findsOneWidget);
+      expect(find.text('修改库存'), findsNothing);
       await tester.tap(find.byKey(const ValueKey('inventory-stock-listed')));
       await tester.pumpAndSettle();
       expect(find.text('备选酒100 700ml'), findsNothing);
       expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'unlisted candidate price save adopts only on save and keeps the selected editor',
+    (tester) async {
+      tester.view.physicalSize = const Size(1274, 710);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final auth = CandidateAuth(administrator: true);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InventoryPanel(
+              auth: auth,
+              language: UiLanguage.zh,
+              enableRealtime: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('inventory-stock-unlisted')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('备选酒0 700ml'));
+      await tester.pumpAndSettle();
+      expect(find.text('修改库存'), findsOneWidget);
+      await tester.tap(find.text('修改零售价'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('retail-price-close')));
+      await tester.pumpAndSettle();
+      expect(auth.calls.where((v) => v['action'] == 'retail_price'), isEmpty);
+      await tester.tap(find.text('修改零售价'));
+      await tester.pumpAndSettle();
+      for (final digit in ['1', '6', '8']) {
+        await tester.tap(find.byKey(ValueKey('retail-key-$digit')));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('保存零售价'));
+      await tester.pumpAndSettle();
+      final saved = auth.calls
+          .where((v) => v['action'] == 'retail_price')
+          .single;
+      expect(saved['candidateKey'], '0' * 64);
+      expect(saved['revision'], 0);
+      expect(saved['priceCents'], 16800);
+      expect(find.text('本店零售价  ¥ 168.00'), findsOneWidget);
+      expect(find.text('修改库存'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
     },
   );
 }

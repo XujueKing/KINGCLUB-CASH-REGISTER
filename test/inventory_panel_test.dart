@@ -12,7 +12,12 @@ class InventoryAuth extends TableAuth {
     this.preferExpensiveSupplier = false,
     this.fullSupplierCatalog = false,
     this.unknownSupplierUnitCost = false,
-  }) : super(permissions: ['workbench.read', 'report.read', 'shift.manage']);
+    List<String> permissions = const [
+      'workbench.read',
+      'report.read',
+      'shift.manage',
+    ],
+  }) : super(permissions: permissions);
   final bool preferUnquotedSupplier;
   final bool preferExpensiveSupplier;
   final bool fullSupplierCatalog;
