@@ -28,6 +28,7 @@ class AppUpdateBridge(private val activity: Activity, messenger: BinaryMessenger
     private val handler = Handler(Looper.getMainLooper())
     private val busy = AtomicBoolean(false)
     @Volatile private var disposed = false
+    @Volatile private var foreground = false
     @Volatile private var connection: HttpURLConnection? = null
     private val directory = File(activity.cacheDir, "cashier-update")
     private val apk = File(directory, "update.apk")
@@ -50,6 +51,10 @@ class AppUpdateBridge(private val activity: Activity, messenger: BinaryMessenger
                     verify(apk, manifest)
                     handler.post {
                         if (disposed) return@post
+                        if (!foreground) {
+                            result.error("INSTALL_NOT_FOREGROUND", "Return to the cashier before installing", null)
+                            return@post
+                        }
                         try {
                             if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
                                 activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -206,4 +211,6 @@ class AppUpdateBridge(private val activity: Activity, messenger: BinaryMessenger
         connection?.disconnect()
         worker.shutdownNow()
     }
+
+    fun setForeground(value: Boolean) { foreground = value }
 }

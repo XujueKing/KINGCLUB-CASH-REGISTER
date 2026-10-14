@@ -64,6 +64,7 @@ class _CashierAppState extends State<CashierApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    AppUpdates.instance.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       unawaited(AppUpdates.instance.check());
       restoreFullscreen();

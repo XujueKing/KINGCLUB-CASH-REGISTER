@@ -13,9 +13,15 @@ void main() {
   const endpoint = 'https://example.test/kingclub-updates/cashier/stable.json';
   late AppUpdates updates;
   late List<String> calls;
+  late DateTime now;
   setUp(() {
     calls = [];
-    updates = AppUpdates(channel: channel, manifestUrl: endpoint);
+    now = DateTime.utc(2026, 10, 14);
+    updates = AppUpdates(
+      channel: channel,
+      manifestUrl: endpoint,
+      now: () => now,
+    );
   });
   tearDown(() {
     updates.dispose();
@@ -54,6 +60,80 @@ void main() {
     await first;
     expect(updates.stage, UpdateStage.current);
   });
+  test(
+    'failure retries after fifteen minutes and success waits one hour',
+    () async {
+      var unavailable = true;
+      respond((_) async {
+        if (unavailable) throw PlatformException(code: 'UPDATE_FAILED');
+        return {'status': 'current'};
+      });
+      await updates.check();
+      now = now.add(const Duration(minutes: 14));
+      await updates.check();
+      expect(calls.length, 1);
+      now = now.add(const Duration(minutes: 1));
+      unavailable = false;
+      await updates.check();
+      expect(updates.stage, UpdateStage.current);
+      now = now.add(const Duration(minutes: 59));
+      await updates.check();
+      expect(calls.length, 2);
+      now = now.add(const Duration(minutes: 1));
+      await updates.check();
+      expect(calls.length, 3);
+    },
+  );
+  test(
+    'system installer holds the downloaded file until return to cashier',
+    () async {
+      respond(
+        (call) async => call.method == 'install'
+            ? {'status': 'installer'}
+            : {'status': 'ready', 'versionName': '0.1.3'},
+      );
+      await updates.check();
+      expect(await updates.install(), 'installer');
+      now = now.add(const Duration(hours: 2));
+      await updates.check(force: true);
+      expect(calls, ['check', 'install']);
+      updates.setForeground(false);
+      await updates.check(force: true);
+      expect(await updates.install(), 'failed');
+      expect(calls, ['check', 'install']);
+      updates.setForeground(
+        true,
+      ); // System installer was cancelled or permission screen closed.
+      await updates.check();
+      expect(calls, ['check', 'install', 'check']);
+      expect(updates.stage, UpdateStage.ready);
+      expect(await updates.install(), 'installer');
+    },
+  );
+  test('failed installer releases the guard and can be retried', () async {
+    respond((call) async {
+      if (call.method == 'install')
+        throw PlatformException(code: 'INSTALL_UNAVAILABLE');
+      return {'status': 'ready', 'versionName': '0.1.3'};
+    });
+    await updates.check();
+    expect(await updates.install(), 'failed');
+    expect(updates.busy, false);
+    expect(await updates.install(), 'failed');
+    expect(calls, ['check', 'install', 'install']);
+  });
+  test(
+    'background timer checks are deferred without touching the package',
+    () async {
+      respond((_) async => {'status': 'current'});
+      updates.setForeground(false);
+      await updates.check(force: true);
+      expect(calls, isEmpty);
+      updates.setForeground(true);
+      await updates.check();
+      expect(calls, ['check']);
+    },
+  );
   test(
     'failed check does not trigger installation or throw into sales',
     () async {

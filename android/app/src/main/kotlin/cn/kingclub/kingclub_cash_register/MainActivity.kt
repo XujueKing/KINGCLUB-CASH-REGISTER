@@ -29,11 +29,12 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        appUpdate?.setForeground(true)
         scanner?.setForeground(true)
         usbRasterOutput?.setForeground(true)
         window.decorView.post { if (hasWindowFocus()) hideSystemBars() }
     }
-    override fun onPause() { scanner?.setForeground(false); usbRasterOutput?.setForeground(false); super.onPause() }
+    override fun onPause() { appUpdate?.setForeground(false); scanner?.setForeground(false); usbRasterOutput?.setForeground(false); super.onPause() }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         scanner?.setForeground(hasFocus)

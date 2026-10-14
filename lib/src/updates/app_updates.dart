@@ -17,20 +17,34 @@ class AppUpdates extends ChangeNotifier {
   AppUpdates({
     this.channel = const MethodChannel('cn.kingclub.cashier/app-update'),
     this.manifestUrl = const String.fromEnvironment('CASHIER_UPDATE_URL'),
-  });
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
   static final instance = AppUpdates();
   final MethodChannel channel;
   final String manifestUrl;
+  final DateTime Function() _now;
   UpdateStage stage = UpdateStage.idle;
   String currentVersion = '', nextVersion = '', notes = '';
   int progress = 0;
   bool installing = false, _disposed = false, _started = false;
+  bool _foreground = true, _externalInstaller = false, _installerPaused = false;
   DateTime? _nextCheck, _lastAttempt;
   Timer? _timer;
   bool get busy =>
       installing ||
+      _externalInstaller ||
       stage == UpdateStage.checking ||
       stage == UpdateStage.downloading;
+
+  void setForeground(bool value) {
+    _foreground = value;
+    if (!value && _externalInstaller) _installerPaused = true;
+    if (value && _installerPaused) {
+      _externalInstaller = false;
+      _installerPaused = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
 
   Future<void> start() async {
     if (_started || _disposed) return;
@@ -68,12 +82,13 @@ class AppUpdates extends ChangeNotifier {
 
   Future<void> check({bool force = false}) async {
     if (_disposed ||
+        !_foreground ||
         busy ||
         manifestUrl.isEmpty ||
         stage == UpdateStage.unavailable) {
       return;
     }
-    final now = DateTime.now();
+    final now = _now();
     if (_lastAttempt != null &&
         now.difference(_lastAttempt!) < const Duration(seconds: 15)) {
       return;
@@ -109,16 +124,22 @@ class AppUpdates extends ChangeNotifier {
 
   // Only an explicit action in the update dialog may open the system installer.
   Future<String> install() async {
-    if (_disposed || busy || stage != UpdateStage.ready) return 'failed';
+    if (_disposed || !_foreground || busy || stage != UpdateStage.ready)
+      return 'failed';
     installing = true;
+    _externalInstaller = true;
+    _installerPaused = false;
     notifyListeners();
     try {
       final result = await channel.invokeMapMethod<String, dynamic>('install');
       final status = result?['status'];
+      if (status != 'permission' && status != 'installer')
+        _externalInstaller = false;
       return status == 'permission' || status == 'installer'
           ? status as String
           : 'failed';
     } catch (_) {
+      _externalInstaller = false;
       return 'failed';
     } finally {
       installing = false;
