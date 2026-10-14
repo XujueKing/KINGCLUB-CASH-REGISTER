@@ -40,6 +40,16 @@ class _InventoryPanelState extends State<InventoryPanel> {
       muted = Color(0xFF748078);
   final search = TextEditingController();
   int stockOffset = 0;
+  int activityOffset = 0, secondaryOffset = 0;
+  String? historyReading;
+  String? activitySection(int value) => switch (value) {
+    2 => 'loans',
+    4 => 'receiving',
+    5 => 'history',
+    _ => null,
+  };
+  bool get activityPage =>
+      data?['view'] == 'activity' && data?['section'] == activitySection(tab);
   Map<String, dynamic>? stockIndexSource;
   final stockIndex = <String, Map<String, dynamic>>{};
   List<Map<String, dynamic>> indexedStockRows = [];
@@ -78,7 +88,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
       stockFilter == 'all' &&
       search.text.trim().isEmpty;
   String get readKey =>
-      'inventory-page:${jsonEncode([tab, stockOffset, category, stockFilter, search.text.trim()])}';
+      'inventory-page:${jsonEncode([tab, stockOffset, category, stockFilter, search.text.trim(), activityOffset, secondaryOffset, movementFilter])}';
   List<Map<String, dynamic>> get shownProducts {
     if (pagedStock) return stockRows;
     final rows = visibleProducts;
@@ -276,7 +286,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
   final pageCache = const InventoryPageCache();
   Future<void>? cacheRestore;
   Future<void>? draftRestore;
-  Future<Map<String, dynamic>>? procurementRead;
   String get displayScope {
     final session = widget.auth.session;
     final permissions = session?.permissions.toList() ?? [];
@@ -299,7 +308,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
   void onRealtime() {
     if (revision == realtime?.revision) return;
     revision = realtime?.revision ?? 0;
-    procurementRead = null;
     if (data?['procurementProducts'] is List) {
       data = {...data!}..remove('procurementProducts');
     }
@@ -434,12 +442,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
     category = '';
     stockFilter = 'all';
     stockOffset = 0;
+    activityOffset = 0;
+    secondaryOffset = 0;
+    movementFilter = 'all';
     imageMaterials.clear();
     imageReads.clear();
     search.clear();
     countDraft.clear();
     pending = null;
-    procurementRead = null;
     cacheRestore = restoreDisplay();
     draftRestore = restore();
     unawaited(load());
@@ -503,7 +513,18 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final command = {
         'action': 'context',
         'before': before,
-        'view': stock ? 'stock' : 'summary',
+        'view': activitySection(tab) != null
+            ? 'activity'
+            : stock
+            ? 'stock'
+            : 'summary',
+        if (activitySection(tab) != null) ...{
+          'section': activitySection(tab),
+          'pageSize': 50,
+          'offset': activityOffset,
+          'secondaryOffset': secondaryOffset,
+          'movementFilter': movementFilter,
+        },
         if (stock) ...{
           'pageSize': 50,
           'offset': stockOffset,
@@ -535,8 +556,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final next = (v['notModified'] == true || v['notModified'] == 1)
           ? {...?data, ...v}
           : v;
-      if (v['notModified'] != true && v['notModified'] != 1)
-        procurementRead = null;
       if (next['products'] is! List)
         throw const FormatException('Inventory display missing');
       final status = v['pendingStatus'];
@@ -580,7 +599,18 @@ class _InventoryPanelState extends State<InventoryPanel> {
   }
 
   Map<String, dynamic> get responseQuery => {
-    'view': tab == 0 ? 'stock' : 'summary',
+    'view': activitySection(tab) != null
+        ? 'activity'
+        : tab == 0
+        ? 'stock'
+        : 'summary',
+    if (activitySection(tab) != null) ...{
+      'section': activitySection(tab),
+      'pageSize': 50,
+      'offset': activityOffset,
+      'secondaryOffset': secondaryOffset,
+      'movementFilter': movementFilter,
+    },
     if (tab == 0) ...{
       'pageSize': 50,
       'offset': stockOffset,
@@ -2232,7 +2262,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
         returns = loan['returns'] as List? ?? [];
     final left =
         (details['quantity'] as num).toInt() -
-        returns.fold<int>(0, (n, r) => n + (r['quantity'] as num).toInt());
+        ((loan['returnedQuantity'] as num?)?.toInt() ??
+            returns.fold<int>(0, (n, r) => n + (r['quantity'] as num).toInt()));
     var q = left, loc = locations.firstOrNull ?? '', condition = 'sealed';
     final ok = await showDialog<bool>(
       context: context,
@@ -2921,6 +2952,49 @@ class _InventoryPanelState extends State<InventoryPanel> {
       ],
     ),
   );
+  Widget activityPager({bool secondary = false}) {
+    final offset =
+        (data?[secondary ? 'secondaryOffset' : 'offset'] as num?)?.toInt() ??
+        (secondary ? secondaryOffset : activityOffset);
+    final total = (data?[secondary ? 'secondaryTotal' : 'total'] as num? ?? 0)
+        .toInt();
+    void move(int delta) {
+      setState(() {
+        if (secondary) {
+          secondaryOffset = max(0, offset + delta);
+        } else {
+          activityOffset = max(0, offset + delta);
+        }
+      });
+      unawaited(load());
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: label(
+            '${total == 0 || offset >= total ? 0 : offset + 1}-${min(offset + 50, total)} / $total',
+            color: muted,
+          ),
+        ),
+        IconButton(
+          key: ValueKey('activity-prev-$secondary'),
+          constraints: const BoxConstraints(minWidth: 52, minHeight: 52),
+          onPressed: loading || working || offset == 0 ? null : () => move(-50),
+          icon: const Icon(Icons.chevron_left),
+        ),
+        IconButton(
+          key: ValueKey('activity-next-$secondary'),
+          constraints: const BoxConstraints(minWidth: 52, minHeight: 52),
+          onPressed: loading || working || offset + 50 >= total
+              ? null
+              : () => move(50),
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ],
+    );
+  }
+
   Widget loans() => box(
     ListView(
       children: [
@@ -2939,7 +3013,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
           ),
           color: muted,
         ),
-        for (final loan in rows('loans')) ...loanRow(loan),
+        if (activityPage) activityPager(),
+        for (final loan
+            in rows('loans')..sort(
+              (a, b) =>
+                  (b['rowId'] as num? ?? 0).compareTo(a['rowId'] as num? ?? 0),
+            ))
+          ...loanRow(loan),
       ],
     ),
   );
@@ -2948,7 +3028,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
     final returns = loan['returns'] as List? ?? [];
     final left =
         (d['quantity'] as num).toInt() -
-        returns.fold<int>(0, (n, r) => n + (r['quantity'] as num).toInt());
+        ((loan['returnedQuantity'] as num?)?.toInt() ??
+            returns.fold<int>(0, (n, r) => n + (r['quantity'] as num).toInt()));
     if (left <= 0) return [];
     return [
       const Divider(),
@@ -3037,6 +3118,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
           color: muted,
         ),
         const SizedBox(height: 16),
+        if (activityPage) activityPager(),
         for (final b
             in (rows('purchaseBatches')
                 .where(
@@ -3127,7 +3209,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
             ),
         ],
         if (receiving &&
-            rows('purchases').any((p) => p['applicationBatchRef'] == null)) ...[
+            (rows('purchases').any((p) => p['applicationBatchRef'] == null) ||
+                (activityPage &&
+                    (data?['secondaryTotal'] as num? ?? 0) > 0))) ...[
           const Divider(height: 32),
           label(
             l(
@@ -3139,6 +3223,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
             size: 18,
             weight: FontWeight.bold,
           ),
+          if (activityPage) activityPager(secondary: true),
           for (final p in rows(
             'purchases',
           ).where((p) => p['applicationBatchRef'] == null))
@@ -3214,15 +3299,11 @@ class _InventoryPanelState extends State<InventoryPanel> {
     ListView(
       children: [
         label(
-          l(
-            '库存单据 · 最近 50 笔',
-            'Inventory documents · latest 50',
-            '庫存單據 · 最近 50 筆',
-            'เอกสารคลัง · ล่าสุด 50',
-          ),
+          l('库存单据', 'Inventory documents', '庫存單據', 'เอกสารคลัง · ล่าสุด 50'),
           size: 20,
           weight: FontWeight.bold,
         ),
+        if (activityPage) activityPager(),
         for (final h in rows(
           'history',
         )..sort((a, b) => (b['rowId'] as num).compareTo(a['rowId'] as num)))
@@ -3234,72 +3315,16 @@ class _InventoryPanelState extends State<InventoryPanel> {
               '${h['member'] ?? h['employee']} · ${(h['details'] as Map?)?['note'] ?? ''}',
               color: muted,
             ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => showDialog<void>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: Text(actionName('${h['type']}')),
-                content: SizedBox(
-                  width: 620,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        label(time(h['createdAt'])),
-                        label(
-                          '${l('经办', 'Operator', '經辦', 'ผู้ดำเนินการ')}: ${h['employee']}',
-                        ),
-                        if (h['member'] != null)
-                          label('${h['member']} · ${h['userAccount']}'),
-                        const Divider(),
-                        if ((h['details'] as Map?)?['productRef'] != null)
-                          label(productName('${h['details']['productRef']}')),
-                        if (h['type'] == 'retail_price')
-                          label(
-                            '${l('零售价', 'Retail price', '零售價', 'ราคาขาย')}: '
-                            '${money((h['receipt'] as Map?)?['oldPriceCents'])}'
-                            ' → ${money((h['receipt'] as Map?)?['priceCents'])}',
-                          ),
-                        if ((h['details'] as Map?)?['quantity'] != null)
-                          label(
-                            '${l('数量', 'Units', '數量', 'จำนวน')}: ${h['details']['quantity']}',
-                          ),
-                        for (final item
-                            in (h['details'] as Map?)?['items'] as List? ?? [])
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: label(
-                              '${productName('${item['productRef']}')}\n${item['expectedOnHand']} → ${item['quantity']} · ${item['location']}',
-                            ),
-                          ),
-                        label('${(h['details'] as Map?)?['note'] ?? ''}'),
-                        if ((h['details'] as Map?)?['document'] != null)
-                          label(
-                            '${l('底单号', 'Document number', '底單號', 'เลขเอกสาร')}: ${h['details']['document']['number'] ?? ''}',
-                          ),
-                        for (final id
-                            in ((h['details'] as Map?)?['document']
-                                        as Map?)?['fileIds']
-                                    as List? ??
-                                [])
-                          button(
-                            l('查看底单', 'View document', '查看底單', 'ดูเอกสาร'),
-                            () => document('$id'),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                actions: [
-                  button(
-                    l('关闭', 'Close', '關閉', 'ปิด'),
-                    () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
+            trailing: historyReading == h['operationRef']
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.chevron_right),
+            onTap: () => openHistory(h),
           ),
-        if (rows('history').length == 50)
+        if (!activityPage && rows('history').length == 50)
           button(
             l('更早记录', 'Earlier records', '更早記錄', 'ก่อนหน้า'),
             () => load(
@@ -3309,52 +3334,171 @@ class _InventoryPanelState extends State<InventoryPanel> {
             ),
           ),
         const Divider(height: 30),
-        label(
-          l(
-            '最近出入库流水（含销售）',
-            'Recent movements including sales',
-            '最近出入庫流水（含銷售）',
-            'เคลื่อนไหวล่าสุดรวมการขาย',
-          ),
-          size: 18,
-          weight: FontWeight.bold,
-        ),
-        Wrap(
-          spacing: 8,
-          children: [
-            for (final f in [
-              ('all', l('全部', 'All', '全部', 'ทั้งหมด')),
-              ('in', l('进货 / 入库', 'Incoming', '進貨 / 入庫', 'รับเข้า')),
-              ('out', l('出货 / 去向', 'Outgoing', '出貨 / 去向', 'จ่ายออก')),
-            ])
-              ChoiceChip(
-                label: Text(f.$2),
-                selected: movementFilter == f.$1,
-                onSelected: (_) => setState(() => movementFilter = f.$1),
-              ),
-          ],
-        ),
-        for (final m in rows('movements').where(
-          (m) =>
-              movementFilter == 'all' ||
-              (movementFilter == 'in'
-                  ? (m['quantity'] as num) > 0
-                  : (m['quantity'] as num) < 0),
-        ))
-          ListTile(
-            title: label(productName('${m['productRef']}')),
-            subtitle: label(
-              '${time(m['createdAt'])} · ${actionName('${m['type']}')}\n${m['location'] ?? ''} · ${m['batchNumber'] ?? m['batchRef']} · ${m['supplierName'] ?? ''}\n${m['sourceRef'] ?? ''}',
-              size: 12,
-              color: muted,
-            ),
-            trailing: label(
-              '${(m['quantity'] as num) > 0 ? '+' : ''}${m['quantity']}',
-            ),
-          ),
+        ...movementWidgets(),
       ],
     ),
   );
+
+  Future<void> openHistory(Map<String, dynamic> original) async {
+    if (historyReading != null) return;
+    final request = epoch, identity = cacheIdentity;
+    var h = original;
+    var products = rows('products');
+    if (original['detailLoaded'] == false || original['detailLoaded'] == 0) {
+      setState(() => historyReading = '${original['operationRef']}');
+      try {
+        final detail = await widget.auth.inventory({
+          'action': 'operation_detail',
+          'operationRef': original['operationRef'],
+        });
+        if (!mounted || request != epoch || !identical(identity, cacheIdentity))
+          return;
+        h = Map<String, dynamic>.from(detail['operation'] as Map);
+        products = (detail['products'] as List)
+            .map((p) => Map<String, dynamic>.from(p as Map))
+            .toList();
+      } catch (_) {
+        if (mounted && request == epoch && identical(identity, cacheIdentity))
+          message(
+            l(
+              '单据读取失败，请重试',
+              'Could not load document. Retry.',
+              '單據讀取失敗，請重試',
+              'อ่านเอกสารไม่ได้ ลองใหม่',
+            ),
+          );
+        return;
+      } finally {
+        if (mounted) setState(() => historyReading = null);
+      }
+    }
+    String detailProductName(String ref) {
+      final p = products.where((p) => p['productRef'] == ref).firstOrNull;
+      return p == null
+          ? ref
+          : '${name(p['names'])} ${name(p['specifications'])}';
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(actionName('${h['type']}')),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                label(time(h['createdAt'])),
+                label(
+                  '${l('经办', 'Operator', '經辦', 'ผู้ดำเนินการ')}: ${h['employee']}',
+                ),
+                if (h['member'] != null)
+                  label('${h['member']} · ${h['userAccount']}'),
+                const Divider(),
+                if ((h['details'] as Map?)?['productRef'] != null)
+                  label(detailProductName('${h['details']['productRef']}')),
+                if (h['type'] == 'retail_price')
+                  label(
+                    '${l('零售价', 'Retail price', '零售價', 'ราคาขาย')}: '
+                    '${money((h['receipt'] as Map?)?['oldPriceCents'])}'
+                    ' → ${money((h['receipt'] as Map?)?['priceCents'])}',
+                  ),
+                if ((h['details'] as Map?)?['quantity'] != null)
+                  label(
+                    '${l('数量', 'Units', '數量', 'จำนวน')}: ${h['details']['quantity']}',
+                  ),
+                for (final item
+                    in (h['details'] as Map?)?['items'] as List? ?? [])
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: label(
+                      '${detailProductName('${item['productRef']}')}\n${item['expectedOnHand']} → ${item['quantity']} · ${item['location']}',
+                    ),
+                  ),
+                label('${(h['details'] as Map?)?['note'] ?? ''}'),
+                if ((h['details'] as Map?)?['document'] != null)
+                  label(
+                    '${l('底单号', 'Document number', '底單號', 'เลขเอกสาร')}: ${h['details']['document']['number'] ?? ''}',
+                  ),
+                for (final id
+                    in ((h['details'] as Map?)?['document'] as Map?)?['fileIds']
+                            as List? ??
+                        [])
+                  button(
+                    l('查看底单', 'View document', '查看底單', 'ดูเอกสาร'),
+                    () => document('$id'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          button(l('关闭', 'Close', '關閉', 'ปิด'), () => Navigator.pop(context)),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> movementWidgets() => [
+    label(
+      l(
+        '最近出入库流水（含销售）',
+        'Recent movements including sales',
+        '最近出入庫流水（含銷售）',
+        'เคลื่อนไหวล่าสุดรวมการขาย',
+      ),
+      size: 18,
+      weight: FontWeight.bold,
+    ),
+    Wrap(
+      spacing: 8,
+      children: [
+        for (final f in [
+          ('all', l('全部', 'All', '全部', 'ทั้งหมด')),
+          ('in', l('进货 / 入库', 'Incoming', '進貨 / 入庫', 'รับเข้า')),
+          ('out', l('出货 / 去向', 'Outgoing', '出貨 / 去向', 'จ่ายออก')),
+        ])
+          ChoiceChip(
+            label: Text(f.$2),
+            selected: movementFilter == f.$1,
+            onSelected: loading || working
+                ? null
+                : (_) {
+                    setState(() {
+                      movementFilter = f.$1;
+                      secondaryOffset = 0;
+                    });
+                    if (activityPage) unawaited(load());
+                  },
+          ),
+      ],
+    ),
+    if (activityPage) activityPager(secondary: true),
+    for (final m
+        in (rows('movements')..sort(
+              (a, b) =>
+                  (b['rowId'] as num? ?? 0).compareTo(a['rowId'] as num? ?? 0),
+            ))
+            .where(
+              (m) =>
+                  movementFilter == 'all' ||
+                  (movementFilter == 'in'
+                      ? (m['quantity'] as num) > 0
+                      : (m['quantity'] as num) < 0),
+            ))
+      ListTile(
+        title: label(productName('${m['productRef']}')),
+        subtitle: label(
+          '${time(m['createdAt'])} · ${actionName('${m['type']}')}\n${m['location'] ?? ''} · ${m['batchNumber'] ?? m['batchRef']} · ${m['supplierName'] ?? ''}\n${m['sourceRef'] ?? ''}',
+          size: 12,
+          color: muted,
+        ),
+        trailing: label(
+          '${(m['quantity'] as num) > 0 ? '+' : ''}${m['quantity']}',
+        ),
+      ),
+  ];
   Widget suppliers() => box(
     Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3496,10 +3640,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
                     key: ValueKey('inventory-tab-$i'),
                     child: button(titles[i], () {
                       final needsRead =
+                          (data?['view'] == 'activity' && i != tab) ||
+                          (data?['view'] == 'summary' &&
+                              activitySection(i) != null) ||
                           (data?['paged'] == true && i != 0) ||
                           (i == 0 &&
                               ['full', 'summary'].contains(data?['view']));
                       setState(() {
+                        if (i != tab) {
+                          activityOffset = 0;
+                          secondaryOffset = 0;
+                        }
                         tab = i;
                       });
                       if (needsRead) unawaited(load());
@@ -3513,7 +3664,12 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 child: label(error!, color: Colors.red),
               ),
             Expanded(
-              child: data == null || (tab != 0 && data?['paged'] == true)
+              child:
+                  data == null ||
+                      (tab != 0 && data?['paged'] == true) ||
+                      (data?['view'] == 'activity' && !activityPage) ||
+                      (data?['view'] == 'summary' &&
+                          activitySection(tab) != null)
                   ? Center(
                       child: label(
                         l(
