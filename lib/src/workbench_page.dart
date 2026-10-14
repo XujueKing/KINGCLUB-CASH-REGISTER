@@ -18,6 +18,7 @@ import 'live/business_report_panel.dart';
 import 'live/inventory_panel.dart';
 import 'live/reservations_panel.dart';
 import 'strings.dart';
+import 'updates/update_button.dart';
 
 import 'package:flutter/services.dart';
 
@@ -285,6 +286,10 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
                           ),
                         ),
                       ),
+                      UpdateButton(
+                        language: widget.language,
+                        onlyWhenReady: true,
+                      ),
                       if (widget.auth.session?.permissions.contains(
                             'together.admit',
                           ) ==
@@ -389,6 +394,8 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             icon: const Icon(Icons.print_outlined),
             label: Text(t('printerInspectTitle')),
           ),
+          const SizedBox(height: 20),
+          UpdateButton(language: widget.language),
           const SizedBox(height: 20),
           OutlinedButton.icon(
             key: const ValueKey('receipt-accounts-settings'),

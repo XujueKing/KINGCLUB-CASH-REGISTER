@@ -18,6 +18,8 @@ local.properties
 .dart_tool/
 build/
 node_modules/
+__pycache__/
+*.pyc
 *.log
 *.iml
 artifacts/

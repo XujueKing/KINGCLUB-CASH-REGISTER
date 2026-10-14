@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../strings.dart';
+import '../updates/update_button.dart';
 import '../workbench_page.dart';
 import '../hardware/printer_discovery_dialog.dart';
 import 'staff_auth_controller.dart';
@@ -184,6 +185,7 @@ class _StaffAccessPageState extends State<StaffAccessPage>
       appBar: AppBar(
         title: const Text('KINGCLUB POS'),
         actions: [
+          UpdateButton(language: language),
           TextButton(
             key: const ValueKey('printer-inspect-open'),
             onPressed: () => showDialog<void>(

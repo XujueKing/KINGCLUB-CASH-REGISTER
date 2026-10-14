@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'src/auth/staff_access_page.dart';
+import 'src/updates/app_updates.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +35,7 @@ class _CashierAppState extends State<CashierApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(AppUpdates.instance.start());
   }
 
   void restoreFullscreen() {
@@ -63,6 +65,7 @@ class _CashierAppState extends State<CashierApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(AppUpdates.instance.check());
       restoreFullscreen();
     } else {
       immersiveRestore?.cancel();

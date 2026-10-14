@@ -15,6 +15,7 @@ class MainActivity : FlutterActivity() {
     private var usbPrinterPermission: UsbPrinterPermissionBridge? = null
     private var usbRasterOutput: UsbRasterOutputBridge? = null
     private var inventoryDocument: InventoryDocumentBridge? = null
+    private var appUpdate: AppUpdateBridge? = null
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         if (inventoryDocument?.onActivityResult(requestCode, resultCode, data) == true) return
@@ -59,6 +60,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        appUpdate?.dispose()
+        appUpdate = AppUpdateBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         io.flutter.plugin.common.MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "cn.kingclub.cashier/product-images").setMethodCallHandler { call, result ->
             if (call.method == "directory") {
@@ -103,6 +106,8 @@ class MainActivity : FlutterActivity() {
         usbRasterOutput = null
         inventoryDocument?.dispose()
         inventoryDocument = null
+        appUpdate?.dispose()
+        appUpdate = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }
